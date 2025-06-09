@@ -1,0 +1,25 @@
+[package]
+name = "libcint-rs"
+version = "0.0.1"
+edition = "2024"
+description = "FFI binding and GTO wrapper for libcint"
+repository = "https://github.com/ajz34/libcint-rs"
+keywords = ["chemistry", "integral", "scientific"]
+categories = ["science"]
+license = "Apache-2.0"
+
+[dependencies]
+itertools = "0.12"
+rayon = "1.10"
+num-complex = "0.4"
+
+[build-dependencies]
+cc = "1.0"
+cmake = "0.1"
+
+[dev-dependencies]
+ndarray = "0.15"
+approx = "0.5"
+
+[profile.dev]
+opt-level = 2

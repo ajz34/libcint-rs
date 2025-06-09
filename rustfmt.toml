@@ -1,0 +1,4 @@
+use_small_heuristics = "Max"
+match_block_trailing_comma = true
+wrap_comments = true
+overflow_delimited_expr = true
