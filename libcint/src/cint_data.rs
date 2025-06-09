@@ -21,12 +21,15 @@ pub struct CintData {
     pub env: Vec<f64>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CintKind {
     Int,
     Ecp,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CintType {
+    #[default]
     Sph,
     Cart,
     Spinor,
@@ -42,26 +45,69 @@ pub enum CintOptimizer {
 
 /* #region impl integrator */
 
-pub fn get_integrator(name: &str) -> Box<dyn Integrator> {
-    get_integrator_f(name).unwrap()
+/// Obtain integrator by name.
+///
+/// # Panics
+///
+/// - integrator not found
+/// - rare cases that integrator not available for the specified `CintType`
+///   (i.e., for `with_f12` integrators such as `int2e_stg`, the cart and spinor
+///   versions are not available)
+pub fn get_integrator(intor: &str) -> (Box<dyn Integrator>, CintType) {
+    get_integrator_f(intor).unwrap()
 }
 
-pub fn get_integrator_f(name: &str) -> Result<Box<dyn Integrator>, CintError> {
-    if let Some(intor) = get_cint_integrator(name) {
+pub fn get_integrator_f(intor: &str) -> Result<(Box<dyn Integrator>, CintType), CintError> {
+    // check if suffix is present
+    let (intor, cint_type) = if let Some(intor) = intor.strip_suffix("_sph") {
+        (intor, CintType::Sph)
+    } else if let Some(intor) = intor.strip_suffix("_cart") {
+        (intor, CintType::Cart)
+    } else if let Some(intor) = intor.strip_suffix("_spinor") {
+        (intor, CintType::Spinor)
+    } else {
+        (intor, CintType::default()) // default to sph
+    };
+
+    // explicitly check cint and ecp differently
+    let intor = if let Some(intor) = get_cint_integrator(intor) {
         Ok(intor)
-    } else if let Some(intor) = get_ecp_integrator(name) {
+    } else if let Some(intor) = get_ecp_integrator(intor) {
         Ok(intor)
     } else {
-        Err(CintError::IntegratorNotFound(name.to_string()))
+        Err(CintError::IntegratorNotFound(intor.to_string()))
+    }?;
+
+    // check if the integrator and cint_type is available
+    match cint_type {
+        CintType::Sph => {
+            if !intor.is_sph_available() {
+                return Err(CintError::IntegratorNotAvailable(format!(
+                    "{} is not available for spherical integrals",
+                    intor.name()
+                )));
+            }
+        },
+        CintType::Cart => {
+            if !intor.is_cart_available() {
+                return Err(CintError::IntegratorNotAvailable(format!(
+                    "{} is not available for Cartesian integrals",
+                    intor.name()
+                )));
+            }
+        },
+        CintType::Spinor => {
+            if !intor.is_spinor_available() {
+                return Err(CintError::IntegratorNotAvailable(format!(
+                    "{} is not available for spinor integrals",
+                    intor.name()
+                )));
+            }
+        },
     }
-}
 
-pub fn get_integrator_kind(name: &str) -> CintKind {
-    get_integrator_kind_f(name).unwrap()
-}
-
-pub fn get_integrator_kind_f(name: &str) -> Result<CintKind, CintError> {
-    Ok(get_integrator_f(name)?.kind())
+    // should have checked anything, gracefully returns
+    Ok((intor, cint_type))
 }
 
 /* #endregion */
@@ -76,19 +122,43 @@ impl Drop for CintOptimizer {
 }
 
 impl CintData {
-    pub fn get_optimizer(&self, name: &str) -> CintOptimizer {
-        self.get_optimizer_f(name).unwrap()
+    /// Creates a new `CintData` instance, with ECP integral information
+    /// written to `bas` field, and properly initializes values in `env` field.
+    ///
+    /// Should be called before integral calculations. Be careful this function
+    /// should not called twice in consecutive.
+    pub fn merge_ecp_data(&self) -> CintData {
+        let mut merged = self.clone();
+        merged.bas.extend_from_slice(&self.ecpbas);
+        merged.env[cecp::AS_ECPBAS_OFFSET as usize] = self.bas.len() as f64;
+        merged.env[cecp::AS_NECPBAS as usize] = self.ecpbas.len() as f64;
+        merged
     }
 
-    pub fn get_optimizer_f(&self, name: &str) -> Result<CintOptimizer, CintError> {
-        let intor = get_integrator_f(name)?;
+    /// Obtain integrator optimizer.
+    ///
+    /// # Panics
+    ///
+    /// - integrator not found
+    /// - `env` field not properly initialized for ECP integrator (should call
+    ///   `merge_ecp_data` before this function)
+    ///
+    /// # See also
+    ///
+    /// PySCF `make_cintopt`
+    pub fn make_optimizer(&self, intor: &str) -> CintOptimizer {
+        self.make_optimizer_f(intor).unwrap()
+    }
+
+    pub fn make_optimizer_f(&self, intor: &str) -> Result<CintOptimizer, CintError> {
+        let (intor, _) = get_integrator_f(intor)?;
+        let atm_ptr = self.atm.as_ptr() as *const c_int;
+        let bas_ptr = self.bas.as_ptr() as *const c_int;
+        let env_ptr = self.env.as_ptr();
+        let n_atm = self.atm.len() as c_int;
+        let n_bas = self.bas.len() as c_int;
         match intor.kind() {
             CintKind::Int => {
-                let atm_ptr = self.atm.as_ptr() as *const c_int;
-                let bas_ptr = self.bas.as_ptr() as *const c_int;
-                let env_ptr = self.env.as_ptr();
-                let n_atm = self.atm.len() as c_int;
-                let n_bas = self.bas.len() as c_int;
                 let mut c_opt_ptr: *mut CINTOpt = null_mut();
                 unsafe {
                     intor.optimizer(
@@ -103,18 +173,12 @@ impl CintData {
                 Ok(CintOptimizer::Int(NonNull::new(&mut c_opt_ptr).unwrap()))
             },
             CintKind::Ecp => {
-                let merged = self.merge_ecp_data();
-                if merged.is_none() {
-                    return Err(CintError::NotECPAvailable(
-                        "Current cint_data has no ECP data".to_string(),
+                // Check if this cint_data has been merged with ECP data
+                if self.env[cecp::AS_ECPBAS_OFFSET as usize] == 0.0 {
+                    return Err(CintError::RuntimeError(
+                        "ECP integrator requires ECP data to be merged".to_string(),
                     ));
                 }
-                let merged = merged.unwrap();
-                let atm_ptr = merged.atm.as_ptr() as *const c_int;
-                let bas_ptr = merged.bas.as_ptr() as *const c_int;
-                let env_ptr = merged.env.as_ptr();
-                let n_atm = merged.atm.len() as c_int;
-                let n_bas = merged.bas.len() as c_int;
                 let mut c_opt_ptr: *mut ECPOpt = null_mut();
                 unsafe {
                     intor.optimizer(
@@ -130,17 +194,6 @@ impl CintData {
             },
         }
     }
-
-    pub fn merge_ecp_data(&self) -> Option<CintData> {
-        if self.ecpbas.is_empty() {
-            return None;
-        }
-        let mut merged = self.clone();
-        merged.bas.extend_from_slice(&self.ecpbas);
-        merged.env[cecp::AS_ECPBAS_OFFSET as usize] = self.bas.len() as f64;
-        merged.env[cecp::AS_NECPBAS as usize] = self.ecpbas.len() as f64;
-        Some(merged)
-    }
 }
 
 #[cfg(test)]
@@ -150,7 +203,7 @@ mod tests {
     #[test]
     fn test_cint_data() {
         let cint_data = initialize();
-        let opt = cint_data.get_optimizer("int2e");
+        let opt = cint_data.make_optimizer("int2e");
         println!("int2e opt: {opt:?}");
         if let CintOptimizer::Int(opt) = opt {
             println!("int2e opt inner {:?}", unsafe { opt.read() });

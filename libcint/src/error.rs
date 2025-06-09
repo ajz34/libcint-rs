@@ -5,7 +5,7 @@ use std::fmt::{Debug, Display};
 pub enum CintError {
     IntegratorNotFound(String),
     IntegratorNotAvailable(String),
-    NotECPAvailable(String),
+    RuntimeError(String),
     InvalidValue(String),
     Miscellaneous(String),
 }
