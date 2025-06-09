@@ -21,5 +21,9 @@ cmake = "0.1"
 ndarray = "0.15"
 approx = "0.5"
 
+[features]
+with_f12 = []
+with_4c1e = []
+
 [profile.dev]
 opt-level = 2

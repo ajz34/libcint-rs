@@ -1,16 +1,20 @@
 use crate::cint_data::CintKind;
-use crate::error::CintError;
 use crate::ffi::cecp::*;
 use crate::ffi::wrapper_traits::Integrator;
-use crate::impl_integrator_sph_cart_only;
+use crate::ffi::wrapper_traits::panic_spinor;
+use crate::impl_integrator;
 use core::any::Any;
 use core::ffi::{c_int, c_void};
 
-impl_integrator_sph_cart_only!(
+impl_integrator!(
     ECPscalar,
     ECPscalar_optimizer,
     ECPscalar_sph,
     ECPscalar_cart,
+    panic_spinor,
+    true,
+    true,
+    false,
     1,
     1,
     2,
@@ -19,11 +23,15 @@ impl_integrator_sph_cart_only!(
     "ECPIntegratorBase",
     CintKind::Ecp
 );
-impl_integrator_sph_cart_only!(
+impl_integrator!(
     ECPscalar_ignuc,
     ECPscalar_ignuc_optimizer,
     ECPscalar_ignuc_sph,
     ECPscalar_ignuc_cart,
+    panic_spinor,
+    true,
+    true,
+    false,
     3,
     3,
     2,
@@ -32,11 +40,15 @@ impl_integrator_sph_cart_only!(
     "ECPscalar_ignuc",
     CintKind::Ecp
 );
-impl_integrator_sph_cart_only!(
+impl_integrator!(
     ECPscalar_ipnuc,
     ECPscalar_ipnuc_optimizer,
     ECPscalar_ipnuc_sph,
     ECPscalar_ipnuc_cart,
+    panic_spinor,
+    true,
+    true,
+    false,
     3,
     3,
     2,
@@ -45,11 +57,15 @@ impl_integrator_sph_cart_only!(
     "ECPscalar_ipnuc",
     CintKind::Ecp
 );
-impl_integrator_sph_cart_only!(
+impl_integrator!(
     ECPscalar_ipipnuc,
     ECPscalar_ipipnuc_optimizer,
     ECPscalar_ipipnuc_sph,
     ECPscalar_ipipnuc_cart,
+    panic_spinor,
+    true,
+    true,
+    false,
     9,
     9,
     2,
@@ -58,11 +74,15 @@ impl_integrator_sph_cart_only!(
     "ECPscalar_ipipnuc",
     CintKind::Ecp
 );
-impl_integrator_sph_cart_only!(
+impl_integrator!(
     ECPscalar_ipnucip,
     ECPscalar_ipnucip_optimizer,
     ECPscalar_ipnucip_sph,
     ECPscalar_ipnucip_cart,
+    panic_spinor,
+    true,
+    true,
+    false,
     9,
     9,
     2,
@@ -71,11 +91,15 @@ impl_integrator_sph_cart_only!(
     "ECPscalar_ipnucip",
     CintKind::Ecp
 );
-impl_integrator_sph_cart_only!(
+impl_integrator!(
     ECPscalar_iprinv,
     ECPscalar_iprinv_optimizer,
     ECPscalar_iprinv_sph,
     ECPscalar_iprinv_cart,
+    panic_spinor,
+    true,
+    true,
+    false,
     9,
     9,
     2,
@@ -84,11 +108,15 @@ impl_integrator_sph_cart_only!(
     "ECPscalar_iprinv",
     CintKind::Ecp
 );
-impl_integrator_sph_cart_only!(
+impl_integrator!(
     ECPscalar_ipiprinv,
     ECPscalar_ipiprinv_optimizer,
     ECPscalar_ipiprinv_sph,
     ECPscalar_ipiprinv_cart,
+    panic_spinor,
+    true,
+    true,
+    false,
     9,
     9,
     2,
@@ -97,11 +125,15 @@ impl_integrator_sph_cart_only!(
     "ECPscalar_ipiprinv",
     CintKind::Ecp
 );
-impl_integrator_sph_cart_only!(
+impl_integrator!(
     ECPscalar_iprinvip,
     ECPscalar_iprinvip_optimizer,
     ECPscalar_iprinvip_sph,
     ECPscalar_iprinvip_cart,
+    panic_spinor,
+    true,
+    true,
+    false,
     9,
     9,
     2,
