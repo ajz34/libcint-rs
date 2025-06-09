@@ -3,7 +3,7 @@
 
 use crate::ffi::cint;
 use crate::ffi::cint::CINTOpt;
-use crate::ffi::wrapper_traits::Integrator;
+use crate::ffi::wrapper_traits::CintIntegrator;
 use crate::impl_integrator;
 use core::any::Any;
 use core::ffi::c_int;
@@ -64,8 +64,8 @@ impl_integrator!(
     int2e_stg,
     int2e_stg_optimizer,
     int2e_stg_sph,
-    int2e_stg_cart,
-    int2e_stg_spinor,
+    integral_null_cart,
+    integral_null_spinor,
     1,
     1,
     4,
@@ -77,8 +77,8 @@ impl_integrator!(
     int2e_yp,
     int2e_yp_optimizer,
     int2e_yp_sph,
-    int2e_yp_cart,
-    int2e_yp_spinor,
+    integral_null_cart,
+    integral_null_spinor,
     1,
     1,
     4,
@@ -90,8 +90,8 @@ impl_integrator!(
     int2e_yp_ip1,
     int2e_yp_ip1_optimizer,
     int2e_yp_ip1_sph,
-    int2e_yp_ip1_cart,
-    int2e_yp_ip1_spinor,
+    integral_null_cart,
+    integral_null_spinor,
     3,
     3,
     4,
@@ -103,8 +103,8 @@ impl_integrator!(
     int2e_stg_ip1,
     int2e_stg_ip1_optimizer,
     int2e_stg_ip1_sph,
-    int2e_stg_ip1_cart,
-    int2e_stg_ip1_spinor,
+    integral_null_cart,
+    integral_null_spinor,
     3,
     3,
     4,
@@ -116,8 +116,8 @@ impl_integrator!(
     int2e_yp_ipip1,
     int2e_yp_ipip1_optimizer,
     int2e_yp_ipip1_sph,
-    int2e_yp_ipip1_cart,
-    int2e_yp_ipip1_spinor,
+    integral_null_cart,
+    integral_null_spinor,
     9,
     9,
     4,
@@ -129,8 +129,8 @@ impl_integrator!(
     int2e_stg_ipip1,
     int2e_stg_ipip1_optimizer,
     int2e_stg_ipip1_sph,
-    int2e_stg_ipip1_cart,
-    int2e_stg_ipip1_spinor,
+    integral_null_cart,
+    integral_null_spinor,
     9,
     9,
     4,
@@ -142,8 +142,8 @@ impl_integrator!(
     int2e_yp_ipvip1,
     int2e_yp_ipvip1_optimizer,
     int2e_yp_ipvip1_sph,
-    int2e_yp_ipvip1_cart,
-    int2e_yp_ipvip1_spinor,
+    integral_null_cart,
+    integral_null_spinor,
     9,
     9,
     4,
@@ -155,8 +155,8 @@ impl_integrator!(
     int2e_stg_ipvip1,
     int2e_stg_ipvip1_optimizer,
     int2e_stg_ipvip1_sph,
-    int2e_stg_ipvip1_cart,
-    int2e_stg_ipvip1_spinor,
+    integral_null_cart,
+    integral_null_spinor,
     9,
     9,
     4,
@@ -168,8 +168,8 @@ impl_integrator!(
     int2e_yp_ip1ip2,
     int2e_yp_ip1ip2_optimizer,
     int2e_yp_ip1ip2_sph,
-    int2e_yp_ip1ip2_cart,
-    int2e_yp_ip1ip2_spinor,
+    integral_null_cart,
+    integral_null_spinor,
     9,
     9,
     4,
@@ -181,8 +181,8 @@ impl_integrator!(
     int2e_stg_ip1ip2,
     int2e_stg_ip1ip2_optimizer,
     int2e_stg_ip1ip2_sph,
-    int2e_stg_ip1ip2_cart,
-    int2e_stg_ip1ip2_spinor,
+    integral_null_cart,
+    integral_null_spinor,
     9,
     9,
     4,
@@ -2843,7 +2843,7 @@ impl_integrator!(
     "int2c2e_ip1ip2"
 );
 
-pub fn get_integrator(name: &str) -> Option<Box<dyn Integrator>> {
+pub fn get_cint_integrator(name: &str) -> Option<Box<dyn CintIntegrator>> {
     match name {
         "int2e_breit_r1p2" => Some(Box::new(int2e_breit_r1p2)),
         "int2e_breit_r2p2" => Some(Box::new(int2e_breit_r2p2)),

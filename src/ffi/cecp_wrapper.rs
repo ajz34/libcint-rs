@@ -80,14 +80,14 @@ impl_ecpintegrator!(
 
 pub fn get_ecp_integrator(name: &str) -> Option<Box<dyn ECPIntegrator>> {
     match name {
-        "ECPscalar" => Some(Box::new(ECPscalar)),
-        "ECPscalar_ignuc" => Some(Box::new(ECPscalar_ignuc)),
-        "ECPscalar_ipnuc" => Some(Box::new(ECPscalar_ipnuc)),
-        "ECPscalar_ipipnuc" => Some(Box::new(ECPscalar_ipipnuc)),
-        "ECPscalar_ipnucip" => Some(Box::new(ECPscalar_ipnucip)),
-        "ECPscalar_iprinv" => Some(Box::new(ECPscalar_iprinv)),
-        "ECPscalar_ipiprinv" => Some(Box::new(ECPscalar_ipiprinv)),
-        "ECPscalar_iprinvip" => Some(Box::new(ECPscalar_iprinvip)),
+        "ecpscalar" => Some(Box::new(ECPscalar)),
+        "ecpscalar_ignuc" => Some(Box::new(ECPscalar_ignuc)),
+        "ecpscalar_ipnuc" => Some(Box::new(ECPscalar_ipnuc)),
+        "ecpscalar_ipipnuc" => Some(Box::new(ECPscalar_ipipnuc)),
+        "ecpscalar_ipnucip" => Some(Box::new(ECPscalar_ipnucip)),
+        "ecpscalar_iprinv" => Some(Box::new(ECPscalar_iprinv)),
+        "ecpscalar_ipiprinv" => Some(Box::new(ECPscalar_ipiprinv)),
+        "ecpscalar_iprinvip" => Some(Box::new(ECPscalar_iprinvip)),
         _ => None,
     }
 }

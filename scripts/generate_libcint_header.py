@@ -136,23 +136,41 @@ typedef CACHE_SIZE_T CINTIntegralFunctionComplex(
 """
 
 # for unknown intors (mostly not in autocode, but in main source code), generate signature for header
+# exclusion (F12): _stg_, _yp_
 token = """
 extern CINTOptimizerFunction       {0:}_optimizer;
 extern CINTIntegralFunctionReal    {0:}_cart;
 extern CINTIntegralFunctionReal    {0:}_sph;
 extern CINTIntegralFunctionComplex {0:}_spinor;
 """
-cint_funcs = cint_funcs + "".join([token.format(intor) for intor in sorted(set(actual_intor))])
+cint_funcs = cint_funcs + "".join([
+    token.format(intor)
+    for intor in sorted(set(actual_intor))
+    if ("_stg" not in intor and "_yp" not in intor)])
 cint_funcs = cint_funcs.replace("#include <cint.h>", "#include \"cint.h\"")
 
-# libcint2 interface compability
+# for unknown intors (mostly not in autocode, but in main source code), generate signature for header
+# exclusion (F12): _stg_, _yp_; they do not have cart and spinor
 token = """
-extern CINTOptimizerFunction       c{0:}_optimizer;
-extern CINTIntegralFunctionReal    c{0:}_cart;
-extern CINTIntegralFunctionReal    c{0:}_sph;
-extern CINTIntegralFunctionComplex c{0:}_spinor;
+extern CINTOptimizerFunction       {0:}_optimizer;
+extern CINTIntegralFunctionReal    {0:}_sph;
 """
-cint_funcs = cint_funcs + "".join([token.format(intor) for intor in sorted(actual_intor) if intor not in ["int2e"]])
+cint_funcs = cint_funcs + "".join([
+    token.format(intor)
+    for intor in sorted(set(actual_intor))
+    if ("_stg" in intor or "_yp" in intor)])
+cint_funcs = cint_funcs.replace("#include <cint.h>", "#include \"cint.h\"")
+
+# +
+# libcint2 interface compability
+# token = """
+# extern CINTOptimizerFunction       c{0:}_optimizer;
+# extern CINTIntegralFunctionReal    c{0:}_cart;
+# extern CINTIntegralFunctionReal    c{0:}_sph;
+# extern CINTIntegralFunctionComplex c{0:}_spinor;
+# """
+# cint_funcs = cint_funcs + "".join([token.format(intor) for intor in sorted(actual_intor) if intor not in ["int2e"]])
+# -
 
 # ### Merge `cint.h` and `cint_funcs.h`
 
@@ -193,6 +211,41 @@ token = token.replace("::std::os::raw::c_int", "c_int")
 token = token.replace("::std::option::Option", "Option")
 # -
 
+token = token + """
+
+/// # Safety
+pub unsafe fn integral_null_cart(
+    _out: *mut f64,
+    _dims: *const c_int,
+    _shls: *const c_int,
+    _atm: *const c_int,
+    _natm: c_int,
+    _bas: *const c_int,
+    _nbas: c_int,
+    _env: *const f64,
+    _opt: *const CINTOpt,
+    _cache: *mut f64,
+) -> c_int {
+    panic!("Libcint does not implement this integral.");
+}
+
+/// # Safety
+pub unsafe fn integral_null_spinor(
+    _out: *mut __BindgenComplex<f64>,
+    _dims: *const c_int,
+    _shls: *const c_int,
+    _atm: *const c_int,
+    _natm: c_int,
+    _bas: *const c_int,
+    _nbas: c_int,
+    _env: *const f64,
+    _opt: *const CINTOpt,
+    _cache: *mut f64,
+) -> c_int {
+    panic!("Libcint does not implement this integral.");
+}
+"""
+
 with open("cint.rs", "w") as f:
     f.write(token)
 
@@ -215,7 +268,7 @@ token_wrapper = """
 use crate::ffi::cint;
 use crate::ffi::cint::CINTOpt;
 use crate::impl_integrator;
-use crate::ffi::wrapper_traits::Integrator;
+use crate::ffi::wrapper_traits::{CintIntegrator, integral_null_cart, integral_null_spinor};
 use core::ffi::c_int;
 use core::any::Any;
 
@@ -246,6 +299,10 @@ def gen_impl_integrator(intor):
     comp_1e, comp_2e, comp_tensor = ng[-3:]
     comp_all = max(comp_1e, 1) * max(comp_2e, 1) * comp_tensor
     token = token.format(intor, integrator_type, comp_tensor, comp_all, n_center, ng)
+    # special rule for F12 integrals
+    if "_stg" in intor or "_yp" in intor:
+        token = token.replace(f"{intor}_cart", "integral_null_cart")
+        token = token.replace(f"{intor}_spinor", "integral_null_spinor")
     return token
 
 for intor in actual_intor:
@@ -256,7 +313,7 @@ for intor in actual_intor:
 
 token_wrapper += """
 
-pub fn get_integrator(name: &str) -> Option<Box<dyn Integrator>> {
+pub fn get_cint_integrator(name: &str) -> Option<Box<dyn CintIntegrator>> {
     match name {
 """
 

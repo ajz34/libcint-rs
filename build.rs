@@ -7,7 +7,8 @@ fn main() {
 fn build_cint() {
     // let dst = cmake::Config::new("external_deps").build();
     // println!("cargo:rustc-link-search=native={}/lib", dst.display());
-    // println!("cargo:rustc-link-lib=cint");
+    println!("cargo:rustc-link-search=/home/a/Software/libcint-6.1.2/lib");
+    println!("cargo:rustc-link-lib=cint");
     // println!("cargo:rustc-link-lib=quadmath");
 }
 

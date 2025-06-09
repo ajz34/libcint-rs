@@ -6,7 +6,7 @@ use std::ffi::c_int;
 
 /* #region integrator from cint */
 
-pub trait Integrator {
+pub trait CintIntegrator {
     /// # Safety
     unsafe fn optimizer(
         &self,
@@ -85,7 +85,7 @@ macro_rules! impl_integrator {
     ) => {
         #[allow(non_camel_case_types)]
         pub struct $intor;
-        impl Integrator for $intor {
+        impl CintIntegrator for $intor {
             unsafe fn optimizer(
                 &self,
                 opt: *mut *mut CINTOpt,
