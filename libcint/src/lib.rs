@@ -2,4 +2,5 @@
 
 pub mod cint_data;
 pub mod crafter;
+pub mod error;
 pub mod ffi;

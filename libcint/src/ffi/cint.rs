@@ -9702,35 +9702,3 @@ unsafe extern "C" {
         cache: *mut f64,
     ) -> c_int;
 }
-
-/// # Safety
-pub unsafe fn integral_null_cart(
-    _out: *mut f64,
-    _dims: *const c_int,
-    _shls: *const c_int,
-    _atm: *const c_int,
-    _natm: c_int,
-    _bas: *const c_int,
-    _nbas: c_int,
-    _env: *const f64,
-    _opt: *const CINTOpt,
-    _cache: *mut f64,
-) -> c_int {
-    panic!("Libcint does not implement this integral.");
-}
-
-/// # Safety
-pub unsafe fn integral_null_spinor(
-    _out: *mut __BindgenComplex<f64>,
-    _dims: *const c_int,
-    _shls: *const c_int,
-    _atm: *const c_int,
-    _natm: c_int,
-    _bas: *const c_int,
-    _nbas: c_int,
-    _env: *const f64,
-    _opt: *const CINTOpt,
-    _cache: *mut f64,
-) -> c_int {
-    panic!("Libcint does not implement this integral.");
-}

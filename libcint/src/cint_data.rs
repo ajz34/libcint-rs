@@ -1,12 +1,14 @@
+use crate::error::CintError;
 use crate::ffi::cecp;
 use crate::ffi::cecp::ECPOpt;
+use crate::ffi::cecp_wrapper::get_ecp_integrator;
 use crate::ffi::cint;
 use crate::ffi::cint::CINTOpt;
-use crate::ffi::wrapper_traits::{CintIntegrator, ECPIntegrator};
+use crate::ffi::cint_wrapper::get_cint_integrator;
+use crate::ffi::wrapper_traits::Integrator;
 use core::ffi::c_int;
 use core::ptr::NonNull;
-use std::error::Error;
-use std::fmt::{Debug, Display};
+use std::ffi::c_void;
 use std::ptr::null_mut;
 
 /* #region structs */
@@ -19,48 +21,50 @@ pub struct CintData {
     pub env: Vec<f64>,
 }
 
+pub enum CintKind {
+    Int,
+    Ecp,
+}
+
+pub enum CintType {
+    Sph,
+    Cart,
+    Spinor,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum CintOptimizer {
     Int(NonNull<*mut CINTOpt>),
     Ecp(NonNull<*mut ECPOpt>),
 }
 
-pub enum Integrator {
-    Int(Box<dyn CintIntegrator>),
-    Ecp(Box<dyn ECPIntegrator>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CintError {
-    IntegratorNotFound(String),
-    Miscellaneous(String),
-}
-
 /* #endregion */
 
 /* #region impl integrator */
 
-pub fn get_integrator_f(name: &str) -> Result<Integrator, CintError> {
-    crate::ffi::cint_wrapper::get_cint_integrator(name)
-        .map(|cint_integrator| Ok(Integrator::Int(cint_integrator)))
-        .or(crate::ffi::cecp_wrapper::get_ecp_integrator(name)
-            .map(|ecp_integrator| Ok(Integrator::Ecp(ecp_integrator))))
-        .unwrap_or_else(|| Err(CintError::IntegratorNotFound(name.to_string())))
-}
-
-pub fn get_integrator(name: &str) -> Integrator {
+pub fn get_integrator(name: &str) -> Box<dyn Integrator> {
     get_integrator_f(name).unwrap()
 }
 
-/* #endregion */
-
-impl Display for CintError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(self, f)
+pub fn get_integrator_f(name: &str) -> Result<Box<dyn Integrator>, CintError> {
+    if let Some(intor) = get_cint_integrator(name) {
+        Ok(intor)
+    } else if let Some(intor) = get_ecp_integrator(name) {
+        Ok(intor)
+    } else {
+        Err(CintError::IntegratorNotFound(name.to_string()))
     }
 }
 
-impl Error for CintError {}
+pub fn get_integrator_kind(name: &str) -> CintKind {
+    get_integrator_kind_f(name).unwrap()
+}
+
+pub fn get_integrator_kind_f(name: &str) -> Result<CintKind, CintError> {
+    Ok(get_integrator_f(name)?.kind())
+}
+
+/* #endregion */
 
 impl Drop for CintOptimizer {
     fn drop(&mut self) {
@@ -78,41 +82,64 @@ impl CintData {
 
     pub fn get_optimizer_f(&self, name: &str) -> Result<CintOptimizer, CintError> {
         let intor = get_integrator_f(name)?;
-        match intor {
-            Integrator::Int(intor) => {
+        match intor.kind() {
+            CintKind::Int => {
                 let atm_ptr = self.atm.as_ptr() as *const c_int;
                 let bas_ptr = self.bas.as_ptr() as *const c_int;
                 let env_ptr = self.env.as_ptr();
                 let n_atm = self.atm.len() as c_int;
                 let n_bas = self.bas.len() as c_int;
-                let mut c_opt_ptr = null_mut();
+                let mut c_opt_ptr: *mut CINTOpt = null_mut();
                 unsafe {
-                    intor.optimizer(&mut c_opt_ptr, atm_ptr, n_atm, bas_ptr, n_bas, env_ptr);
+                    intor.optimizer(
+                        &mut c_opt_ptr as *mut *mut CINTOpt as *mut *mut c_void,
+                        atm_ptr,
+                        n_atm,
+                        bas_ptr,
+                        n_bas,
+                        env_ptr,
+                    );
                 };
                 Ok(CintOptimizer::Int(NonNull::new(&mut c_opt_ptr).unwrap()))
             },
-            Integrator::Ecp(intor) => {
+            CintKind::Ecp => {
                 let merged = self.merge_ecp_data();
+                if merged.is_none() {
+                    return Err(CintError::NotECPAvailable(
+                        "Current cint_data has no ECP data".to_string(),
+                    ));
+                }
+                let merged = merged.unwrap();
                 let atm_ptr = merged.atm.as_ptr() as *const c_int;
                 let bas_ptr = merged.bas.as_ptr() as *const c_int;
                 let env_ptr = merged.env.as_ptr();
                 let n_atm = merged.atm.len() as c_int;
                 let n_bas = merged.bas.len() as c_int;
-                let mut c_opt_ptr = null_mut();
+                let mut c_opt_ptr: *mut ECPOpt = null_mut();
                 unsafe {
-                    intor.optimizer(&mut c_opt_ptr, atm_ptr, n_atm, bas_ptr, n_bas, env_ptr);
+                    intor.optimizer(
+                        &mut c_opt_ptr as *mut *mut ECPOpt as *mut *mut c_void,
+                        atm_ptr,
+                        n_atm,
+                        bas_ptr,
+                        n_bas,
+                        env_ptr,
+                    );
                 };
                 Ok(CintOptimizer::Ecp(NonNull::new(&mut c_opt_ptr).unwrap()))
             },
         }
     }
 
-    pub fn merge_ecp_data(&self) -> CintData {
+    pub fn merge_ecp_data(&self) -> Option<CintData> {
+        if self.ecpbas.is_empty() {
+            return None;
+        }
         let mut merged = self.clone();
         merged.bas.extend_from_slice(&self.ecpbas);
         merged.env[cecp::AS_ECPBAS_OFFSET as usize] = self.bas.len() as f64;
         merged.env[cecp::AS_NECPBAS as usize] = self.ecpbas.len() as f64;
-        merged
+        Some(merged)
     }
 }
 
