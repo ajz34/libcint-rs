@@ -17,24 +17,13 @@ with open("../src/cecp/nr_ecp.h", "r") as f:
 subprocess.run([
     "bindgen", "../src/cecp/nr_ecp.h",
     "-o", "cecp.rs",
-    "--no-layout-tests",  # disable redundant tests
-    "--wasm-import-module-name=cint",  # to be modified to #[link(name = ...)]
-    "--blocklist-function", "[_].*",  # exclude some function of complex.c
-    "--blocklist-var", "_.*",  # exclude variables from complex.c and stdint.c
-    "--blocklist-type", "_.*",  # exclude types from complex.c
+    "--allowlist-file", "../src/cecp/nr_ecp.h",
+    "--no-layout-tests",
+    "--merge-extern-blocks",
 ])
 
 with open("cecp.rs", "r") as f:
     token = f.read()
-
-# exclude some function of complex.c
-res = re.findall(r"(?:\#.*?\})", token.replace("\n", "NEWLINE"))
-for r in res:
-    if "pub fn c" in r and "pub fn cint" not in r:
-        token = token.replace(r.replace("NEWLINE", "\n") + "\n", "")
-
-# change to #[link(name = "cint")]
-token = token.replace("wasm_import_module", "name")
 
 # change mutability
 token = token \
@@ -45,7 +34,25 @@ token = token \
     .replace("env: *mut", "env: *const") \
     .replace("opt: *mut ECPOpt", "opt: *const ECPOpt")
 
+# +
+# clean some `::std::` code
+token = """
+use core::ffi::{c_int, c_ulong};
+
+""" + token
+
+token = token.replace("::std::os::raw::c_int", "c_int")
+token = token.replace("::std::os::raw::c_ulong", "c_ulong")
+token = token.replace("::std::option::Option", "Option")
+# -
+
 with open("cecp.rs", "w") as f:
     f.write(token)
 
-subprocess.run(["mv", "cecp.rs", "../src/"])
+subprocess.run(["mv", "cecp.rs", "../src/ffi/cecp.rs"])
+
+# ## Finalize with format
+
+os.chdir("..")
+
+subprocess.run(["cargo", "fmt"])

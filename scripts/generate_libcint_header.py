@@ -167,11 +167,7 @@ subprocess.run([
     "bindgen", "cint_funcs.h",
     "-o", "cint.rs",
     "--allowlist-file", "cint_funcs.h",
-    "--no-layout-tests",  # disable redundant tests
-    # "--wasm-import-module-name=cint",  # to be modified to #[link(name = ...)]
-    # "--blocklist-function", "[_].*",  # exclude some function of complex.c
-    # "--blocklist-var", "_.*",  # exclude variables from complex.c and stdint.c
-    # "--blocklist-type", "_.*",  # exclude types from complex.c
+    "--no-layout-tests",
     "--merge-extern-blocks",
 ])
 
@@ -260,23 +256,23 @@ for intor in actual_intor:
 
 token_wrapper += """
 
-pub fn get_integrator(name: &str) -> Box<dyn Integrator> {
+pub fn get_integrator(name: &str) -> Option<Box<dyn Integrator>> {
     match name {
 """
 
 for intor in actual_intor:
     token_wrapper += f"""
-        "{intor}" => Box::new({intor}),
+        "{intor}" => Some(Box::new({intor})),
     """.strip()
 
 token_wrapper += """
-        _ => panic!("cint integrator `{name}` is not available!"),
+        _ => None,
     }
 }
 """
 # -
 
-with open("../src/ffi/wrapper.rs", "w") as f:
+with open("../src/ffi/cint_wrapper.rs", "w") as f:
     f.write(token_wrapper)
 
 # ## Finalize with format

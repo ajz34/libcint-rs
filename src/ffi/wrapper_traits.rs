@@ -1,12 +1,13 @@
+use crate::ffi::cecp::ECPOpt;
 use crate::ffi::cint;
 use crate::ffi::cint::CINTOpt;
 use std::any::Any;
 use std::ffi::c_int;
 
+/* #region integrator from cint */
+
 pub trait Integrator {
     /// # Safety
-    ///
-    /// TODO
     unsafe fn optimizer(
         &self,
         opt: *mut *mut CINTOpt,
@@ -17,8 +18,6 @@ pub trait Integrator {
         env: *const f64,
     );
     /// # Safety
-    ///
-    /// TODO
     unsafe fn integral_sph(
         &self,
         out: *mut f64,
@@ -33,8 +32,6 @@ pub trait Integrator {
         cache: *mut f64,
     ) -> c_int;
     /// # Safety
-    ///
-    /// TODO
     unsafe fn integral_cart(
         &self,
         out: *mut f64,
@@ -49,8 +46,6 @@ pub trait Integrator {
         cache: *mut f64,
     ) -> c_int;
     /// # Safety
-    ///
-    /// TODO
     unsafe fn integral_spinor(
         &self,
         out: *mut cint::__BindgenComplex<f64>,
@@ -177,3 +172,129 @@ macro_rules! impl_integrator {
         }
     };
 }
+
+/* #endregion */
+
+/* #region integrator from cecp */
+
+pub trait ECPIntegrator {
+    /// # Safety
+    unsafe fn optimizer(
+        &self,
+        opt: *mut *mut ECPOpt,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+    );
+    /// # Safety
+    unsafe fn integral_sph(
+        &self,
+        out: *mut f64,
+        dims: *const c_int,
+        shls: *const c_int,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+        opt: *const ECPOpt,
+        cache: *mut f64,
+    ) -> c_int;
+    /// # Safety
+    unsafe fn integral_cart(
+        &self,
+        out: *mut f64,
+        dims: *const c_int,
+        shls: *const c_int,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+        opt: *const ECPOpt,
+        cache: *mut f64,
+    ) -> c_int;
+    fn n_comp(&self) -> usize;
+    fn integrator_type(&self) -> &'static str;
+    fn name(&self) -> &'static str;
+    fn as_any(&self) -> &dyn Any;
+}
+
+#[macro_export]
+macro_rules! impl_ecpintegrator {
+    (
+        $integrator: ident,
+        $optimizer: ident,
+        $integral_sph: ident,
+        $integral_cart: ident,
+        $n_comp: expr,
+        $integrator_type: literal,
+        $name: literal
+    ) => {
+        #[allow(non_camel_case_types)]
+        pub struct $integrator;
+        impl ECPIntegrator for $integrator {
+            unsafe fn optimizer(
+                &self,
+                opt: *mut *mut ECPOpt,
+                atm: *const c_int,
+                natm: c_int,
+                bas: *const c_int,
+                nbas: c_int,
+                env: *const f64,
+            ) {
+                unsafe { cecp::$optimizer(opt, atm, natm, bas, nbas, env) }
+            }
+            unsafe fn integral_sph(
+                &self,
+                out: *mut f64,
+                dims: *const c_int,
+                shls: *const c_int,
+                atm: *const c_int,
+                natm: c_int,
+                bas: *const c_int,
+                nbas: c_int,
+                env: *const f64,
+                opt: *const ECPOpt,
+                cache: *mut f64,
+            ) -> c_int {
+                unsafe {
+                    cecp::$integral_sph(out, dims, shls, atm, natm, bas, nbas, env, opt, cache)
+                }
+            }
+            unsafe fn integral_cart(
+                &self,
+                out: *mut f64,
+                dims: *const c_int,
+                shls: *const c_int,
+                atm: *const c_int,
+                natm: c_int,
+                bas: *const c_int,
+                nbas: c_int,
+                env: *const f64,
+                opt: *const ECPOpt,
+                cache: *mut f64,
+            ) -> c_int {
+                unsafe {
+                    cecp::$integral_cart(out, dims, shls, atm, natm, bas, nbas, env, opt, cache)
+                }
+            }
+            fn n_comp(&self) -> usize {
+                $n_comp as usize
+            }
+            fn integrator_type(&self) -> &'static str {
+                $integrator_type
+            }
+            fn name(&self) -> &'static str {
+                $name
+            }
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+    };
+}
+
+/* #endregion */
