@@ -2,6 +2,9 @@ pub use crate::cint::{CInt, CIntKind, CIntOptimizer, CIntType};
 pub use crate::error::CIntError;
 pub use crate::ffi::wrapper_traits::Integrator;
 
+// for doc testing
+pub use crate::test_mol::{init_h2o_def2_tzvp, init_sb2me4_def2_tzvp};
+
 // for developing
 pub(crate) use crate::ffi::cecp_ffi;
 pub(crate) use crate::ffi::cecp_ffi::ECPOpt;

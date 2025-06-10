@@ -11,7 +11,7 @@ license = "Apache-2.0"
 [dependencies]
 itertools = "0.12"
 rayon = "1.10"
-num-complex = "0.4"
+num = "0.4"
 
 [build-dependencies]
 cc = "1.0"

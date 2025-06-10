@@ -1,9 +1,5 @@
 #![allow(dead_code)]
 
-/* #region optimizer */
-
-/* #endregion */
-
 /* #region util */
 
 #[allow(clippy::mut_from_ref)]

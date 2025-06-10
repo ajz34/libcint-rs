@@ -5,3 +5,4 @@ pub mod crafter;
 pub mod error;
 pub mod ffi;
 pub mod prelude;
+pub mod test_mol;
