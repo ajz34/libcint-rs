@@ -12,6 +12,7 @@ license = "Apache-2.0"
 itertools = "0.12"
 rayon = "1.10"
 num = "0.4"
+duplicate = "2.0"
 
 [build-dependencies]
 cc = "1.0"

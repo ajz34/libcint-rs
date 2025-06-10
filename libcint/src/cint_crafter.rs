@@ -1,3 +1,5 @@
+//! Integral crafter for `CInt` instance (the main integral functions).
+
 #![allow(dead_code)]
 
 /* #region util */
