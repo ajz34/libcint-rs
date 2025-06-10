@@ -16,13 +16,13 @@ with open("../src/cecp/nr_ecp.h", "r") as f:
 
 subprocess.run([
     "bindgen", "../src/cecp/nr_ecp.h",
-    "-o", "cecp.rs",
+    "-o", "cecp_ffi.rs",
     "--allowlist-file", "../src/cecp/nr_ecp.h",
     "--no-layout-tests",
     "--merge-extern-blocks",
 ])
 
-with open("cecp.rs", "r") as f:
+with open("cecp_ffi.rs", "r") as f:
     token = f.read()
 
 # change mutability
@@ -46,10 +46,10 @@ token = token.replace("::std::os::raw::c_ulong", "c_ulong")
 token = token.replace("::std::option::Option", "Option")
 # -
 
-with open("cecp.rs", "w") as f:
+with open("cecp_ffi.rs", "w") as f:
     f.write(token)
 
-subprocess.run(["mv", "cecp.rs", "../src/ffi/cecp.rs"])
+subprocess.run(["mv", "cecp_ffi.rs", "../src/ffi/cecp_ffi.rs"])
 
 # ## Finalize with format
 

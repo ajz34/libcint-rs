@@ -1,5 +1,11 @@
 #![allow(dead_code)]
 
+/* #region optimizer */
+
+/* #endregion */
+
+/* #region util */
+
 #[allow(clippy::mut_from_ref)]
 pub(crate) unsafe fn cast_mut_slice<T>(slc: &[T]) -> &mut [T] {
     let len = slc.len();
@@ -215,3 +221,5 @@ pub(crate) fn copy_5d_s2ij_diag<T>(
         }
     }
 }
+
+/* #endregion */

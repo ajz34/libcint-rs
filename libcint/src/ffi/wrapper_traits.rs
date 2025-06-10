@@ -1,6 +1,4 @@
-use crate::cint_data::CintKind;
-use std::any::Any;
-use std::ffi::{c_int, c_void};
+use crate::prelude::*;
 
 /* #region integrator from cint */
 
@@ -66,7 +64,7 @@ pub trait Integrator {
     fn ng(&self) -> Vec<i32>;
     fn integrator_category(&self) -> &'static str;
     fn name(&self) -> &'static str;
-    fn kind(&self) -> CintKind;
+    fn kind(&self) -> CIntKind;
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -196,7 +194,7 @@ macro_rules! impl_integrator {
                 $name
             }
 
-            fn kind(&self) -> CintKind {
+            fn kind(&self) -> CIntKind {
                 $kind
             }
 

@@ -1,20 +1,12 @@
-use crate::error::CintError;
-use crate::ffi::cecp;
-use crate::ffi::cecp::ECPOpt;
+use crate::prelude::*;
+
 use crate::ffi::cecp_wrapper::get_ecp_integrator;
-use crate::ffi::cint;
-use crate::ffi::cint::CINTOpt;
 use crate::ffi::cint_wrapper::get_cint_integrator;
-use crate::ffi::wrapper_traits::Integrator;
-use core::ffi::c_int;
-use core::ptr::NonNull;
-use std::ffi::c_void;
-use std::ptr::null_mut;
 
 /* #region structs */
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CintData {
+pub struct CInt {
     pub atm: Vec<[c_int; 6]>,    // ATM_SLOTS
     pub bas: Vec<[c_int; 8]>,    // BAS_SLOTS
     pub ecpbas: Vec<[c_int; 8]>, // BAS_SLOTS
@@ -22,13 +14,13 @@ pub struct CintData {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CintKind {
+pub enum CIntKind {
     Int,
     Ecp,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CintType {
+pub enum CIntType {
     #[default]
     Sph,
     Cart,
@@ -36,37 +28,37 @@ pub enum CintType {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum CintOptimizer {
+pub enum CIntOptimizer {
     Int(NonNull<*mut CINTOpt>),
     Ecp(NonNull<*mut ECPOpt>),
 }
 
 /* #endregion */
 
-/* #region impl integrator */
+/* #region get_integrator */
 
 /// Obtain integrator by name.
 ///
 /// # Panics
 ///
 /// - integrator not found
-/// - rare cases that integrator not available for the specified `CintType`
+/// - rare cases that integrator not available for the specified `CIntType`
 ///   (i.e., for `with_f12` integrators such as `int2e_stg`, the cart and spinor
 ///   versions are not available)
-pub fn get_integrator(intor: &str) -> (Box<dyn Integrator>, CintType) {
+pub fn get_integrator(intor: &str) -> (Box<dyn Integrator>, CIntType) {
     get_integrator_f(intor).unwrap()
 }
 
-pub fn get_integrator_f(intor: &str) -> Result<(Box<dyn Integrator>, CintType), CintError> {
+pub fn get_integrator_f(intor: &str) -> Result<(Box<dyn Integrator>, CIntType), CIntError> {
     // check if suffix is present
     let (intor, cint_type) = if let Some(intor) = intor.strip_suffix("_sph") {
-        (intor, CintType::Sph)
+        (intor, CIntType::Sph)
     } else if let Some(intor) = intor.strip_suffix("_cart") {
-        (intor, CintType::Cart)
+        (intor, CIntType::Cart)
     } else if let Some(intor) = intor.strip_suffix("_spinor") {
-        (intor, CintType::Spinor)
+        (intor, CIntType::Spinor)
     } else {
-        (intor, CintType::default()) // default to sph
+        (intor, CIntType::default()) // default to sph
     };
 
     // explicitly check cint and ecp differently
@@ -75,30 +67,30 @@ pub fn get_integrator_f(intor: &str) -> Result<(Box<dyn Integrator>, CintType), 
     } else if let Some(intor) = get_ecp_integrator(intor) {
         Ok(intor)
     } else {
-        Err(CintError::IntegratorNotFound(intor.to_string()))
+        Err(CIntError::IntegratorNotFound(intor.to_string()))
     }?;
 
     // check if the integrator and cint_type is available
     match cint_type {
-        CintType::Sph => {
+        CIntType::Sph => {
             if !intor.is_sph_available() {
-                return Err(CintError::IntegratorNotAvailable(format!(
+                return Err(CIntError::IntegratorNotAvailable(format!(
                     "{} is not available for spherical integrals",
                     intor.name()
                 )));
             }
         },
-        CintType::Cart => {
+        CIntType::Cart => {
             if !intor.is_cart_available() {
-                return Err(CintError::IntegratorNotAvailable(format!(
+                return Err(CIntError::IntegratorNotAvailable(format!(
                     "{} is not available for Cartesian integrals",
                     intor.name()
                 )));
             }
         },
-        CintType::Spinor => {
+        CIntType::Spinor => {
             if !intor.is_spinor_available() {
-                return Err(CintError::IntegratorNotAvailable(format!(
+                return Err(CIntError::IntegratorNotAvailable(format!(
                     "{} is not available for spinor integrals",
                     intor.name()
                 )));
@@ -112,27 +104,59 @@ pub fn get_integrator_f(intor: &str) -> Result<(Box<dyn Integrator>, CintType), 
 
 /* #endregion */
 
-impl Drop for CintOptimizer {
+impl Drop for CIntOptimizer {
     fn drop(&mut self) {
         match self {
-            Self::Int(opt) => unsafe { cint::CINTdel_optimizer(opt.as_mut()) },
-            Self::Ecp(opt) => unsafe { cecp::ECPdel_optimizer(opt.as_mut()) },
+            Self::Int(opt) => unsafe { cint_ffi::CINTdel_optimizer(opt.as_mut()) },
+            Self::Ecp(opt) => unsafe { cecp_ffi::ECPdel_optimizer(opt.as_mut()) },
         }
     }
 }
 
-impl CintData {
-    /// Creates a new `CintData` instance, with ECP integral information
+/// Merge ECP data for integral evaluation.
+impl CInt {
+    /// Creates a new `CIntData` instance, with ECP integral information
     /// written to `bas` field, and properly initializes values in `env` field.
     ///
     /// Should be called before integral calculations. Be careful this function
     /// should not called twice in consecutive.
-    pub fn merge_ecp_data(&self) -> CintData {
-        let mut merged = self.clone();
-        merged.bas.extend_from_slice(&self.ecpbas);
-        merged.env[cecp::AS_ECPBAS_OFFSET as usize] = self.bas.len() as f64;
-        merged.env[cecp::AS_NECPBAS as usize] = self.ecpbas.len() as f64;
-        merged
+    pub fn merge_ecp_data(&self) -> CInt {
+        if self.is_ecp_merged() {
+            self.clone()
+        } else {
+            let mut merged = self.clone();
+            merged.bas.extend_from_slice(&self.ecpbas);
+            merged.env[cecp_ffi::AS_ECPBAS_OFFSET as usize] = self.bas.len() as f64;
+            merged.env[cecp_ffi::AS_NECPBAS as usize] = self.ecpbas.len() as f64;
+            merged
+        }
+    }
+
+    /// Check whether the `CInt` instance has been merged with ECP data.
+    pub fn is_ecp_merged(&self) -> bool {
+        self.env[cecp_ffi::AS_ECPBAS_OFFSET as usize] != 0.0
+    }
+}
+
+/// Obtaining integrator and optimizer.
+impl CInt {
+    /// Obtain integrator by name.
+    ///
+    /// This function does not require `CInt` instance. Make it here only for
+    /// convenience. You can also call
+    ///
+    /// # Panics
+    ///
+    /// - integrator not found
+    /// - rare cases that integrator not available for the specified `CIntType`
+    ///   (i.e., for `with_f12` integrators such as `int2e_stg`, the cart and
+    ///   spinor versions are not available)
+    pub fn get_integrator(intor: &str) -> (Box<dyn Integrator>, CIntType) {
+        get_integrator(intor)
+    }
+
+    pub fn get_integrator_f(intor: &str) -> Result<(Box<dyn Integrator>, CIntType), CIntError> {
+        get_integrator_f(intor)
     }
 
     /// Obtain integrator optimizer.
@@ -146,19 +170,19 @@ impl CintData {
     /// # See also
     ///
     /// PySCF `make_cintopt`
-    pub fn make_optimizer(&self, intor: &str) -> CintOptimizer {
+    pub fn make_optimizer(&self, intor: &str) -> CIntOptimizer {
         self.make_optimizer_f(intor).unwrap()
     }
 
-    pub fn make_optimizer_f(&self, intor: &str) -> Result<CintOptimizer, CintError> {
+    pub fn make_optimizer_f(&self, intor: &str) -> Result<CIntOptimizer, CIntError> {
         let (intor, _) = get_integrator_f(intor)?;
-        let atm_ptr = self.atm.as_ptr() as *const c_int;
-        let bas_ptr = self.bas.as_ptr() as *const c_int;
-        let env_ptr = self.env.as_ptr();
-        let n_atm = self.atm.len() as c_int;
-        let n_bas = self.bas.len() as c_int;
         match intor.kind() {
-            CintKind::Int => {
+            CIntKind::Int => {
+                let atm_ptr = self.atm.as_ptr() as *const c_int;
+                let bas_ptr = self.bas.as_ptr() as *const c_int;
+                let env_ptr = self.env.as_ptr();
+                let n_atm = self.atm.len() as c_int;
+                let n_bas = self.bas.len() as c_int;
                 let mut c_opt_ptr: *mut CINTOpt = null_mut();
                 unsafe {
                     intor.optimizer(
@@ -170,15 +194,16 @@ impl CintData {
                         env_ptr,
                     );
                 };
-                Ok(CintOptimizer::Int(NonNull::new(&mut c_opt_ptr).unwrap()))
+                Ok(CIntOptimizer::Int(NonNull::new(&mut c_opt_ptr).unwrap()))
             },
-            CintKind::Ecp => {
+            CIntKind::Ecp => {
                 // Check if this cint_data has been merged with ECP data
-                if self.env[cecp::AS_ECPBAS_OFFSET as usize] == 0.0 {
-                    return Err(CintError::RuntimeError(
-                        "ECP integrator requires ECP data to be merged".to_string(),
-                    ));
-                }
+                let merged = self.merge_ecp_data();
+                let atm_ptr = merged.atm.as_ptr() as *const c_int;
+                let bas_ptr = merged.bas.as_ptr() as *const c_int;
+                let env_ptr = merged.env.as_ptr();
+                let n_atm = merged.atm.len() as c_int;
+                let n_bas = merged.bas.len() as c_int;
                 let mut c_opt_ptr: *mut ECPOpt = null_mut();
                 unsafe {
                     intor.optimizer(
@@ -190,7 +215,7 @@ impl CintData {
                         env_ptr,
                     );
                 };
-                Ok(CintOptimizer::Ecp(NonNull::new(&mut c_opt_ptr).unwrap()))
+                Ok(CIntOptimizer::Ecp(NonNull::new(&mut c_opt_ptr).unwrap()))
             },
         }
     }
@@ -205,12 +230,12 @@ mod tests {
         let cint_data = initialize();
         let opt = cint_data.make_optimizer("int2e");
         println!("int2e opt: {opt:?}");
-        if let CintOptimizer::Int(opt) = opt {
+        if let CIntOptimizer::Int(opt) = opt {
             println!("int2e opt inner {:?}", unsafe { opt.read() });
         }
     }
 
-    fn initialize() -> CintData {
+    fn initialize() -> CInt {
         // mol = gto.Mole(atom="O; H 1 0.94; H 1 0.94 2 104.5",
         // basis="def2-TZVP").build()
         let atm = vec![[8, 20, 1, 23, 0, 0], [1, 24, 1, 27, 0, 0], [1, 28, 1, 31, 0, 0]];
@@ -322,6 +347,6 @@ mod tests {
             4.3969226782656516e+00,
         ];
 
-        CintData { atm, bas, ecpbas: vec![], env: c_env }
+        CInt { atm, bas, ecpbas: vec![], env: c_env }
     }
 }

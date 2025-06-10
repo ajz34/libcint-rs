@@ -1,5 +1,5 @@
-use crate::cint_data::CintKind;
-use crate::ffi::cecp::*;
+use crate::cint::CIntKind;
+use crate::ffi::cecp_ffi::*;
 use crate::ffi::wrapper_traits::Integrator;
 use crate::ffi::wrapper_traits::panic_spinor;
 use crate::impl_integrator;
@@ -21,7 +21,7 @@ impl_integrator!(
     vec![0, 0, 0, 0, 0, 1, 1, 1],
     "ECP",
     "ECPIntegratorBase",
-    CintKind::Ecp
+    CIntKind::Ecp
 );
 impl_integrator!(
     ECPscalar_ignuc,
@@ -38,7 +38,7 @@ impl_integrator!(
     vec![1, 0, 0, 0, 1, 1, 0, 3],
     "ECP",
     "ECPscalar_ignuc",
-    CintKind::Ecp
+    CIntKind::Ecp
 );
 impl_integrator!(
     ECPscalar_ipnuc,
@@ -55,7 +55,7 @@ impl_integrator!(
     vec![1, 0, 0, 0, 1, 1, 0, 3],
     "ECP",
     "ECPscalar_ipnuc",
-    CintKind::Ecp
+    CIntKind::Ecp
 );
 impl_integrator!(
     ECPscalar_ipipnuc,
@@ -72,7 +72,7 @@ impl_integrator!(
     vec![2, 0, 0, 0, 2, 1, 0, 9],
     "ECP",
     "ECPscalar_ipipnuc",
-    CintKind::Ecp
+    CIntKind::Ecp
 );
 impl_integrator!(
     ECPscalar_ipnucip,
@@ -89,7 +89,7 @@ impl_integrator!(
     vec![1, 1, 0, 0, 2, 1, 0, 9],
     "ECP",
     "ECPscalar_ipnucip",
-    CintKind::Ecp
+    CIntKind::Ecp
 );
 impl_integrator!(
     ECPscalar_iprinv,
@@ -106,7 +106,7 @@ impl_integrator!(
     vec![1, 1, 0, 0, 2, 1, 0, 9],
     "ECP",
     "ECPscalar_iprinv",
-    CintKind::Ecp
+    CIntKind::Ecp
 );
 impl_integrator!(
     ECPscalar_ipiprinv,
@@ -123,7 +123,7 @@ impl_integrator!(
     vec![2, 0, 0, 0, 2, 1, 0, 9],
     "ECP",
     "ECPscalar_ipiprinv",
-    CintKind::Ecp
+    CIntKind::Ecp
 );
 impl_integrator!(
     ECPscalar_iprinvip,
@@ -140,7 +140,7 @@ impl_integrator!(
     vec![2, 0, 0, 0, 2, 1, 0, 9],
     "ECP",
     "ECPscalar_iprinvip",
-    CintKind::Ecp
+    CIntKind::Ecp
 );
 
 pub fn get_ecp_integrator(name: &str) -> Option<Box<dyn Integrator>> {
