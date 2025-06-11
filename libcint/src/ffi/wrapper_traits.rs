@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /* #region integrator from cint */
 
-pub trait Integrator {
+pub trait Integrator: Send + Sync {
     /// # Safety
     unsafe fn optimizer(
         &self,
@@ -200,6 +200,12 @@ macro_rules! impl_integrator {
 
             fn as_any(&self) -> &dyn Any {
                 self
+            }
+        }
+
+        impl Default for $intor {
+            fn default() -> Self {
+                Self
             }
         }
     };

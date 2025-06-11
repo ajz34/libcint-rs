@@ -120,7 +120,7 @@ pub fn init_h2o_def2_tzvp() -> CInt {
         3.2969483673949351e-01,  2.3140000000000001e+00,  1.1328313432935008e+01,  6.4500000000000002e-01,  1.2113199965714336e+00,  1.4279999999999999e+00,  4.3969226782656516e+00
     ];
 
-    CInt { atm, bas, ecpbas: vec![], env: c_env }
+    CInt { atm, bas, ecpbas: vec![], env: c_env, cint_type: Spheric }
 }
 
 /// Initialize Sb2Me4 with the cc-pVTZ basis set, which also includes ECP.
@@ -391,5 +391,5 @@ pub fn init_sb2me4_cc_pvtz() -> CInt {
         [  1,   3,   2,   2,   0, 256, 258,   0],
     ];
 
-    CInt { atm, bas, ecpbas, env }
+    CInt { atm, bas, ecpbas, env, cint_type: Spheric }
 }

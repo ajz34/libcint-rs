@@ -81,6 +81,14 @@ pub struct CInt {
     /// | 19 | `AS_NECPBAS`        | Number of ECP shells in `ecpbas` field                                     |
     /// | 20 | `PTR_ENV_START`     | Start of data                                                              |
     pub env: Vec<f64>,
+
+    /// Type of integral.
+    ///
+    /// - `Spheric`: spherical harmonics, which is the most common case.
+    /// - `Cartesian`: cartesian coordinates.
+    /// - `Spinor`: spinor integrals, which are used in relativistic
+    ///   calculations.
+    pub cint_type: CIntType,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,8 +100,8 @@ pub enum CIntKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CIntType {
     #[default]
-    Sph,
-    Cart,
+    Spheric,
+    Cartesian,
     Spinor,
 }
 

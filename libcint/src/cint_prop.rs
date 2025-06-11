@@ -77,6 +77,30 @@ impl CInt {
         if self.is_ecp_merged() { self.bas.len() - self.ecpbas.len() } else { self.bas.len() }
     }
 
+    /// Number of atoms in the system.
+    #[inline]
+    pub fn get_natm(&self) -> usize {
+        self.atm.len()
+    }
+
+    /// Pointer to the shell data.
+    #[inline]
+    pub fn get_bas_ptr(&self) -> *const c_int {
+        self.bas.as_ptr() as *const c_int
+    }
+
+    /// Pointer to the atom data.
+    #[inline]
+    pub fn get_atm_ptr(&self) -> *const c_int {
+        self.atm.as_ptr() as *const c_int
+    }
+
+    /// Pointer to the environment data.
+    #[inline]
+    pub fn get_env_ptr(&self) -> *const f64 {
+        self.env.as_ptr()
+    }
+
     /// Nuclear effective charge of the given atom id.
     ///
     /// # Note
@@ -191,6 +215,34 @@ impl CInt {
 
     /// Location mapping from shell to basis.
     ///
+    /// The type of integral is specified by struct field `cint_type`.
+    ///
+    /// Output vector is of length `nshl + 1`, where `nshl` is the number of
+    /// shells.
+    ///
+    /// # PySCF Equivalent
+    ///
+    /// This implementation follows `gto.moleintor.make_loc`.
+    ///
+    /// For `gto.Mole` object, methods `ao_loc`, `ao_loc_nr`, `ao_loc_2c` are
+    /// also relavent.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    ///
+    /// let loc_sph = cint_data.make_loc();
+    /// assert_eq!(loc_sph, vec![ 0,  1,  2,  3,  4,  5,  8, 11, 14, 19, 24, 31, 32, 33, 34, 37, 38, 39, 40, 43]);
+    /// ```
+    #[inline]
+    pub fn make_loc(&self) -> Vec<c_int> {
+        self.make_loc_with_type(self.cint_type)
+    }
+
+    /// Location mapping from shell to basis (with integral type specified).
+    ///
     /// This mapping is cumulated, and can be different for sph, cart and spinor
     /// types.
     ///
@@ -210,16 +262,16 @@ impl CInt {
     /// use libcint::prelude::*;
     /// let cint_data = init_h2o_def2_tzvp();
     ///
-    /// let loc_sph = cint_data.make_loc(CIntType::Sph);
+    /// let loc_sph = cint_data.make_loc_with_type(CIntType::Spheric);
     /// assert_eq!(loc_sph, vec![ 0,  1,  2,  3,  4,  5,  8, 11, 14, 19, 24, 31, 32, 33, 34, 37, 38, 39, 40, 43]);
     ///
-    /// let loc_cart = cint_data.make_loc(CIntType::Cart);
+    /// let loc_cart = cint_data.make_loc_with_type(CIntType::Cartesian);
     /// assert_eq!(loc_cart, vec![ 0,  1,  2,  3,  4,  5,  8, 11, 14, 20, 26, 36, 37, 38, 39, 42, 43, 44, 45, 48]);
     ///
-    /// let loc_spinor = cint_data.make_loc(CIntType::Spinor);
+    /// let loc_spinor = cint_data.make_loc_with_type(CIntType::Spinor);
     /// assert_eq!(loc_spinor, vec![ 0,  2,  4,  6,  8, 10, 16, 22, 28, 38, 48, 62, 64, 66, 68, 74, 76, 78, 80, 86]);
     /// ```
-    pub fn make_loc(&self, cint_type: CIntType) -> Vec<c_int> {
+    pub fn make_loc_with_type(&self, cint_type: CIntType) -> Vec<c_int> {
         const ANG_OF: usize = cint_ffi::ANG_OF as usize;
         const KAPPA_OF: usize = cint_ffi::KAPPA_OF as usize;
         const NCTR_OF: usize = cint_ffi::NCTR_OF as usize;
@@ -231,9 +283,9 @@ impl CInt {
             let k = self.bas[shl][KAPPA_OF];
             let nctr = self.bas[shl][NCTR_OF];
             let val = match cint_type {
-                CIntType::Sph => Self::len_sph(l) as c_int * nctr,
-                CIntType::Cart => Self::len_cart(l) as c_int * nctr,
-                CIntType::Spinor => Self::len_spinor(l, k) as c_int * nctr,
+                Spheric => Self::len_sph(l) as c_int * nctr,
+                Cartesian => Self::len_cart(l) as c_int * nctr,
+                Spinor => Self::len_spinor(l, k) as c_int * nctr,
             };
             ao_loc.push(ao_loc[shl] + val);
         }
@@ -242,9 +294,9 @@ impl CInt {
 
     /// Get the number of basis (atomic orbitals).
     ///
-    /// This value is different for sph, cart and spinor types.
+    /// The type of integral is specified by struct field `cint_type`.
     ///
-    /// This value is the same to the last of [`CInt::make_loc`].
+    /// This value is the same to the last of [`CInt::make_loc_with_type`].
     ///
     /// # PySCF Equivalent
     ///
@@ -258,27 +310,63 @@ impl CInt {
     /// use libcint::prelude::*;
     /// let cint_data = init_h2o_def2_tzvp();
     ///
-    /// let nao_sph = cint_data.get_nao(CIntType::Sph);
+    /// let nao_sph = cint_data.get_nao();
     /// assert_eq!(nao_sph, 43);
     ///
-    /// let nao_cart = cint_data.get_nao(CIntType::Cart);
-    /// assert_eq!(nao_cart, 48);
-    ///
-    /// let nao_spinor = cint_data.get_nao(CIntType::Spinor);
-    /// assert_eq!(nao_spinor, 86);
-    ///
     /// let cint_data = init_sb2me4_cc_pvtz();
-    /// let nao_sph = cint_data.get_nao(CIntType::Sph);
+    /// let nao_sph = cint_data.get_nao();
     /// assert_eq!(nao_sph, 366);
     ///
     /// # // This is test that when ecpbas is merged, the number of
     /// # // atomic orbitals is still correct.
     /// # let merged = cint_data.merge_ecpbas();
-    /// # let nao_cart = merged.get_nao(CIntType::Sph);
+    /// # let nao_cart = merged.get_nao();
     /// # assert_eq!(nao_cart, 366);
     /// ```
     #[inline]
-    pub fn get_nao(&self, key: CIntType) -> usize {
+    pub fn get_nao(&self) -> usize {
+        self.get_nao_with_type(self.cint_type)
+    }
+
+    /// Get the number of basis (atomic orbitals, with integral type specified).
+    ///
+    /// This value is different for sph, cart and spinor types.
+    ///
+    /// This value is the same to the last of [`CInt::make_loc_with_type`].
+    ///
+    /// # PySCF Equivalent
+    ///
+    /// For `gto.Mole` object, methods `nao_nr`, `nao_cart`, `nao_2c` are
+    /// relavent.
+    ///
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    ///
+    /// let nao_sph = cint_data.get_nao_with_type(CIntType::Spheric);
+    /// assert_eq!(nao_sph, 43);
+    ///
+    /// let nao_cart = cint_data.get_nao_with_type(CIntType::Cartesian);
+    /// assert_eq!(nao_cart, 48);
+    ///
+    /// let nao_spinor = cint_data.get_nao_with_type(CIntType::Spinor);
+    /// assert_eq!(nao_spinor, 86);
+    ///
+    /// let cint_data = init_sb2me4_cc_pvtz();
+    /// let nao_sph = cint_data.get_nao_with_type(CIntType::Spheric);
+    /// assert_eq!(nao_sph, 366);
+    ///
+    /// # // This is test that when ecpbas is merged, the number of
+    /// # // atomic orbitals is still correct.
+    /// # let merged = cint_data.merge_ecpbas();
+    /// # let nao_cart = merged.get_nao_with_type(CIntType::Spheric);
+    /// # assert_eq!(nao_cart, 366);
+    /// ```
+    #[inline]
+    pub fn get_nao_with_type(&self, cint_type: CIntType) -> usize {
         const ANG_OF: usize = cint_ffi::ANG_OF as usize;
         const KAPPA_OF: usize = cint_ffi::KAPPA_OF as usize;
         const NCTR_OF: usize = cint_ffi::NCTR_OF as usize;
@@ -289,10 +377,10 @@ impl CInt {
             let l = self.bas[shl][ANG_OF];
             let k = self.bas[shl][KAPPA_OF];
             let nctr = self.bas[shl][NCTR_OF];
-            let val = match key {
-                CIntType::Sph => Self::len_sph(l) as c_int * nctr,
-                CIntType::Cart => Self::len_cart(l) as c_int * nctr,
-                CIntType::Spinor => Self::len_spinor(l, k) as c_int * nctr,
+            let val = match cint_type {
+                Spheric => Self::len_sph(l) as c_int * nctr,
+                Cartesian => Self::len_cart(l) as c_int * nctr,
+                Spinor => Self::len_spinor(l, k) as c_int * nctr,
             };
             nao += val as usize;
         }
@@ -511,18 +599,48 @@ impl CInt {
     /// ```rust
     /// use libcint::prelude::*;
     /// let cint_data = init_h2o_def2_tzvp();
-    /// let aoslice = cint_data.aoslice_by_atom(CIntType::Sph);
+    /// let aoslice = cint_data.aoslice_by_atom();
     /// assert_eq!(aoslice, vec![
     ///     [ 0, 11,  0, 31],
     ///     [11, 15, 31, 37],
     ///     [15, 19, 37, 43],
     /// ]);
     /// ```
-    pub fn aoslice_by_atom(&self, cint_type: CIntType) -> Vec<[usize; 4]> {
+    #[inline]
+    pub fn aoslice_by_atom(&self) -> Vec<[usize; 4]> {
+        self.aoslice_by_atom_with_type(self.cint_type)
+    }
+
+    /// Shell and basis (atomic orbitals) offsets for each atom (with integral
+    /// type specified).
+    ///
+    /// This will give a list of `[shl_start, shl_end, ao_start, ao_end]` for
+    /// each atom.
+    ///
+    /// # PySCF Equivalent
+    ///
+    /// Method `Mole.aoslice_by_atom`. This implementation does not allow
+    /// aribitary `ao_loc` (which can be obtained by [`CInt::make_loc`]).
+    /// However, user can provide `cint_type` to specify if you wish to use
+    /// sph, cart or spinor.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    /// let aoslice = cint_data.aoslice_by_atom_with_type(CIntType::Spheric);
+    /// assert_eq!(aoslice, vec![
+    ///     [ 0, 11,  0, 31],
+    ///     [11, 15, 31, 37],
+    ///     [15, 19, 37, 43],
+    /// ]);
+    /// ```
+    pub fn aoslice_by_atom_with_type(&self, cint_type: CIntType) -> Vec<[usize; 4]> {
         const ATOM_OF: usize = cint_ffi::ATOM_OF as usize;
 
         let nbas = self.get_nbas();
-        let ao_loc = self.make_loc(cint_type);
+        let ao_loc = self.make_loc_with_type(cint_type);
 
         // category atoms with basis index
         // [atm_id, shl_start, shl_end]
@@ -565,7 +683,7 @@ impl CInt {
         // check result length
         assert_eq!(result.len(), self.atm.len());
         // check total number of basis
-        assert_eq!(result.last().unwrap()[3], self.get_nao(cint_type));
+        assert_eq!(result.last().unwrap()[3], self.get_nao_with_type(cint_type));
         result
     }
 }
@@ -577,6 +695,6 @@ mod test {
     #[test]
     fn playground() {
         let cint_data = init_h2o_def2_tzvp();
-        println!("{:?}", cint_data.aoslice_by_atom(CIntType::Sph));
+        println!("{:?}", cint_data.aoslice_by_atom());
     }
 }
