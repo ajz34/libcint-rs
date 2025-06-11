@@ -105,6 +105,16 @@ pub enum CIntType {
     Spinor,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CIntSymm {
+    #[default]
+    S1,
+    S2ij,
+    S2kl,
+    S4,
+    S8,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum CIntOptimizer {
     Int(NonNull<*mut CINTOpt>),
@@ -140,11 +150,24 @@ pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
 
 /* #endregion */
 
+unsafe impl Send for CIntOptimizer {}
+unsafe impl Sync for CIntOptimizer {}
+
 impl Drop for CIntOptimizer {
     fn drop(&mut self) {
         match self {
             Self::Int(opt) => unsafe { cint_ffi::CINTdel_optimizer(opt.as_mut()) },
             Self::Ecp(opt) => unsafe { cecp_ffi::ECPdel_optimizer(opt.as_mut()) },
+        }
+    }
+}
+
+impl CIntOptimizer {
+    #[inline]
+    pub fn as_ptr(&self) -> *const c_void {
+        match self {
+            Self::Int(opt) => unsafe { *opt.as_ptr() as *const c_void },
+            Self::Ecp(opt) => unsafe { *opt.as_ptr() as *const c_void },
         }
     }
 }
@@ -191,67 +214,6 @@ impl CInt {
     pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
         get_integrator_f(intor)
     }
-
-    /// Obtain integrator optimizer.
-    ///
-    /// # Panics
-    ///
-    /// - integrator not found
-    /// - `env` field not properly initialized for ECP integrator (should call
-    ///   `merge_ecpbas` before this function)
-    ///
-    /// # See also
-    ///
-    /// PySCF `make_cintopt`
-    pub fn make_optimizer(&self, intor: &str) -> CIntOptimizer {
-        self.make_optimizer_f(intor).unwrap()
-    }
-
-    pub fn make_optimizer_f(&self, intor: &str) -> Result<CIntOptimizer, CIntError> {
-        let intor = get_integrator_f(intor)?;
-        match intor.kind() {
-            CIntKind::Int => {
-                let atm_ptr = self.atm.as_ptr() as *const c_int;
-                let bas_ptr = self.bas.as_ptr() as *const c_int;
-                let env_ptr = self.env.as_ptr();
-                let n_atm = self.atm.len() as c_int;
-                let n_bas = self.bas.len() as c_int;
-                let mut c_opt_ptr: *mut CINTOpt = null_mut();
-                unsafe {
-                    intor.optimizer(
-                        &mut c_opt_ptr as *mut *mut CINTOpt as *mut *mut c_void,
-                        atm_ptr,
-                        n_atm,
-                        bas_ptr,
-                        n_bas,
-                        env_ptr,
-                    );
-                };
-                Ok(CIntOptimizer::Int(NonNull::new(&mut c_opt_ptr).unwrap()))
-            },
-            CIntKind::Ecp => {
-                // Check if this cint_data has been merged with ECP data
-                let merged = if self.is_ecp_merged() { self } else { &self.merge_ecpbas() };
-                let atm_ptr = merged.atm.as_ptr() as *const c_int;
-                let bas_ptr = merged.bas.as_ptr() as *const c_int;
-                let env_ptr = merged.env.as_ptr();
-                let n_atm = merged.atm.len() as c_int;
-                let n_bas = merged.bas.len() as c_int;
-                let mut c_opt_ptr: *mut ECPOpt = null_mut();
-                unsafe {
-                    intor.optimizer(
-                        &mut c_opt_ptr as *mut *mut ECPOpt as *mut *mut c_void,
-                        atm_ptr,
-                        n_atm,
-                        bas_ptr,
-                        n_bas,
-                        env_ptr,
-                    );
-                };
-                Ok(CIntOptimizer::Ecp(NonNull::new(&mut c_opt_ptr).unwrap()))
-            },
-        }
-    }
 }
 
 #[cfg(test)]
@@ -261,7 +223,7 @@ mod tests {
     #[test]
     fn test_cint_data() {
         let cint_data = init_h2o_def2_tzvp();
-        let opt = cint_data.make_optimizer("int2e");
+        let opt = cint_data.optimizer("int2e");
         println!("int2e opt: {opt:?}");
         if let CIntOptimizer::Int(opt) = opt {
             println!("int2e opt inner {:?}", unsafe { opt.read() });

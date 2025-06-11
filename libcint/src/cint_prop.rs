@@ -63,41 +63,41 @@ impl CInt {
     /// use libcint::prelude::*;
     ///
     /// let cint_data = init_h2o_def2_tzvp();
-    /// assert_eq!(cint_data.get_nbas(), 19);
+    /// assert_eq!(cint_data.nbas(), 19);
     ///
     /// let cint_data = init_sb2me4_cc_pvtz();
-    /// assert_eq!(cint_data.get_nbas(), 130);
+    /// assert_eq!(cint_data.nbas(), 130);
     ///
     /// # // This is test that when ecpbas is merged, the number of shells is still correct.
     /// # let merged = cint_data.merge_ecpbas();
-    /// # assert_eq!(merged.get_nbas(), 130);
+    /// # assert_eq!(merged.nbas(), 130);
     /// ```
     #[inline]
-    pub fn get_nbas(&self) -> usize {
+    pub fn nbas(&self) -> usize {
         if self.is_ecp_merged() { self.bas.len() - self.ecpbas.len() } else { self.bas.len() }
     }
 
     /// Number of atoms in the system.
     #[inline]
-    pub fn get_natm(&self) -> usize {
+    pub fn natm(&self) -> usize {
         self.atm.len()
     }
 
     /// Pointer to the shell data.
     #[inline]
-    pub fn get_bas_ptr(&self) -> *const c_int {
+    pub fn bas_ptr(&self) -> *const c_int {
         self.bas.as_ptr() as *const c_int
     }
 
     /// Pointer to the atom data.
     #[inline]
-    pub fn get_atm_ptr(&self) -> *const c_int {
+    pub fn atm_ptr(&self) -> *const c_int {
         self.atm.as_ptr() as *const c_int
     }
 
     /// Pointer to the environment data.
     #[inline]
-    pub fn get_env_ptr(&self) -> *const f64 {
+    pub fn env_ptr(&self) -> *const f64 {
         self.env.as_ptr()
     }
 
@@ -237,8 +237,18 @@ impl CInt {
     /// assert_eq!(loc_sph, vec![ 0,  1,  2,  3,  4,  5,  8, 11, 14, 19, 24, 31, 32, 33, 34, 37, 38, 39, 40, 43]);
     /// ```
     #[inline]
-    pub fn make_loc(&self) -> Vec<c_int> {
+    pub fn make_loc(&self) -> Vec<usize> {
         self.make_loc_with_type(self.cint_type)
+    }
+
+    /// Location mapping from shell to basis.
+    ///
+    /// # See also
+    ///
+    /// [`CInt::make_loc`]
+    #[inline]
+    pub fn ao_loc(&self) -> Vec<usize> {
+        self.make_loc()
     }
 
     /// Location mapping from shell to basis (with integral type specified).
@@ -271,21 +281,21 @@ impl CInt {
     /// let loc_spinor = cint_data.make_loc_with_type(CIntType::Spinor);
     /// assert_eq!(loc_spinor, vec![ 0,  2,  4,  6,  8, 10, 16, 22, 28, 38, 48, 62, 64, 66, 68, 74, 76, 78, 80, 86]);
     /// ```
-    pub fn make_loc_with_type(&self, cint_type: CIntType) -> Vec<c_int> {
+    pub fn make_loc_with_type(&self, cint_type: CIntType) -> Vec<usize> {
         const ANG_OF: usize = cint_ffi::ANG_OF as usize;
         const KAPPA_OF: usize = cint_ffi::KAPPA_OF as usize;
         const NCTR_OF: usize = cint_ffi::NCTR_OF as usize;
 
         let mut ao_loc = vec![0];
-        let nbas = self.get_nbas();
+        let nbas = self.nbas();
         for shl in 0..nbas {
             let l = self.bas[shl][ANG_OF];
             let k = self.bas[shl][KAPPA_OF];
-            let nctr = self.bas[shl][NCTR_OF];
+            let nctr = self.bas[shl][NCTR_OF] as usize;
             let val = match cint_type {
-                Spheric => Self::len_sph(l) as c_int * nctr,
-                Cartesian => Self::len_cart(l) as c_int * nctr,
-                Spinor => Self::len_spinor(l, k) as c_int * nctr,
+                Spheric => Self::len_sph(l) * nctr,
+                Cartesian => Self::len_cart(l) * nctr,
+                Spinor => Self::len_spinor(l, k) * nctr,
             };
             ao_loc.push(ao_loc[shl] + val);
         }
@@ -310,22 +320,22 @@ impl CInt {
     /// use libcint::prelude::*;
     /// let cint_data = init_h2o_def2_tzvp();
     ///
-    /// let nao_sph = cint_data.get_nao();
+    /// let nao_sph = cint_data.nao();
     /// assert_eq!(nao_sph, 43);
     ///
     /// let cint_data = init_sb2me4_cc_pvtz();
-    /// let nao_sph = cint_data.get_nao();
+    /// let nao_sph = cint_data.nao();
     /// assert_eq!(nao_sph, 366);
     ///
     /// # // This is test that when ecpbas is merged, the number of
     /// # // atomic orbitals is still correct.
     /// # let merged = cint_data.merge_ecpbas();
-    /// # let nao_cart = merged.get_nao();
+    /// # let nao_cart = merged.nao();
     /// # assert_eq!(nao_cart, 366);
     /// ```
     #[inline]
-    pub fn get_nao(&self) -> usize {
-        self.get_nao_with_type(self.cint_type)
+    pub fn nao(&self) -> usize {
+        self.nao_with_type(self.cint_type)
     }
 
     /// Get the number of basis (atomic orbitals, with integral type specified).
@@ -346,33 +356,33 @@ impl CInt {
     /// use libcint::prelude::*;
     /// let cint_data = init_h2o_def2_tzvp();
     ///
-    /// let nao_sph = cint_data.get_nao_with_type(CIntType::Spheric);
+    /// let nao_sph = cint_data.nao_with_type(CIntType::Spheric);
     /// assert_eq!(nao_sph, 43);
     ///
-    /// let nao_cart = cint_data.get_nao_with_type(CIntType::Cartesian);
+    /// let nao_cart = cint_data.nao_with_type(CIntType::Cartesian);
     /// assert_eq!(nao_cart, 48);
     ///
-    /// let nao_spinor = cint_data.get_nao_with_type(CIntType::Spinor);
+    /// let nao_spinor = cint_data.nao_with_type(CIntType::Spinor);
     /// assert_eq!(nao_spinor, 86);
     ///
     /// let cint_data = init_sb2me4_cc_pvtz();
-    /// let nao_sph = cint_data.get_nao_with_type(CIntType::Spheric);
+    /// let nao_sph = cint_data.nao_with_type(CIntType::Spheric);
     /// assert_eq!(nao_sph, 366);
     ///
     /// # // This is test that when ecpbas is merged, the number of
     /// # // atomic orbitals is still correct.
     /// # let merged = cint_data.merge_ecpbas();
-    /// # let nao_cart = merged.get_nao_with_type(CIntType::Spheric);
+    /// # let nao_cart = merged.nao_with_type(CIntType::Spheric);
     /// # assert_eq!(nao_cart, 366);
     /// ```
     #[inline]
-    pub fn get_nao_with_type(&self, cint_type: CIntType) -> usize {
+    pub fn nao_with_type(&self, cint_type: CIntType) -> usize {
         const ANG_OF: usize = cint_ffi::ANG_OF as usize;
         const KAPPA_OF: usize = cint_ffi::KAPPA_OF as usize;
         const NCTR_OF: usize = cint_ffi::NCTR_OF as usize;
 
         let mut nao = 0;
-        let nbas = self.get_nbas();
+        let nbas = self.nbas();
         for shl in 0..nbas {
             let l = self.bas[shl][ANG_OF];
             let k = self.bas[shl][KAPPA_OF];
@@ -421,7 +431,7 @@ impl CInt {
     /// ```
     #[inline]
     pub fn atom_coords(&self) -> Vec<[f64; 3]> {
-        (0..self.atm.len()).map(|i| self.atom_coord(i)).collect::<Vec<_>>()
+        (0..self.atm.len()).map(|i| self.atom_coord(i)).collect_vec()
     }
 
     /// Number of shells of the given atom
@@ -441,7 +451,7 @@ impl CInt {
     pub fn atom_nshells(&self, atm_id: usize) -> usize {
         const ATOM_OF: usize = cint_ffi::ATOM_OF as usize;
 
-        let nbas = self.get_nbas();
+        let nbas = self.nbas();
         self.bas[..nbas].iter().filter(|bas| bas[ATOM_OF] as usize == atm_id).count()
     }
 
@@ -462,7 +472,7 @@ impl CInt {
     pub fn atom_shell_ids(&self, atm_id: usize) -> Vec<usize> {
         const ATOM_OF: usize = cint_ffi::ATOM_OF as usize;
 
-        let nbas = self.get_nbas();
+        let nbas = self.nbas();
         self.bas[..nbas]
             .iter()
             .enumerate()
@@ -472,7 +482,7 @@ impl CInt {
 
     #[inline]
     fn check_bas_id(&self, bas_id: usize) {
-        let nbas = self.get_nbas();
+        let nbas = self.nbas();
         if bas_id >= nbas {
             panic!("Invalid bas_id: {bas_id}. Number of shells is {nbas}");
         }
@@ -579,7 +589,7 @@ impl CInt {
     /// Method `Mole.bas_exps`
     #[inline]
     pub fn bas_exps(&self) -> Vec<Vec<f64>> {
-        (0..self.get_nbas()).map(|i| self.bas_exp(i).to_vec()).collect()
+        (0..self.nbas()).map(|i| self.bas_exp(i).to_vec()).collect()
     }
 
     /// Shell and basis (atomic orbitals) offsets for each atom.
@@ -639,7 +649,7 @@ impl CInt {
     pub fn aoslice_by_atom_with_type(&self, cint_type: CIntType) -> Vec<[usize; 4]> {
         const ATOM_OF: usize = cint_ffi::ATOM_OF as usize;
 
-        let nbas = self.get_nbas();
+        let nbas = self.nbas();
         let ao_loc = self.make_loc_with_type(cint_type);
 
         // category atoms with basis index
@@ -648,7 +658,7 @@ impl CInt {
         if nbas > 0 {
             let mut current_atm = self.bas[0][ATOM_OF];
             let mut shl_start = 0;
-            for shl in 0..self.get_nbas() {
+            for shl in 0..self.nbas() {
                 let atm_id = self.bas[shl][ATOM_OF];
                 if atm_id != current_atm {
                     category.push([current_atm as usize, shl_start, shl]);
@@ -667,8 +677,8 @@ impl CInt {
                 // atom exists in bas
                 let shl_start = category[ptr_category][1];
                 let shl_end = category[ptr_category][2];
-                let ao_start = ao_loc[shl_start] as usize;
-                let ao_end = ao_loc[shl_end] as usize;
+                let ao_start = ao_loc[shl_start];
+                let ao_end = ao_loc[shl_end];
                 result.push([shl_start, shl_end, ao_start, ao_end]);
                 ptr_category += 1;
             } else {
@@ -683,7 +693,7 @@ impl CInt {
         // check result length
         assert_eq!(result.len(), self.atm.len());
         // check total number of basis
-        assert_eq!(result.last().unwrap()[3], self.get_nao_with_type(cint_type));
+        assert_eq!(result.last().unwrap()[3], self.nao_with_type(cint_type));
         result
     }
 }

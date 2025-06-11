@@ -1,21 +1,102 @@
 //! Integral crafter for `CInt` instance (the main integral functions).
+//!
+//! Code naming conventions:
+//! - `cgto_`: shell slices related variables, indicating shell -> basis
+//!   mapping.
 
 #![allow(dead_code)]
 
 use crate::prelude::*;
 use rayon::prelude::*;
+use rstsr_common::layout::IndexedIterLayout;
+use rstsr_common::prelude::*;
 
-/// Implementation of integral at lower API level.
+/// Implementation of integral at higher API level (for user usage).
 impl CInt {
+    /// Obtain integrator optimizer.
+    ///
+    /// # Panics
+    ///
+    /// - integrator not found
+    /// - `env` field not properly initialized for ECP integrator (should call
+    ///   `merge_ecpbas` before this function)
+    ///
+    /// # See also
+    ///
+    /// PySCF `make_cintopt`
+    pub fn optimizer(&self, intor: &str) -> CIntOptimizer {
+        self.optimizer_f(intor).unwrap()
+    }
+
+    pub fn optimizer_f(&self, intor: &str) -> Result<CIntOptimizer, CIntError> {
+        let integrator = crate::cint::get_integrator_f(intor)?;
+        // make dummy shell slices
+        let n_center = integrator.n_center();
+        let cint_symm = CIntSymm::S1;
+        let shls_slice = vec![[0, 0]; n_center];
+        self.check_shls_slice(&*integrator, &shls_slice, cint_symm)?;
+        Ok(self.get_optimizer_dyn(&*integrator))
+    }
+}
+
+/// Implementation of integral at lower API level (integral preparation).
+impl CInt {
+    /* #region check_integratable */
+
     /// Check if the integral can be integrated with the given integrator.
-    pub fn check_integratable(
+    ///
+    /// # Example
+    ///
+    /// Following examples always uses H2O/def2-tzvp basis set with spheric.
+    ///
+    /// ```no_run
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    /// ```
+    ///
+    /// Successful case:
+    ///
+    /// ```rust
+    /// # use libcint::prelude::*;
+    /// # let cint_data = init_h2o_def2_tzvp();
+    /// let integrator = CInt::get_integrator("int2e");
+    /// let shls_slice = &[[3, 13], [3, 13], [0, 19], [0, 19]];
+    /// let check = cint_data.check_shls_slice(&*integrator, shls_slice, CIntSymm::S4);
+    /// assert!(check.is_ok());
+    /// ```
+    ///
+    /// Failed case (shls_slice not matching to cint_symm):
+    ///
+    /// ```rust
+    /// # use libcint::prelude::*;
+    /// # let cint_data = init_h2o_def2_tzvp();
+    /// let integrator = CInt::get_integrator("int2e");
+    /// let shls_slice = &[[0, 15], [3, 12], [0, 19], [0, 19]]; // first two slices different
+    /// let check = cint_data.check_shls_slice(&*integrator, shls_slice, CIntSymm::S4);
+    /// assert!(check.is_err());
+    /// ```
+    ///
+    /// Failed case (number of shls_slice not matching to number of centers):
+    ///
+    /// ```rust
+    /// # use libcint::prelude::*;
+    /// # let cint_data = init_h2o_def2_tzvp();
+    /// let integrator = CInt::get_integrator("int1e_ipkin");
+    /// let shls_slice = &[[0, 15], [0, 15], [0, 19]]; // thr3e slices, but integrator requires 2
+    /// let check = cint_data.check_shls_slice(&*integrator, shls_slice, CIntSymm::S2ij);
+    /// assert!(check.is_err());
+    /// ```
+    pub fn check_shls_slice(
         &self,
-        integrator: Box<dyn Integrator>,
+        integrator: &dyn Integrator,
         shls_slice: &[[c_int; 2]],
+        cint_symm: CIntSymm,
     ) -> Result<(), CIntError> {
-        // length of shls_slice must be either 0, or the same value to number of
-        // centers of integrator.
-        if !shls_slice.is_empty() && shls_slice.len() != integrator.n_center() {
+        let n_center = integrator.n_center();
+
+        // length of shls_slice must be the same value to number of centers of
+        // integrator.
+        if shls_slice.len() != n_center {
             return Err(CIntError::IntegratorNotAvailable(format!(
                 "Integrator {} requires {} centers, but got {}",
                 integrator.name(),
@@ -53,45 +134,215 @@ impl CInt {
         }
 
         // Every shell in shls_slice must be within the range of number of shells.
-        let nbas = self.get_nbas() as c_int;
+        let nbas = self.nbas() as c_int;
         for (i, shl) in shls_slice.iter().enumerate() {
             if !(0 <= shl[0] && shl[0] <= shl[1] && shl[1] <= nbas) {
-                return Err(CIntError::IntegratorNotAvailable(format!(
+                return Err(CIntError::InvalidValue(format!(
                     "Shell slice {:?} at index {} is not proper within [{}, {}]",
                     shl, i, 0, nbas
                 )));
             }
         }
 
+        // check symmetry
+        match cint_symm {
+            CIntSymm::S2ij => {
+                if shls_slice[0] != shls_slice[1] {
+                    return Err(CIntError::InvalidValue(format!(
+                        "Integrator {} does not support S2ij symmetry with different shell slices ({:?}, {:?})",
+                        integrator.name(),
+                        shls_slice[0],
+                        shls_slice[1]
+                    )));
+                }
+            },
+            CIntSymm::S2kl => {
+                if n_center != 4 {
+                    return Err(CIntError::InvalidValue(format!(
+                        "Integrator {} requires 4 centers for S2kl symmetry, but got {}",
+                        integrator.name(),
+                        n_center
+                    )));
+                }
+                if shls_slice[2] != shls_slice[3] {
+                    return Err(CIntError::InvalidValue(format!(
+                        "Integrator {} does not support S2kl symmetry with different shell slices ({:?}, {:?})",
+                        integrator.name(),
+                        shls_slice[2],
+                        shls_slice[3]
+                    )));
+                }
+            },
+            CIntSymm::S4 => {
+                if n_center != 4 {
+                    return Err(CIntError::InvalidValue(format!(
+                        "Integrator {} requires 4 centers for S4 symmetry, but got {}",
+                        integrator.name(),
+                        n_center
+                    )));
+                }
+                if shls_slice[0] != shls_slice[1] || shls_slice[2] != shls_slice[3] {
+                    return Err(CIntError::InvalidValue(format!(
+                        "Integrator {} does not support S4 symmetry with different shell slices {:?}",
+                        integrator.name(),
+                        shls_slice
+                    )));
+                }
+            },
+            CIntSymm::S8 => {
+                if n_center != 4 {
+                    return Err(CIntError::InvalidValue(format!(
+                        "Integrator {} requires 4 centers for S8 symmetry, but got {}",
+                        integrator.name(),
+                        n_center
+                    )));
+                }
+                if shls_slice[0] != shls_slice[1]
+                    || shls_slice[0] != shls_slice[2]
+                    || shls_slice[0] != shls_slice[3]
+                {
+                    return Err(CIntError::InvalidValue(format!(
+                        "Integrator {} does not support S8 symmetry with different shell slices {:?}",
+                        integrator.name(),
+                        shls_slice
+                    )));
+                }
+            },
+            CIntSymm::S1 => {
+                // S1 symmetry is always available
+            },
+        }
+
         Ok(())
     }
 
-    /// Obtain cache size for integral.
+    pub fn check_float_type<F>(&self) -> Result<(), CIntError>
+    where
+        F: ComplexFloat,
+    {
+        let expected = match self.cint_type {
+            Spheric | Cartesian => 8, // f64
+            Spinor => 16,             // Complex<f64>
+        };
+        let actual = std::mem::size_of::<F>();
+        if actual != expected {
+            Err(CIntError::InvalidValue(format!(
+                "Expected float type size {expected} bytes, but got {actual} bytes"
+            )))
+        } else {
+            Ok(())
+        }
+    }
+
+    /* #endregion */
+
+    /* #region cgto_shape */
+
+    /// Shape of integral (in atomic orbital basis, symmetry s1), for specified
+    /// slices of shell, without integrator components.
     ///
-    /// If the shell slice is not known to you currently, just pass empty
-    /// `shls_slice = vec![]`, then it should give the maximum cache size
-    /// for this molecule/intor.
-    ///
-    /// # Safety
-    ///
-    /// - Does not check the validity of the `integrator`.
-    /// - Panic if `shls_slice` exceeds the number of shells in the molecule.
+    /// This function does not check the validity of the `shls_slice`.
     ///
     /// # Example
     ///
     /// ```rust
     /// use libcint::prelude::*;
-    /// use libcint::ffi::cint_wrapper::int2e_ip1;
     /// let cint_data = init_h2o_def2_tzvp();
-    /// let cache_size = unsafe { cint_data.size_of_cache::<int2e_ip1>(&[]) };
+    /// let shls_slice = [[0, 15], [5, 19], [3, 12]];
+    /// let cgto_shape = cint_data.cgto_shape_s1(&shls_slice);
+    /// assert_eq!(cgto_shape, vec![37, 38, 29]);
     /// ```
-    pub unsafe fn size_of_cache<T>(&self, shls_slice: &[[c_int; 2]]) -> usize
-    where
-        T: Integrator + Default,
-    {
-        let integrator = T::default();
-        unsafe { self.size_of_cache_dyn(&integrator, shls_slice) }
+    pub fn cgto_shape_s1(&self, shls_slice: &[[c_int; 2]]) -> Vec<usize> {
+        let ao_loc = self.ao_loc();
+
+        shls_slice
+            .iter()
+            .map(|&[shl0, shl1]| {
+                let p0 = ao_loc[shl0 as usize];
+                let p1 = ao_loc[shl1 as usize];
+                p1 - p0
+            })
+            .collect()
     }
+
+    /// Shape of integral (in atomic orbital basis, symmetry s2ij), for
+    /// specified slices of shell, without integrator components.
+    ///
+    /// This function does not check the validity of the `shls_slice`.
+    ///
+    /// # Panics
+    ///
+    /// This function only checks if the first two elements of `shls_slice` are
+    /// the same. If not, it will panic.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    /// let shls_slice = [[0, 15], [0, 15], [3, 12]];
+    /// let cgto_shape = cint_data.cgto_shape_s2ij(&shls_slice);
+    /// assert_eq!(cgto_shape, vec![703, 29]);
+    /// ```
+    pub fn cgto_shape_s2ij(&self, shls_slice: &[[c_int; 2]]) -> Vec<usize> {
+        let ao_loc = self.ao_loc();
+        let n_center = shls_slice.len();
+
+        if shls_slice[0] != shls_slice[1] {
+            panic!("shls_slice must have the same first two elements for S2ij symmetry");
+        }
+
+        let mut shape = vec![];
+        {
+            let shl_slice = shls_slice[0];
+            let p0 = ao_loc[shl_slice[0] as usize];
+            let p1 = ao_loc[shl_slice[1] as usize];
+            let np = p1 - p0;
+            shape.push(np * (np + 1) / 2);
+        }
+        for n in 2..n_center {
+            let shl_slice = shls_slice[n];
+            let p0 = ao_loc[shl_slice[0] as usize];
+            let p1 = ao_loc[shl_slice[1] as usize];
+            shape.push(p1 - p0);
+        }
+        shape
+    }
+
+    /// Obtain atomic orbital locations for integral, starting from 0 (instead
+    /// of the first basis index mapped from first shell, or to say that is
+    /// relative).
+    ///
+    /// This function will be used when coping small blocks of integral tensors
+    /// into large output tensor.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    /// let shls_slice = [[0, 7], [2, 6], [15, 19]];
+    /// let cgto_locs = cint_data.cgto_locs(&shls_slice);
+    /// assert_eq!(cgto_locs, vec![
+    ///     vec![0, 1, 2, 3, 4, 5, 8, 11],
+    ///     vec![0, 1, 2, 3, 6],
+    ///     vec![0, 1, 2, 3, 6]
+    /// ]);
+    /// ```
+    pub fn cgto_locs(&self, shls_slice: &[[c_int; 2]]) -> Vec<Vec<usize>> {
+        let ao_loc = self.ao_loc();
+        shls_slice
+            .iter()
+            .map(|&[shl0, shl1]| {
+                let [shl0, shl1] = [shl0 as usize, shl1 as usize];
+                ao_loc[shl0..shl1 + 1].iter().map(|&x| x - ao_loc[shl0]).collect_vec()
+            })
+            .collect_vec()
+    }
+
+    /* #endregion */
+
+    /* #region other preparation */
 
     /// Obtain cache size for integral.
     ///
@@ -99,7 +350,13 @@ impl CInt {
     /// `shls_slice = vec![]`, then it should give the maximum cache size
     /// for this molecule/intor.
     ///
-    /// # Safety
+    /// Please also note that cache should be allocated per thread.
+    ///
+    /// # PySCF equivalent
+    ///
+    /// `GTOmax_cache_size` in `fill_int2e.c`
+    ///
+    /// # Panics
     ///
     /// - Does not check the validity of the `integrator`.
     /// - Panic if `shls_slice` exceeds the number of shells in the molecule.
@@ -110,15 +367,11 @@ impl CInt {
     /// use libcint::prelude::*;
     /// let cint_data = init_h2o_def2_tzvp();
     /// let integrator = CInt::get_integrator("int2e_ip1");
-    /// let cache_size = unsafe { cint_data.size_of_cache_dyn(&*integrator, &[]) };
+    /// let cache_size = cint_data.max_cache_size(&*integrator, &[]);
     /// ```
-    pub unsafe fn size_of_cache_dyn(
-        &self,
-        integrator: &dyn Integrator,
-        shls_slice: &[[c_int; 2]],
-    ) -> usize {
-        let natm = self.get_natm() as c_int;
-        let nbas = self.get_nbas() as c_int;
+    pub fn max_cache_size(&self, integrator: &dyn Integrator, shls_slice: &[[c_int; 2]]) -> usize {
+        let natm = self.natm() as c_int;
+        let nbas = self.nbas() as c_int;
         let shls_min = shls_slice.iter().map(|x| x[0]).min().unwrap_or(0);
         let shls_max = shls_slice.iter().map(|x| x[1]).max().unwrap_or(nbas);
 
@@ -131,11 +384,11 @@ impl CInt {
                         null_mut(),
                         null(),
                         shls.as_ptr(),
-                        self.get_atm_ptr(),
+                        self.atm_ptr(),
                         natm,
-                        self.get_bas_ptr(),
+                        self.bas_ptr(),
                         nbas,
-                        self.get_env_ptr(),
+                        self.env_ptr(),
                         null(),
                         null_mut(),
                     ),
@@ -143,11 +396,11 @@ impl CInt {
                         null_mut(),
                         null(),
                         shls.as_ptr(),
-                        self.get_atm_ptr(),
+                        self.atm_ptr(),
                         natm,
-                        self.get_bas_ptr(),
+                        self.bas_ptr(),
                         nbas,
-                        self.get_env_ptr(),
+                        self.env_ptr(),
                         null(),
                         null_mut(),
                     ),
@@ -155,11 +408,11 @@ impl CInt {
                         null_mut(),
                         null(),
                         shls.as_ptr(),
-                        self.get_atm_ptr(),
+                        self.atm_ptr(),
                         natm,
-                        self.get_bas_ptr(),
+                        self.bas_ptr(),
                         nbas,
-                        self.get_env_ptr(),
+                        self.env_ptr(),
                         null(),
                         null_mut(),
                     ),
@@ -167,6 +420,292 @@ impl CInt {
             })
             .max()
             .unwrap() as usize
+    }
+
+    /// Obtain maximum buffer size for integral.
+    ///
+    /// # PySCF equivalent
+    ///
+    /// `GTOmax_shell_dim` in `fill_int2e.c` for similar functionality (but
+    /// different in result)
+    ///
+    /// # Panics
+    ///
+    /// - Does not check the validity of the `integrator`.
+    /// - Panic if `shls_slice` exceeds the number of shells in the molecule.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    /// let integrator = CInt::get_integrator("int3c2e_ip1");
+    /// let shls_slice = [[0, 7], [2, 6], [15, 19]];
+    /// let max_buffer_size = cint_data.max_buffer_size(&*integrator, &shls_slice);
+    /// assert_eq!(max_buffer_size, 243);
+    /// ```
+    pub fn max_buffer_size(&self, integrator: &dyn Integrator, shls_slice: &[[c_int; 2]]) -> usize {
+        let ao_loc = self.ao_loc();
+        let n_comp = integrator.n_comp();
+
+        let mut result = n_comp;
+        for &[shl0, shl1] in shls_slice {
+            for shl in shl0..shl1 {
+                let shl = shl as usize;
+                let p0 = ao_loc[shl];
+                let p1 = ao_loc[shl + 1];
+                result *= p1 - p0;
+            }
+        }
+        result
+    }
+
+    /// Obtain optimizer for integral.
+    ///
+    /// # Panics
+    ///
+    /// - Does not check the validity of the `integrator`.
+    pub fn get_optimizer<T>(&self) -> CIntOptimizer
+    where
+        T: Integrator + Default,
+    {
+        let integrator = T::default();
+        self.get_optimizer_dyn(&integrator)
+    }
+
+    /// Obtain optimizer for integral.
+    ///
+    /// # Panics
+    ///
+    /// - Does not check the validity of the `integrator`.
+    pub fn get_optimizer_dyn(&self, integrator: &dyn Integrator) -> CIntOptimizer {
+        match integrator.kind() {
+            CIntKind::Int => {
+                let atm_ptr = self.atm.as_ptr() as *const c_int;
+                let bas_ptr = self.bas.as_ptr() as *const c_int;
+                let env_ptr = self.env.as_ptr();
+                let n_atm = self.atm.len() as c_int;
+                let n_bas = self.bas.len() as c_int;
+                let mut c_opt_ptr: *mut CINTOpt = null_mut();
+                unsafe {
+                    integrator.optimizer(
+                        &mut c_opt_ptr as *mut *mut CINTOpt as *mut *mut c_void,
+                        atm_ptr,
+                        n_atm,
+                        bas_ptr,
+                        n_bas,
+                        env_ptr,
+                    );
+                };
+                CIntOptimizer::Int(NonNull::new(&mut c_opt_ptr).unwrap())
+            },
+            CIntKind::Ecp => {
+                // Check if this cint_data has been merged with ECP data
+                let merged = if self.is_ecp_merged() { self } else { &self.merge_ecpbas() };
+                let atm_ptr = merged.atm.as_ptr() as *const c_int;
+                let bas_ptr = merged.bas.as_ptr() as *const c_int;
+                let env_ptr = merged.env.as_ptr();
+                let n_atm = merged.atm.len() as c_int;
+                let n_bas = merged.bas.len() as c_int;
+                let mut c_opt_ptr: *mut ECPOpt = null_mut();
+                unsafe {
+                    integrator.optimizer(
+                        &mut c_opt_ptr as *mut *mut ECPOpt as *mut *mut c_void,
+                        atm_ptr,
+                        n_atm,
+                        bas_ptr,
+                        n_bas,
+                        env_ptr,
+                    );
+                };
+                CIntOptimizer::Ecp(NonNull::new(&mut c_opt_ptr).unwrap())
+            },
+        }
+    }
+
+    /* #endregion */
+}
+
+/// Implementation of integral at lower API level (crafting).
+impl CInt {
+    /// Smallest unit of electron-integral function from libcint.
+    ///
+    /// This is not a safe wrapper function, though it is pure rust. Use with
+    /// caution.
+    ///
+    /// - `out` - Output integral buffer, need to be allocated enough space
+    ///   before calling this function and properly offsetted.
+    /// - `shls` - shell indices, which size should be n_center length.
+    /// - `cint_opt` - optimizer that should be obtained before calling this
+    ///   function. If `None`, then no optimization will be performed and will
+    ///   pass null pointer.
+    /// - `shape` - **In general cases, it is not recommanded to use.** If
+    ///   output larger than 4GB, then libcint internal realization may
+    ///   overflow.
+    /// - `cache` - cache buffer, need to be allocated enough space before
+    ///   calling this function; simply using `vec![]` should also works, which
+    ///   lets libcint manages cache and efficiency decreases. See Also
+    ///   [`CInt::max_cache_size`] for guide of properly allocate cache.
+    ///
+    /// # Safety
+    ///
+    /// This function does not check anything. Caller should handle checks:
+    ///
+    /// - Does not check type (float or complex) of `out`. Type check will be
+    ///   checked in caller.
+    /// - Does not check `shls` length and values.
+    /// - Does not check `shape` length and values.
+    /// - Does not check whether `cint_opt` is ECP or general integrator, which
+    ///   may or may not corresponds to `integrator`'s type.
+    pub unsafe fn integral_block<F>(
+        &self,
+        integrator: &dyn Integrator,
+        out: &mut [F],
+        shls: &[c_int],
+        shape: &[c_int],
+        cint_opt: Option<&CIntOptimizer>,
+        cache: &mut [f64],
+    ) where
+        F: ComplexFloat,
+    {
+        let cache_ptr = match cache.len() {
+            0 => null_mut(),
+            _ => cache.as_mut_ptr(),
+        };
+        let shape_ptr = match shape.len() {
+            0 => null_mut(),
+            _ => shape.as_ptr() as *const c_int,
+        };
+        let opt_ptr = cint_opt.map(|opt| opt.as_ptr()).unwrap_or(null());
+        match self.cint_type {
+            Spheric => unsafe {
+                integrator.integral_sph(
+                    out.as_mut_ptr() as *mut f64,
+                    shape_ptr,
+                    shls.as_ptr(),
+                    self.atm_ptr(),
+                    self.natm() as c_int,
+                    self.bas_ptr(),
+                    self.nbas() as c_int,
+                    self.env_ptr(),
+                    opt_ptr,
+                    cache_ptr,
+                );
+            },
+            Cartesian => unsafe {
+                integrator.integral_cart(
+                    out.as_mut_ptr() as *mut f64,
+                    shape_ptr,
+                    shls.as_ptr(),
+                    self.atm_ptr(),
+                    self.natm() as c_int,
+                    self.bas_ptr(),
+                    self.nbas() as c_int,
+                    self.env_ptr(),
+                    opt_ptr,
+                    cache_ptr,
+                );
+            },
+            Spinor => unsafe {
+                integrator.integral_spinor(
+                    out.as_mut_ptr() as *mut c_void,
+                    shape_ptr,
+                    shls.as_ptr(),
+                    self.atm_ptr(),
+                    self.natm() as c_int,
+                    self.bas_ptr(),
+                    self.nbas() as c_int,
+                    self.env_ptr(),
+                    opt_ptr,
+                    cache_ptr,
+                );
+            },
+        }
+    }
+
+    #[allow(non_snake_case)]
+    pub fn integral_s1_inplace<F>(
+        &self,
+        integrator: &dyn Integrator,
+        out: &mut [F],
+        shls_slice: &[[c_int; 2]],
+        cint_opt: Option<&CIntOptimizer>,
+    ) -> Result<(), CIntError>
+    where
+        F: ComplexFloat + Send + Sync,
+    {
+        /* #region sanity check and preparation */
+
+        self.check_float_type::<F>()?;
+        self.check_shls_slice(integrator, shls_slice, CIntSymm::S1)?;
+
+        // dimensions
+
+        let n_comp = integrator.n_comp();
+        let n_center = integrator.n_center();
+        let cgto_shape = self.cgto_shape_s1(shls_slice);
+        let cgto_locs = self.cgto_locs(shls_slice);
+
+        // cache (thread local)
+        let cache_size = self.max_cache_size(integrator, shls_slice);
+        let buffer_size = self.max_buffer_size(integrator, shls_slice);
+        let thread_cache = (0..rayon::current_num_threads())
+            .map(|_| Mutex::new(unsafe { aligned_uninitialized_vec::<f64>(cache_size) }))
+            .collect_vec();
+        let thread_buffer = (0..rayon::current_num_threads())
+            .map(|_| Mutex::new(unsafe { aligned_uninitialized_vec::<F>(buffer_size) }))
+            .collect_vec();
+
+        /* #endregion */
+
+        /* #region parallel integration generation */
+
+        const I: usize = 0; // index of first shell
+        const J: usize = 1; // index of second shell
+        const K: usize = 2; // index of third shell
+        const L: usize = 3; // index of fourth shell
+
+        match n_center {
+            2 => {
+                let iter_layout = [
+                    (shls_slice[I][1] - shls_slice[I][0]) as usize,
+                    (shls_slice[J][1] - shls_slice[J][0]) as usize,
+                ]
+                .f();
+                let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
+
+                iter_indices.into_par_iter().for_each(|([idx_I, idx_J], _)| {
+                    let shl_I = idx_I as c_int + shls_slice[I][0];
+                    let shl_J = idx_J as c_int + shls_slice[J][0];
+                    let cgto_loc_I = cgto_locs[I][idx_I];
+                    let cgto_loc_J = cgto_locs[J][idx_J];
+                    let cgto_I = cgto_locs[I][idx_I + 1] - cgto_loc_I;
+                    let cgto_J = cgto_locs[J][idx_J + 1] - cgto_loc_J;
+
+                    let shls = [shl_I, shl_J];
+
+                    // prepare cache and buffer
+                    let thread_idx = rayon::current_thread_index().unwrap_or(0);
+                    let mut cache = thread_cache[thread_idx].lock().unwrap();
+                    let mut buf = thread_buffer[thread_idx].lock().unwrap();
+
+                    // call integral function
+                    unsafe {
+                        self.integral_block(integrator, &mut buf, &shls, &[], cint_opt, &mut cache);
+                    }
+
+                    // copy buffer to output slice
+                    let out = unsafe { cast_mut_slice(&*out) };
+                    let out_offsets = [cgto_loc_I, cgto_loc_J, 0];
+                    let out_shape = [cgto_shape[I], cgto_shape[J], n_comp];
+                    let buf_shape = [cgto_I, cgto_J, n_comp];
+                    copy_3d_s1(out, &out_offsets, &out_shape, &buf, &buf_shape);
+                });
+            },
+            _ => unreachable!(),
+        }
+
+        Ok(())
     }
 }
 
@@ -234,6 +773,92 @@ pub(crate) fn copy_3d_s2ij_offdiag<T>(
                 let out_index = get_f_index_3d_s2ij(&out_indices, out_s2ij_shape);
                 let buf_index = get_f_index_3d(&buf_indices, buf_shape);
                 out[out_index] = buf[buf_index];
+            }
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn copy_3d_s1<T>(
+    out: &mut [T],
+    out_offsets: &[usize; 3],
+    out_shape: &[usize; 3],
+    buf: &[T],
+    buf_shape: &[usize; 3],
+) where
+    T: Copy,
+{
+    for c in 0..buf_shape[2] {
+        for j in 0..buf_shape[1] {
+            for i in 0..buf_shape[0] {
+                let out_indices = [out_offsets[0] + i, out_offsets[1] + j, out_offsets[2] + c];
+                let buf_indices = [i, j, c];
+                let out_index = get_f_index_3d(&out_indices, out_shape);
+                let buf_index = get_f_index_3d(&buf_indices, buf_shape);
+                out[out_index] = buf[buf_index];
+            }
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn copy_4d_s1<T>(
+    out: &mut [T],
+    out_offsets: &[usize; 4],
+    out_shape: &[usize; 4],
+    buf: &[T],
+    buf_shape: &[usize; 4],
+) where
+    T: Copy,
+{
+    for c in 0..buf_shape[3] {
+        for k in 0..buf_shape[2] {
+            for j in 0..buf_shape[1] {
+                for i in 0..buf_shape[0] {
+                    let out_indices = [
+                        out_offsets[0] + i,
+                        out_offsets[1] + j,
+                        out_offsets[2] + k,
+                        out_offsets[3] + c,
+                    ];
+                    let buf_indices = [i, j, k, c];
+                    let out_index = get_f_index_4d(&out_indices, out_shape);
+                    let buf_index = get_f_index_4d(&buf_indices, buf_shape);
+                    out[out_index] = buf[buf_index];
+                }
+            }
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn copy_5d_s1<T>(
+    out: &mut [T],
+    out_offsets: &[usize; 5],
+    out_shape: &[usize; 5],
+    buf: &[T],
+    buf_shape: &[usize; 5],
+) where
+    T: Copy,
+{
+    for c in 0..buf_shape[4] {
+        for l in 0..buf_shape[3] {
+            for k in 0..buf_shape[2] {
+                for j in 0..buf_shape[1] {
+                    for i in 0..buf_shape[0] {
+                        let out_indices = [
+                            out_offsets[0] + i,
+                            out_offsets[1] + j,
+                            out_offsets[2] + k,
+                            out_offsets[3] + l,
+                            out_offsets[4] + c,
+                        ];
+                        let buf_indices = [i, j, k, l, c];
+                        let out_index = get_f_index_5d(&out_indices, out_shape);
+                        let buf_index = get_f_index_5d(&buf_indices, buf_shape);
+                        out[out_index] = buf[buf_index];
+                    }
+                }
             }
         }
     }
@@ -425,9 +1050,6 @@ pub fn aligned_alloc(numbytes: usize, alignment: usize) -> Option<NonNull<()>> {
 
 /// Create an conditionally aligned uninitialized vector with the given size.
 ///
-/// - `N`: condition for alignment; if `N < size`, then this function will not
-///   allocate aligned vector.
-///
 /// # Safety
 ///
 /// Caller must ensure that the vector is properly initialized before using it.
@@ -436,19 +1058,17 @@ pub fn aligned_alloc(numbytes: usize, alignment: usize) -> Option<NonNull<()>> {
 /// undefined-behavior (UB).
 /// Nevertheless, if `T` is some type of `MaybeUninit`, then this will not UB.
 #[inline]
-pub unsafe fn aligned_uninitialized_vec<T, const N: usize>(
-    size: usize,
-    alignment: usize,
-) -> Vec<T> {
-    const MIN_ALIGN: usize = 64;
+pub unsafe fn aligned_uninitialized_vec<T>(size: usize) -> Vec<T> {
+    const MIN_ALIGN: usize = 64; // minimal number of elements in vector to be aligned
+    const ALIGNMENT: usize = 64; // 64 bytes alignment (minimal requirement for AVX-512)
 
     if size == 0 {
         vec![]
-    } else if size < N {
+    } else if size < MIN_ALIGN {
         unsafe { unaligned_uninitialized_vec(size) }
     } else {
         let sizeof = core::mem::size_of::<T>();
-        let pointer = aligned_alloc(size * sizeof, alignment);
+        let pointer = aligned_alloc(size * sizeof, ALIGNMENT);
         if let Some(pointer) = pointer {
             let mut v = unsafe { Vec::from_raw_parts(pointer.as_ptr() as *mut T, size, size) };
             unsafe { v.set_len(size) };
@@ -467,12 +1087,9 @@ mod test {
 
     #[test]
     fn playground() {
-        use crate::ffi::cint_wrapper::int2e_ip1;
         let cint_data = init_h2o_def2_tzvp();
         let integrator = CInt::get_integrator("int2e_ip1");
-        let cache_size = unsafe { cint_data.size_of_cache_dyn(&*integrator, &[]) };
-        println!("Cache size: {cache_size}");
-        let cache_size = unsafe { cint_data.size_of_cache::<int2e_ip1>(&[]) };
+        let cache_size = cint_data.max_cache_size(&*integrator, &[]);
         println!("Cache size: {cache_size}");
     }
 }

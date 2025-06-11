@@ -13,6 +13,7 @@ itertools = "0.12"
 rayon = "1.10"
 num = "0.4"
 duplicate = "2.0"
+rstsr-common = { version = "0.3.6", features = ["rayon"] }
 
 [build-dependencies]
 cc = "1.0"

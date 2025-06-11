@@ -1,4 +1,5 @@
 #![allow(clippy::excessive_precision)]
+#![allow(clippy::needless_range_loop)]
 
 pub mod cint;
 pub mod cint_change;
