@@ -91,34 +91,87 @@ pub struct CInt {
     pub cint_type: CIntType,
 }
 
+/// Distinguish between general integral or ECP (effective core potential)
+/// integral.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CIntKind {
+    /// General integral type, which is used for most of the integrals.
     Int,
+    /// ECP integral type, which is used for effective core potential integrals.
     Ecp,
 }
 
+/// Integral types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CIntType {
     #[default]
+    /// Spherical integrals, output double float `f64`.
     Spheric,
+    /// Cartesian integrals, output double float `f64`.
     Cartesian,
+    /// Spinor integrals, output `Complex<f64>`, and should be called by
+    /// functions with `_spinor` suffix.
     Spinor,
 }
 
+/// Symmetry of the integral.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CIntSymm {
     #[default]
+    /// No symmetry.
     S1,
+    /// Symmetric for the first two indices (in F-contiguous).
     S2ij,
+    /// Symmetric for the last two indices in 4-center integrals (in
+    /// F-contiguous).
     S2kl,
+    /// Symmetric for the first and last indices in 4-center integrals (in
+    /// F-contiguous).
     S4,
+    /// Symmetric for all indices in 4-center integrals (in F-contiguous).
     S8,
 }
 
+/// CInt optimizer, which is used to optimize the integral evaluation.
+///
+/// Note that currently, this is not intended to be used directly by users.
 #[derive(Debug, PartialEq)]
 pub enum CIntOptimizer {
     Int(NonNull<*mut CINTOpt>),
     Ecp(NonNull<*mut ECPOpt>),
+}
+
+/// Output of the integral evaluation.
+///
+/// You can use `.into()` to convert it to a tuple of `(Vec<F>, Vec<usize>)`,
+/// where `F` is `f64` for sph and cart integrals, and `Complex<f64>` for spinor
+/// integrals.
+pub struct CIntOutput<F> {
+    pub out: Option<Vec<F>>,
+    pub shape: Vec<usize>,
+}
+
+#[derive(Builder, Debug)]
+#[builder(pattern = "owned", build_fn(error = "CIntError"))]
+pub struct IntorArgs<'a, 'b, 'c, F> {
+    /// Integrator name, such as "int1e_ovlp", "int2e", etc.
+    #[builder(setter(into))]
+    pub intor: &'a str,
+
+    /// Shell slices for evaluating sub-tensor of the total integral.
+    #[builder(default = "&[]")]
+    pub shls_slice: &'b [[usize; 2]],
+
+    /// Symmetry of the integral. This will affect shape of output tensor.
+    #[builder(default, setter(into))]
+    pub aosym: CIntSymm,
+
+    /// Output buffer for the integral evaluation.
+    ///
+    /// If this is `None`, the integral engine will generate a buffer for
+    /// output.
+    #[builder(default, setter(strip_option))]
+    pub out: Option<&'c mut [F]>,
 }
 
 /* #endregion */
@@ -150,6 +203,33 @@ pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
 
 /* #endregion */
 
+/* #region CIntSymm impl */
+
+impl From<&'static str> for CIntSymm {
+    #[inline]
+    fn from(aosym: &'static str) -> Self {
+        match aosym {
+            "S1" | "s1" => CIntSymm::S1,
+            "S2ij" | "s2ij" => CIntSymm::S2ij,
+            "S2kl" | "s2kl" => CIntSymm::S2kl,
+            "S4" | "s4" => CIntSymm::S4,
+            "S8" | "s8" => CIntSymm::S8,
+            _ => panic!("Unknown symmetry: {aosym}"),
+        }
+    }
+}
+
+impl From<Option<&'static str>> for CIntSymm {
+    #[inline]
+    fn from(aosym: Option<&'static str>) -> Self {
+        aosym.unwrap_or("s1").into()
+    }
+}
+
+/* #endregion */
+
+/* #region CIntOptimizer impl */
+
 unsafe impl Send for CIntOptimizer {}
 unsafe impl Sync for CIntOptimizer {}
 
@@ -171,6 +251,23 @@ impl CIntOptimizer {
         }
     }
 }
+
+/* #endregion */
+
+/* #region CIntOutput impl */
+
+impl<F> From<CIntOutput<F>> for (Vec<F>, Vec<usize>) {
+    fn from(output: CIntOutput<F>) -> Self {
+        if output.out.is_none() {
+            panic!(
+                "You have called integral with output buffer, and should not call `into` to get the integral buffer, but use your mutable reference instead."
+            );
+        }
+        (output.out.unwrap_or_default(), output.shape)
+    }
+}
+
+/* #endregion */
 
 /// Merge ECP data for integral evaluation.
 impl CInt {
@@ -197,7 +294,7 @@ impl CInt {
     }
 }
 
-/// Obtaining integrator and optimizer.
+/// Obtaining integrator and argument builder.
 impl CInt {
     /// Obtain integrator by name.
     ///
@@ -213,6 +310,16 @@ impl CInt {
 
     pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
         get_integrator_f(intor)
+    }
+
+    pub fn intor_args_builder(&self) -> IntorArgsBuilder<'static, 'static, 'static, f64> {
+        IntorArgsBuilder::default()
+    }
+
+    pub fn intor_args_builder_spinor(
+        &self,
+    ) -> IntorArgsBuilder<'static, 'static, 'static, Complex<f64>> {
+        IntorArgsBuilder::default()
     }
 }
 

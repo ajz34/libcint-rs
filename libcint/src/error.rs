@@ -1,13 +1,15 @@
+use derive_builder::UninitializedFieldError;
 use std::error::Error;
 use std::fmt::{Debug, Display};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum CIntError {
     IntegratorNotFound(String),
     IntegratorNotAvailable(String),
     RuntimeError(String),
     InvalidValue(String),
     Miscellaneous(String),
+    UninitializedFieldError(UninitializedFieldError),
 }
 
 impl Display for CIntError {
@@ -17,3 +19,9 @@ impl Display for CIntError {
 }
 
 impl Error for CIntError {}
+
+impl From<UninitializedFieldError> for CIntError {
+    fn from(err: UninitializedFieldError) -> Self {
+        CIntError::UninitializedFieldError(err)
+    }
+}

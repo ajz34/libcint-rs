@@ -35,7 +35,178 @@ impl CInt {
         let cint_symm = CIntSymm::S1;
         let shls_slice = vec![[0, 0]; n_center];
         self.check_shls_slice(&*integrator, &shls_slice, cint_symm)?;
-        Ok(self.get_optimizer_dyn(&*integrator))
+        Ok(self.get_optimizer(&*integrator))
+    }
+
+    pub fn intor(
+        &self,
+        intor: &str,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: Option<&[[usize; 2]]>,
+    ) -> CIntOutput<f64> {
+        let intor_args = self
+            .intor_args_builder()
+            .intor(intor)
+            .aosym(aosym)
+            .shls_slice(shls_slice.unwrap_or(&[]))
+            .build()
+            .unwrap();
+        self.intor_with_args_inner(intor_args).unwrap()
+    }
+
+    pub fn intor_spinor(
+        &self,
+        intor: &str,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: Option<&[[usize; 2]]>,
+    ) -> CIntOutput<Complex<f64>> {
+        let intor_args = self
+            .intor_args_builder_spinor()
+            .intor(intor)
+            .aosym(aosym)
+            .shls_slice(shls_slice.unwrap_or(&[]))
+            .build()
+            .unwrap();
+        self.intor_with_args_inner(intor_args).unwrap()
+    }
+
+    pub fn intor_with_args_inner<F>(&self, args: IntorArgs<F>) -> Result<CIntOutput<F>, CIntError>
+    where
+        F: ComplexFloat + Send + Sync,
+    {
+        let data = if self.is_ecp_merged() { &self.merge_ecpbas() } else { self };
+
+        // unwrap and prepare (without output checking)
+        let integrator = CInt::get_integrator(args.intor);
+        let mut shls_slice = args
+            .shls_slice
+            .iter()
+            .map(|&[shl0, shl1]| [shl0 as c_int, shl1 as c_int])
+            .collect_vec();
+        if shls_slice.is_empty() {
+            shls_slice = vec![[0, data.nbas() as c_int]];
+        }
+        let aosym = args.aosym;
+        let cint_opt = data.get_optimizer(&*integrator);
+
+        // perfrom most checks
+        data.check_float_type::<F>()?;
+        data.check_shls_slice(&*integrator, &shls_slice, aosym)?;
+        data.check_optimizer(&*integrator, &cint_opt)?;
+
+        // prepare output and check size of output
+        let mut out_shape = data.cgto_shape(&shls_slice, aosym);
+        if integrator.n_comp() > 1 {
+            out_shape.push(integrator.n_comp());
+        }
+        let out_size = out_shape.iter().product();
+
+        let mut out_vec = match args.out {
+            Some(_) => None,
+            None => Some(unsafe { aligned_uninitialized_vec::<F>(out_size) }),
+        };
+        let out = match args.out {
+            Some(out) => out,
+            None => out_vec.as_mut().unwrap(),
+        };
+        if out.len() < out_size {
+            return Err(CIntError::InvalidValue(format!(
+                "Output vector size {} is smaller than required size {}",
+                out.len(),
+                out_size
+            )));
+        }
+
+        // actual integral execution
+        data.integral_inplace(&*integrator, out, &shls_slice, Some(&cint_opt), aosym)?;
+
+        Ok(CIntOutput { out: out_vec, shape: out_shape })
+    }
+}
+
+/// Implementation of integral at higher API level (legacy support).
+impl CInt {
+    pub fn integral_s1<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> Vec<f64>
+    where
+        T: Integrator + Default + ComplexFloat + Send + Sync,
+    {
+        if self.cint_type == Spinor {
+            panic!("Spinor should be called by `integral_s1_spinor<Integrator>`");
+        }
+
+        let (out, _shape) = self.integral_inner::<T, f64>(shls_slice, CIntSymm::S1);
+        out
+    }
+
+    pub fn integral_s1_spinor<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> Vec<Complex<f64>>
+    where
+        T: Integrator + Default + ComplexFloat + Send + Sync,
+    {
+        if self.cint_type != Spinor {
+            panic!("Non-spinor should be called by `integral_s1<Integrator>`");
+        }
+
+        let (out, _shape) = self.integral_inner::<T, Complex<f64>>(shls_slice, CIntSymm::S1);
+        out
+    }
+
+    pub fn integral_s2ij<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> Vec<f64>
+    where
+        T: Integrator + Default + ComplexFloat + Send + Sync,
+    {
+        if self.cint_type == Spinor {
+            panic!("Spinor should be called by `integral_s2ij_spinor<Integrator>`");
+        }
+
+        let (out, _shape) = self.integral_inner::<T, f64>(shls_slice, CIntSymm::S2ij);
+        out
+    }
+
+    pub fn integral_s2ij_spinor<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> Vec<Complex<f64>>
+    where
+        T: Integrator + Default + ComplexFloat + Send + Sync,
+    {
+        if self.cint_type != Spinor {
+            panic!("Non-spinor should be called by `integral_s2ij<Integrator>`");
+        }
+        eprintln!(
+            "`integral_spinor_s2ij` should generally not be called, since spinor may not show s2ij symmetry."
+        );
+
+        let (out, _shape) = self.integral_inner::<T, Complex<f64>>(shls_slice, CIntSymm::S2ij);
+        out
+    }
+
+    pub fn integral_inner<T, F>(
+        &self,
+        shls_slice: Option<&[[c_int; 2]]>,
+        aosym: CIntSymm,
+    ) -> (Vec<F>, Vec<usize>)
+    where
+        T: Integrator + Default,
+        F: ComplexFloat + Send + Sync,
+    {
+        // prepare and unwrap
+        let data = if self.is_ecp_merged() { self } else { &self.merge_ecpbas() };
+        let integrator = T::default();
+        let shls_slice = match shls_slice {
+            Some(shls_slice) => shls_slice,
+            None => &vec![[0, data.nbas() as c_int]; integrator.n_center()],
+        };
+
+        // additional check
+        data.check_shls_slice(&integrator, shls_slice, aosym).unwrap();
+
+        // integral preparation and execution
+        let mut out_shape = data.cgto_shape(shls_slice, aosym);
+        if integrator.n_comp() > 1 {
+            out_shape.push(integrator.n_comp())
+        };
+        let out_size = out_shape.iter().product();
+        let mut out = unsafe { aligned_uninitialized_vec::<F>(out_size) };
+        let cint_opt = data.get_optimizer(&integrator);
+        data.integral_inplace(&integrator, &mut out, shls_slice, Some(&cint_opt), aosym).unwrap();
+        (out, out_shape)
     }
 }
 
@@ -216,6 +387,12 @@ impl CInt {
         Ok(())
     }
 
+    /// Check if the float type is correct for the cint_type.
+    ///
+    /// - For `Spheric` and `Cartesian`, it should be `f64`.
+    /// - For `Spinor`, it should be `Complex<f64>`.
+    ///
+    /// Note that we only check size of type, instead of its real type.
     pub fn check_float_type<F>(&self) -> Result<(), CIntError>
     where
         F: ComplexFloat,
@@ -234,9 +411,49 @@ impl CInt {
         }
     }
 
+    /// Check if the optimizer is compatible with the integrator.
+    ///
+    /// This check only involves that ECP and general integrals have different
+    /// optimizers.
+    pub fn check_optimizer(
+        &self,
+        integrator: &dyn Integrator,
+        optimizer: &CIntOptimizer,
+    ) -> Result<(), CIntError> {
+        match optimizer {
+            CIntOptimizer::Int(_) => {
+                if integrator.kind() != CIntKind::Int {
+                    return Err(CIntError::InvalidValue(format!(
+                        "Optimizer is for Int, but integrator is {:?}",
+                        integrator.kind()
+                    )));
+                }
+            },
+            CIntOptimizer::Ecp(_) => {
+                if integrator.kind() != CIntKind::Ecp {
+                    return Err(CIntError::InvalidValue(format!(
+                        "Optimizer is for Ecp, but integrator is {:?}",
+                        integrator.kind()
+                    )));
+                }
+            },
+        }
+        Ok(())
+    }
+
     /* #endregion */
 
-    /* #region cgto_shape */
+    /* #region cgto_shape, cgto_loc */
+
+    pub fn cgto_shape(&self, shls_slice: &[[c_int; 2]], aosym: CIntSymm) -> Vec<usize> {
+        match aosym {
+            CIntSymm::S1 => self.cgto_shape_s1(shls_slice),
+            CIntSymm::S2ij => self.cgto_shape_s2ij(shls_slice),
+            _ => {
+                panic!("Currently only S1 and S2ij symmetries are supported.");
+            },
+        }
+    }
 
     /// Shape of integral (in atomic orbital basis, symmetry s1), for specified
     /// slices of shell, without integrator components.
@@ -465,20 +682,7 @@ impl CInt {
     /// # Panics
     ///
     /// - Does not check the validity of the `integrator`.
-    pub fn get_optimizer<T>(&self) -> CIntOptimizer
-    where
-        T: Integrator + Default,
-    {
-        let integrator = T::default();
-        self.get_optimizer_dyn(&integrator)
-    }
-
-    /// Obtain optimizer for integral.
-    ///
-    /// # Panics
-    ///
-    /// - Does not check the validity of the `integrator`.
-    pub fn get_optimizer_dyn(&self, integrator: &dyn Integrator) -> CIntOptimizer {
+    pub fn get_optimizer(&self, integrator: &dyn Integrator) -> CIntOptimizer {
         match integrator.kind() {
             CIntKind::Int => {
                 let atm_ptr = self.atm.as_ptr() as *const c_int;
@@ -623,6 +827,24 @@ impl CInt {
         }
     }
 
+    pub fn integral_inplace<F>(
+        &self,
+        integrator: &dyn Integrator,
+        out: &mut [F],
+        shls_slice: &[[c_int; 2]],
+        cint_opt: Option<&CIntOptimizer>,
+        aosym: CIntSymm,
+    ) -> Result<(), CIntError>
+    where
+        F: ComplexFloat + Send + Sync,
+    {
+        match aosym {
+            CIntSymm::S1 => self.integral_s1_inplace(integrator, out, shls_slice, cint_opt),
+            CIntSymm::S2ij => self.integral_s2ij_inplace(integrator, out, shls_slice, cint_opt),
+            _ => Err(CIntError::InvalidValue(format!("CIntSymm {aosym:?} is not supported"))),
+        }
+    }
+
     #[allow(non_snake_case)]
     pub fn integral_s1_inplace<F>(
         &self,
@@ -638,6 +860,9 @@ impl CInt {
 
         self.check_float_type::<F>()?;
         self.check_shls_slice(integrator, shls_slice, CIntSymm::S1)?;
+        if let Some(cint_opt) = cint_opt {
+            self.check_optimizer(integrator, cint_opt)?;
+        }
 
         // dimensions
 
@@ -797,6 +1022,8 @@ impl CInt {
             _ => unreachable!(),
         }
 
+        /* #endregion */
+
         Ok(())
     }
 
@@ -815,6 +1042,9 @@ impl CInt {
 
         self.check_float_type::<F>()?;
         self.check_shls_slice(integrator, shls_slice, CIntSymm::S1)?;
+        if let Some(cint_opt) = cint_opt {
+            self.check_optimizer(integrator, cint_opt)?;
+        }
 
         // dimensions
 
@@ -834,6 +1064,8 @@ impl CInt {
             .collect_vec();
 
         /* #endregion */
+
+        /* #region parallel integration generation */
 
         const I: usize = 0; // index of first shell
         const J: usize = 1; // index of second shell
@@ -962,6 +1194,8 @@ impl CInt {
             },
             _ => unreachable!(),
         }
+
+        /* #endregion */
 
         Ok(())
     }

@@ -1,4 +1,4 @@
-pub use crate::cint::{CInt, CIntKind, CIntOptimizer, CIntSymm, CIntType};
+pub use crate::cint::{CInt, CIntKind, CIntOptimizer, CIntOutput, CIntSymm, CIntType};
 pub use crate::error::CIntError;
 pub use crate::ffi::wrapper_traits::Integrator;
 
@@ -6,11 +6,13 @@ pub use crate::ffi::wrapper_traits::Integrator;
 pub use crate::test_mol::{cint_fingerprint, init_h2o_def2_tzvp, init_sb2me4_cc_pvtz};
 
 // for developing
+pub(crate) use crate::cint::IntorArgs;
 pub(crate) use crate::ffi::cecp_ffi;
 pub(crate) use crate::ffi::cecp_ffi::ECPOpt;
 pub(crate) use crate::ffi::cint_ffi;
 pub(crate) use crate::ffi::cint_ffi::CINTOpt;
 pub(crate) use CIntType::{Cartesian, Spheric, Spinor};
+pub(crate) use derive_builder::Builder;
 pub(crate) use itertools::Itertools;
 pub(crate) use num::complex::{Complex, ComplexFloat};
 pub(crate) use std::any::Any;
