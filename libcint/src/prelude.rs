@@ -3,7 +3,7 @@ pub use crate::error::CIntError;
 pub use crate::ffi::wrapper_traits::Integrator;
 
 // for doc testing
-pub use crate::test_mol::{cint_fingerprint, init_h2o_def2_tzvp, init_sb2me4_cc_pvtz};
+pub use crate::test_mol::{cint_fingerprint, cint_fp, init_h2o_def2_tzvp, init_sb2me4_cc_pvtz};
 
 // for developing
 pub(crate) use crate::cint::IntorArgs;

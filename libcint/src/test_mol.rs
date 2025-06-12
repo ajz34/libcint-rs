@@ -16,6 +16,8 @@ where
     v.fingerprint()
 }
 
+pub use cint_fingerprint as cint_fp;
+
 pub trait FingerPrint {
     type Output;
     /// Fingerprint of a vector.

@@ -854,8 +854,6 @@ impl CInt {
     where
         F: ComplexFloat + Send + Sync,
     {
-        let opt_ptr = cint_opt.map(|opt| opt.as_ptr()).unwrap_or(null());
-        println!("integral_inplace: aosym = {aosym:?}, opt_ptr = {opt_ptr:?}");
         match aosym {
             CIntSymm::S1 => self.integral_s1_inplace(integrator, out, shls_slice, cint_opt),
             CIntSymm::S2ij => self.integral_s2ij_inplace(integrator, out, shls_slice, cint_opt),
@@ -893,10 +891,10 @@ impl CInt {
         let cache_size = self.max_cache_size(integrator, shls_slice);
         let buffer_size = self.max_buffer_size(integrator, shls_slice);
         let thread_cache = (0..rayon::current_num_threads())
-            .map(|_| Mutex::new(unsafe { aligned_uninitialized_vec::<f64>(cache_size) }))
+            .map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) })
             .collect_vec();
         let thread_buffer = (0..rayon::current_num_threads())
-            .map(|_| Mutex::new(unsafe { aligned_uninitialized_vec::<F>(buffer_size) }))
+            .map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) })
             .collect_vec();
 
         /* #endregion */
@@ -908,15 +906,14 @@ impl CInt {
         const K: usize = 2; // index of third shell
         const L: usize = 3; // index of fourth shell
 
+        let nidx_i = (shls_slice[I][1] - shls_slice[I][0]) as usize;
+        let nidx_j = (shls_slice[J][1] - shls_slice[J][0]) as usize;
+
         match n_center {
             2 => {
                 let out_shape = [cgto_shape[I], cgto_shape[J], n_comp];
 
-                let iter_layout = [
-                    (shls_slice[I][1] - shls_slice[I][0]) as usize,
-                    (shls_slice[J][1] - shls_slice[J][0]) as usize,
-                ]
-                .f();
+                let iter_layout = [nidx_i, nidx_j].f();
                 let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
 
                 iter_indices.into_par_iter().for_each(|([idx_i, idx_j], _)| {
@@ -935,30 +932,26 @@ impl CInt {
 
                     // prepare cache and buffer
                     let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let mut cache = thread_cache[thread_idx].lock().unwrap();
-                    let mut buf = thread_buffer[thread_idx].lock().unwrap();
+                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
+                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe {
-                        self.integral_block(integrator, &mut buf, &shls, &[], cint_opt, &mut cache);
+                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
                     }
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };
                     let out_offsets = [cgto_loc_i, cgto_loc_j, 0];
                     let buf_shape = [cgto_i, cgto_j, n_comp];
-                    copy_3d_s1(out, &out_offsets, &out_shape, &buf, &buf_shape);
+                    copy_3d_s1(out, &out_offsets, &out_shape, buf, &buf_shape);
                 });
             },
             3 => {
                 let out_shape = [cgto_shape[I], cgto_shape[J], cgto_shape[K], n_comp];
 
-                let iter_layout = [
-                    (shls_slice[I][1] - shls_slice[I][0]) as usize,
-                    (shls_slice[J][1] - shls_slice[J][0]) as usize,
-                    (shls_slice[K][1] - shls_slice[K][0]) as usize,
-                ]
-                .f();
+                let nidx_k = (shls_slice[K][1] - shls_slice[K][0]) as usize;
+                let iter_layout = [nidx_i, nidx_j, nidx_k].f();
                 let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
 
                 iter_indices.into_par_iter().for_each(|([idx_i, idx_j, idx_k], _)| {
@@ -976,32 +969,28 @@ impl CInt {
 
                     // prepare cache and buffer
                     let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let mut cache = thread_cache[thread_idx].lock().unwrap();
-                    let mut buf = thread_buffer[thread_idx].lock().unwrap();
+                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
+                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe {
-                        self.integral_block(integrator, &mut buf, &shls, &[], cint_opt, &mut cache);
+                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
                     }
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };
                     let out_offsets = [cgto_loc_i, cgto_loc_j, cgto_loc_k, 0];
                     let buf_shape = [cgto_i, cgto_j, cgto_k, n_comp];
-                    copy_4d_s1(out, &out_offsets, &out_shape, &buf, &buf_shape);
+                    copy_4d_s1(out, &out_offsets, &out_shape, buf, &buf_shape);
                 });
             },
             4 => {
                 let out_shape =
                     [cgto_shape[I], cgto_shape[J], cgto_shape[K], cgto_shape[L], n_comp];
 
-                let iter_layout = [
-                    (shls_slice[I][1] - shls_slice[I][0]) as usize,
-                    (shls_slice[J][1] - shls_slice[J][0]) as usize,
-                    (shls_slice[K][1] - shls_slice[K][0]) as usize,
-                    (shls_slice[L][1] - shls_slice[L][0]) as usize,
-                ]
-                .f();
+                let nidx_k = (shls_slice[K][1] - shls_slice[K][0]) as usize;
+                let nidx_l = (shls_slice[L][1] - shls_slice[L][0]) as usize;
+                let iter_layout = [nidx_i, nidx_j, nidx_k, nidx_l].f();
                 let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
 
                 iter_indices.into_par_iter().for_each(|([idx_i, idx_j, idx_k, idx_l], _)| {
@@ -1022,19 +1011,19 @@ impl CInt {
 
                     // prepare cache and buffer
                     let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let mut cache = thread_cache[thread_idx].lock().unwrap();
-                    let mut buf = thread_buffer[thread_idx].lock().unwrap();
+                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
+                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe {
-                        self.integral_block(integrator, &mut buf, &shls, &[], cint_opt, &mut cache);
+                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
                     }
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };
                     let out_offsets = [cgto_loc_i, cgto_loc_j, cgto_loc_k, cgto_loc_l, 0];
                     let buf_shape = [cgto_i, cgto_j, cgto_k, cgto_l, n_comp];
-                    copy_5d_s1(out, &out_offsets, &out_shape, &buf, &buf_shape);
+                    copy_5d_s1(out, &out_offsets, &out_shape, buf, &buf_shape);
                 });
             },
             _ => unreachable!(),
@@ -1075,10 +1064,10 @@ impl CInt {
         let cache_size = self.max_cache_size(integrator, shls_slice);
         let buffer_size = self.max_buffer_size(integrator, shls_slice);
         let thread_cache = (0..rayon::current_num_threads())
-            .map(|_| Mutex::new(unsafe { aligned_uninitialized_vec::<f64>(cache_size) }))
+            .map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) })
             .collect_vec();
         let thread_buffer = (0..rayon::current_num_threads())
-            .map(|_| Mutex::new(unsafe { aligned_uninitialized_vec::<F>(buffer_size) }))
+            .map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) })
             .collect_vec();
 
         /* #endregion */
@@ -1111,28 +1100,29 @@ impl CInt {
 
                     // prepare cache and buffer
                     let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let mut cache = thread_cache[thread_idx].lock().unwrap();
-                    let mut buf = thread_buffer[thread_idx].lock().unwrap();
+                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
+                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe {
-                        self.integral_block(integrator, &mut buf, &shls, &[], cint_opt, &mut cache);
+                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
                     }
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };
                     let out_offsets = [cgto_loc_i, cgto_loc_j, 0];
                     let buf_shape = [cgto_i, cgto_j, n_comp];
-                    copy_3d_s2ij(out, &out_offsets, &out_shape, &buf, &buf_shape);
+                    copy_3d_s2ij(out, &out_offsets, &out_shape, buf, &buf_shape);
                 });
             },
             3 => {
                 let out_shape = [cgto_shape[0], cgto_shape[1], n_comp];
 
-                let iter_layout = [nidx_ij, (shls_slice[K][1] - shls_slice[K][0]) as usize].f();
+                let nidx_k = (shls_slice[K][1] - shls_slice[K][0]) as usize;
+                let iter_layout = [nidx_ij, nidx_k].f();
                 let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
 
-                iter_indices.into_par_iter().for_each(|([idx_ij, idx_k], _)| {
+                iter_indices.into_par_iter().with_max_len(16).for_each(|([idx_ij, idx_k], _)| {
                     let [idx_i, idx_j] = unravel_s2_indices(idx_ij);
 
                     let shl_i = idx_i as c_int + shls_slice[I][0];
@@ -1149,30 +1139,27 @@ impl CInt {
 
                     // prepare cache and buffer
                     let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let mut cache = thread_cache[thread_idx].lock().unwrap();
-                    let mut buf = thread_buffer[thread_idx].lock().unwrap();
+                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
+                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe {
-                        self.integral_block(integrator, &mut buf, &shls, &[], cint_opt, &mut cache);
+                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
                     }
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };
                     let out_offsets = [cgto_loc_i, cgto_loc_j, cgto_loc_k, 0];
                     let buf_shape = [cgto_i, cgto_j, cgto_k, n_comp];
-                    copy_4d_s2ij(out, &out_offsets, &out_shape, &buf, &buf_shape);
+                    copy_4d_s2ij(out, &out_offsets, &out_shape, buf, &buf_shape);
                 });
             },
             4 => {
                 let out_shape = [cgto_shape[0], cgto_shape[1], cgto_shape[2], n_comp];
 
-                let iter_layout = [
-                    nidx_ij,
-                    (shls_slice[K][1] - shls_slice[K][0]) as usize,
-                    (shls_slice[L][1] - shls_slice[L][0]) as usize,
-                ]
-                .f();
+                let nidx_k = (shls_slice[K][1] - shls_slice[K][0]) as usize;
+                let nidx_l = (shls_slice[L][1] - shls_slice[L][0]) as usize;
+                let iter_layout = [nidx_ij, nidx_k, nidx_l].f();
                 let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
 
                 iter_indices.into_par_iter().for_each(|([idx_ij, idx_k, idx_l], _)| {
@@ -1195,19 +1182,19 @@ impl CInt {
 
                     // prepare cache and buffer
                     let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let mut cache = thread_cache[thread_idx].lock().unwrap();
-                    let mut buf = thread_buffer[thread_idx].lock().unwrap();
+                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
+                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe {
-                        self.integral_block(integrator, &mut buf, &shls, &[], cint_opt, &mut cache);
+                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
                     }
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };
                     let out_offsets = [cgto_loc_i, cgto_loc_j, cgto_loc_k, cgto_loc_l, 0];
                     let buf_shape = [cgto_i, cgto_j, cgto_k, cgto_l, n_comp];
-                    copy_5d_s2ij(out, &out_offsets, &out_shape, &buf, &buf_shape);
+                    copy_5d_s2ij(out, &out_offsets, &out_shape, buf, &buf_shape);
                 });
             },
             _ => unreachable!(),
@@ -1284,13 +1271,13 @@ pub(crate) fn copy_3d_s1<T>(
 {
     for c in 0..buf_shape[2] {
         for j in 0..buf_shape[1] {
-            for i in 0..buf_shape[0] {
-                let out_indices = [out_offsets[0] + i, out_offsets[1] + j, out_offsets[2] + c];
-                let buf_indices = [i, j, c];
-                let out_index = get_f_index_3d(&out_indices, out_shape);
-                let buf_index = get_f_index_3d(&buf_indices, buf_shape);
-                out[out_index] = buf[buf_index];
-            }
+            let out_indices = [out_offsets[0], out_offsets[1] + j, out_offsets[2] + c];
+            let buf_indices = [0, j, c];
+            let out_start = get_f_index_3d(&out_indices, out_shape);
+            let buf_start = get_f_index_3d(&buf_indices, buf_shape);
+            let out_stop = out_start + buf_shape[0];
+            let buf_stop = buf_start + buf_shape[0];
+            out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
         }
     }
 }
@@ -1308,18 +1295,14 @@ pub(crate) fn copy_4d_s1<T>(
     for c in 0..buf_shape[3] {
         for k in 0..buf_shape[2] {
             for j in 0..buf_shape[1] {
-                for i in 0..buf_shape[0] {
-                    let out_indices = [
-                        out_offsets[0] + i,
-                        out_offsets[1] + j,
-                        out_offsets[2] + k,
-                        out_offsets[3] + c,
-                    ];
-                    let buf_indices = [i, j, k, c];
-                    let out_index = get_f_index_4d(&out_indices, out_shape);
-                    let buf_index = get_f_index_4d(&buf_indices, buf_shape);
-                    out[out_index] = buf[buf_index];
-                }
+                let out_indices =
+                    [out_offsets[0], out_offsets[1] + j, out_offsets[2] + k, out_offsets[3] + c];
+                let buf_indices = [0, j, k, c];
+                let out_start = get_f_index_4d(&out_indices, out_shape);
+                let buf_start = get_f_index_4d(&buf_indices, buf_shape);
+                let out_stop = out_start + buf_shape[0];
+                let buf_stop = buf_start + buf_shape[0];
+                out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
             }
         }
     }
@@ -1339,19 +1322,19 @@ pub(crate) fn copy_5d_s1<T>(
         for l in 0..buf_shape[3] {
             for k in 0..buf_shape[2] {
                 for j in 0..buf_shape[1] {
-                    for i in 0..buf_shape[0] {
-                        let out_indices = [
-                            out_offsets[0] + i,
-                            out_offsets[1] + j,
-                            out_offsets[2] + k,
-                            out_offsets[3] + l,
-                            out_offsets[4] + c,
-                        ];
-                        let buf_indices = [i, j, k, l, c];
-                        let out_index = get_f_index_5d(&out_indices, out_shape);
-                        let buf_index = get_f_index_5d(&buf_indices, buf_shape);
-                        out[out_index] = buf[buf_index];
-                    }
+                    let out_indices = [
+                        out_offsets[0],
+                        out_offsets[1] + j,
+                        out_offsets[2] + k,
+                        out_offsets[3] + l,
+                        out_offsets[4] + c,
+                    ];
+                    let buf_indices = [0, j, k, l, c];
+                    let out_start = get_f_index_5d(&out_indices, out_shape);
+                    let buf_start = get_f_index_5d(&buf_indices, buf_shape);
+                    let out_stop = out_start + buf_shape[0];
+                    let buf_stop = buf_start + buf_shape[0];
+                    out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
                 }
             }
         }
@@ -1372,26 +1355,26 @@ pub(crate) fn copy_3d_s2ij<T>(
         // offdiag parts
         for c in 0..buf_shape[2] {
             for j in 0..buf_shape[1] {
-                for i in 0..buf_shape[0] {
-                    let out_indices = [out_offsets[0] + i, out_offsets[1] + j, out_offsets[2] + c];
-                    let buf_indices = [i, j, c];
-                    let out_index = get_f_index_3d_s2ij(&out_indices, out_shape);
-                    let buf_index = get_f_index_3d(&buf_indices, buf_shape);
-                    out[out_index] = buf[buf_index];
-                }
+                let out_indices = [out_offsets[0], out_offsets[1] + j, out_offsets[2] + c];
+                let buf_indices = [0, j, c];
+                let out_start = get_f_index_3d_s2ij(&out_indices, out_shape);
+                let buf_start = get_f_index_3d(&buf_indices, buf_shape);
+                let out_stop = out_start + buf_shape[0];
+                let buf_stop = buf_start + buf_shape[0];
+                out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
             }
         }
     } else {
         // diag parts
         for c in 0..buf_shape[2] {
             for j in 0..buf_shape[1] {
-                for i in 0..(j + 1) {
-                    let out_indices = [out_offsets[0] + i, out_offsets[1] + j, out_offsets[2] + c];
-                    let buf_indices = [i, j, c];
-                    let out_index = get_f_index_3d_s2ij(&out_indices, out_shape);
-                    let buf_index = get_f_index_3d(&buf_indices, buf_shape);
-                    out[out_index] = buf[buf_index];
-                }
+                let out_indices = [out_offsets[0], out_offsets[1] + j, out_offsets[2] + c];
+                let buf_indices = [0, j, c];
+                let out_start = get_f_index_3d_s2ij(&out_indices, out_shape);
+                let buf_start = get_f_index_3d(&buf_indices, buf_shape);
+                let out_stop = out_start + j + 1;
+                let buf_stop = buf_start + j + 1;
+                out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
             }
         }
     }
@@ -1412,18 +1395,18 @@ pub(crate) fn copy_4d_s2ij<T>(
         for c in 0..buf_shape[3] {
             for k in 0..buf_shape[2] {
                 for j in 0..buf_shape[1] {
-                    for i in 0..buf_shape[0] {
-                        let out_indices = [
-                            out_offsets[0] + i,
-                            out_offsets[1] + j,
-                            out_offsets[2] + k,
-                            out_offsets[3] + c,
-                        ];
-                        let buf_indices = [i, j, k, c];
-                        let out_index = get_f_index_4d_s2ij(&out_indices, out_shape);
-                        let buf_index = get_f_index_4d(&buf_indices, buf_shape);
-                        out[out_index] = buf[buf_index];
-                    }
+                    let out_indices = [
+                        out_offsets[0],
+                        out_offsets[1] + j,
+                        out_offsets[2] + k,
+                        out_offsets[3] + c,
+                    ];
+                    let buf_indices = [0, j, k, c];
+                    let out_start = get_f_index_4d_s2ij(&out_indices, out_shape);
+                    let buf_start = get_f_index_4d(&buf_indices, buf_shape);
+                    let out_stop = out_start + buf_shape[0];
+                    let buf_stop = buf_start + buf_shape[0];
+                    out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
                 }
             }
         }
@@ -1432,18 +1415,18 @@ pub(crate) fn copy_4d_s2ij<T>(
         for c in 0..buf_shape[3] {
             for k in 0..buf_shape[2] {
                 for j in 0..buf_shape[1] {
-                    for i in 0..(j + 1) {
-                        let out_indices = [
-                            out_offsets[0] + i,
-                            out_offsets[1] + j,
-                            out_offsets[2] + k,
-                            out_offsets[3] + c,
-                        ];
-                        let buf_indices = [i, j, k, c];
-                        let out_index = get_f_index_4d_s2ij(&out_indices, out_shape);
-                        let buf_index = get_f_index_4d(&buf_indices, buf_shape);
-                        out[out_index] = buf[buf_index];
-                    }
+                    let out_indices = [
+                        out_offsets[0],
+                        out_offsets[1] + j,
+                        out_offsets[2] + k,
+                        out_offsets[3] + c,
+                    ];
+                    let buf_indices = [0, j, k, c];
+                    let out_start = get_f_index_4d_s2ij(&out_indices, out_shape);
+                    let buf_start = get_f_index_4d(&buf_indices, buf_shape);
+                    let out_stop = out_start + j + 1;
+                    let buf_stop = buf_start + j + 1;
+                    out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
                 }
             }
         }
@@ -1466,19 +1449,19 @@ pub(crate) fn copy_5d_s2ij<T>(
             for l in 0..buf_shape[3] {
                 for k in 0..buf_shape[2] {
                     for j in 0..buf_shape[1] {
-                        for i in 0..buf_shape[0] {
-                            let out_indices = [
-                                out_offsets[0] + i,
-                                out_offsets[1] + j,
-                                out_offsets[2] + k,
-                                out_offsets[3] + l,
-                                out_offsets[4] + c,
-                            ];
-                            let buf_indices = [i, j, k, l, c];
-                            let out_index = get_f_index_5d_s2ij(&out_indices, out_shape);
-                            let buf_index = get_f_index_5d(&buf_indices, buf_shape);
-                            out[out_index] = buf[buf_index];
-                        }
+                        let out_indices = [
+                            out_offsets[0],
+                            out_offsets[1] + j,
+                            out_offsets[2] + k,
+                            out_offsets[3] + l,
+                            out_offsets[4] + c,
+                        ];
+                        let buf_indices = [0, j, k, l, c];
+                        let out_start = get_f_index_5d_s2ij(&out_indices, out_shape);
+                        let buf_start = get_f_index_5d(&buf_indices, buf_shape);
+                        let out_stop = out_start + buf_shape[0];
+                        let buf_stop = buf_start + buf_shape[0];
+                        out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
                     }
                 }
             }
@@ -1489,19 +1472,19 @@ pub(crate) fn copy_5d_s2ij<T>(
             for l in 0..buf_shape[3] {
                 for k in 0..buf_shape[2] {
                     for j in 0..buf_shape[1] {
-                        for i in 0..(j + 1) {
-                            let out_indices = [
-                                out_offsets[0] + i,
-                                out_offsets[1] + j,
-                                out_offsets[2] + k,
-                                out_offsets[3] + l,
-                                out_offsets[4] + c,
-                            ];
-                            let buf_indices = [i, j, k, l, c];
-                            let out_index = get_f_index_5d_s2ij(&out_indices, out_shape);
-                            let buf_index = get_f_index_5d(&buf_indices, buf_shape);
-                            out[out_index] = buf[buf_index];
-                        }
+                        let out_indices = [
+                            out_offsets[0],
+                            out_offsets[1] + j,
+                            out_offsets[2] + k,
+                            out_offsets[3] + l,
+                            out_offsets[4] + c,
+                        ];
+                        let buf_indices = [0, j, k, l, c];
+                        let out_start = get_f_index_5d_s2ij(&out_indices, out_shape);
+                        let buf_start = get_f_index_5d(&buf_indices, buf_shape);
+                        let out_stop = out_start + j + 1;
+                        let buf_stop = buf_start + j + 1;
+                        out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
                     }
                 }
             }
