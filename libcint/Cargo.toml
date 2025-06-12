@@ -23,6 +23,7 @@ cmake = "0.1"
 [dev-dependencies]
 ndarray = "0.15"
 approx = "0.5"
+rstest = "0.25"
 
 [features]
 with_f12 = []

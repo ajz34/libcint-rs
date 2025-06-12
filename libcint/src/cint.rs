@@ -205,9 +205,9 @@ pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
 
 /* #region CIntSymm impl */
 
-impl From<&'static str> for CIntSymm {
+impl From<&str> for CIntSymm {
     #[inline]
-    fn from(aosym: &'static str) -> Self {
+    fn from(aosym: &str) -> Self {
         match aosym {
             "S1" | "s1" => CIntSymm::S1,
             "S2ij" | "s2ij" => CIntSymm::S2ij,
@@ -219,9 +219,9 @@ impl From<&'static str> for CIntSymm {
     }
 }
 
-impl From<Option<&'static str>> for CIntSymm {
+impl From<Option<&str>> for CIntSymm {
     #[inline]
-    fn from(aosym: Option<&'static str>) -> Self {
+    fn from(aosym: Option<&str>) -> Self {
         aosym.unwrap_or("s1").into()
     }
 }

@@ -44,37 +44,67 @@ impl CInt {
         aosym: impl Into<CIntSymm>,
         shls_slice: impl AsRef<[[usize; 2]]>,
     ) -> CIntOutput<f64> {
+        self.integrate_f(intor, aosym, shls_slice).unwrap()
+    }
+
+    pub fn integrate_f(
+        &self,
+        intor: &str,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl AsRef<[[usize; 2]]>,
+    ) -> Result<CIntOutput<f64>, CIntError> {
         let intor_args = self
             .intor_args_builder()
             .intor(intor)
             .aosym(aosym)
             .shls_slice(shls_slice.as_ref())
-            .build()
-            .unwrap();
-        self.integrate_with_args_inner(intor_args).unwrap()
+            .build()?;
+        self.integrate_with_args_inner(intor_args)
     }
 
     pub fn integrate_spinor(
         &self,
         intor: &str,
         aosym: impl Into<CIntSymm>,
-        shls_slice: Option<&[[usize; 2]]>,
+        shls_slice: impl AsRef<[[usize; 2]]>,
     ) -> CIntOutput<Complex<f64>> {
+        self.integrate_spinor_f(intor, aosym, shls_slice).unwrap()
+    }
+
+    pub fn integrate_spinor_f(
+        &self,
+        intor: &str,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl AsRef<[[usize; 2]]>,
+    ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
         let intor_args = self
             .intor_args_builder_spinor()
             .intor(intor)
             .aosym(aosym)
-            .shls_slice(shls_slice.unwrap_or(&[]))
-            .build()
-            .unwrap();
-        self.integrate_with_args_inner(intor_args).unwrap()
+            .shls_slice(shls_slice.as_ref())
+            .build()?;
+        self.integrate_with_args_inner(intor_args)
     }
 
-    pub fn integrate_with_args(&self, args: IntorArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
+    pub fn integrate_with_args(&self, args: IntorArgs<f64>) -> CIntOutput<f64> {
+        self.integrate_with_args_inner(args).unwrap()
+    }
+
+    pub fn integrate_with_args_f(
+        &self,
+        args: IntorArgs<f64>,
+    ) -> Result<CIntOutput<f64>, CIntError> {
         self.integrate_with_args_inner(args)
     }
 
     pub fn integrate_with_args_spinor(
+        &self,
+        args: IntorArgs<Complex<f64>>,
+    ) -> CIntOutput<Complex<f64>> {
+        self.integrate_with_args_inner(args).unwrap()
+    }
+
+    pub fn integrate_with_args_spinor_f(
         &self,
         args: IntorArgs<Complex<f64>>,
     ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
