@@ -305,7 +305,7 @@ def gen_impl_integrator(intor):
         {is_sph_available},
         {is_cart_available},
         {is_spinor_available},
-        {comp_tensor}, {comp_all}, {n_center},
+        {comp_all}, {comp_tensor}, {n_center},
         vec!{ng},
         "{integrator_category}", "{intor}",
         CIntKind::Int);\n"""

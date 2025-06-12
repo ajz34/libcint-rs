@@ -1,13 +1,12 @@
 use approx::assert_relative_eq;
 use libcint::prelude::*;
+use num::complex::ComplexFloat;
 use rstest::rstest;
 
 use CIntType::{Cartesian, Spheric, Spinor};
 
 #[cfg(test)]
 mod test {
-    use num::complex::ComplexFloat;
-
     use super::*;
 
     /* #region 2-center */
@@ -140,6 +139,84 @@ mod test {
         cint_data.with_cint_type(Cartesian, |cint_data| {
             let (out, shape) = cint_data.integrate(intor, aosym, shls_slice).into();
             assert_relative_eq!(ref_fp, cint_fp(&out), epsilon = 1e-12);
+            assert_eq!(shape, ref_shape.as_ref());
+        });
+    }
+
+    /* #endregion */
+
+    /* #region 4-center */
+
+    #[rstest]
+    #[case("int2e"              , "s1"  , []                                    , 70.00106603114827     , [43, 43, 43, 43]      )] // no-deriv
+    #[case("int2e_ip1"          , "s1"  , []                                    , 118.50663866543611    , [43, 43, 43, 43, 3]   )] // deriv
+    #[case("int2e"              , "s1"  , [[0, 12], [8, 18], [6, 15], [3, 10]]  , 1.5094112713177106    , [32, 26, 29, 21]      )] // no-deriv | shl
+    #[case("int2e_cg_ssa10ssp2" , "s1"  , [[0, 12], [8, 18], [6, 15], [3, 10]]  , 36.85088072685591     , [32, 26, 29, 21, 48]  )] // deriv | shl
+    #[case("int2e"              , "s2ij", []                                    , 1.8306651475961022    , [946, 43, 43]         )] // no-deriv | s2ij
+    #[case("int2e_gg1"          , "s2ij", []                                    , -12.331846851227873   , [946, 43, 43, 9]      )] // deriv | s2ij
+    #[case("int2e"              , "s2ij", [[8, 18], [8, 18], [6, 15], [3, 10]]  , 1.7525131209661868    , [351, 29, 21]         )] // no-deriv | shl | s2ij
+    #[case("int2e_gg1"          , "s2ij", [[8, 18], [8, 18], [6, 15], [3, 10]]  , 6.391595640883066     , [351, 29, 21, 9]      )] // deriv | shl | s2ij
+    fn test_4c_sph(
+        #[case] intor: &str,
+        #[case] aosym: &str,
+        #[case] shls_slice: impl AsRef<[[usize; 2]]>,
+        #[case] ref_fp: f64,
+        #[case] ref_shape: impl AsRef<[usize]>,
+    ) {
+        let mut cint_data = init_h2o_def2_tzvp();
+
+        cint_data.with_cint_type(Spheric, |cint_data| {
+            let (out, shape) = cint_data.integrate(intor, aosym, shls_slice).into();
+            assert_relative_eq!(ref_fp, cint_fp(&out), epsilon = 1e-12);
+            assert_eq!(shape, ref_shape.as_ref());
+        });
+    }
+
+    #[rstest]
+    #[case("int2e"              , "s1"  , []                                    , -27.40361459334603    , [48, 48, 48, 48]      )] // no-deriv
+    #[case("int2e_ip1"          , "s1"  , []                                    , -102.69339786816539   , [48, 48, 48, 48, 3]   )] // deriv
+    #[case("int2e"              , "s1"  , [[0, 12], [8, 18], [6, 15], [3, 10]]  , -3.3950467582181965   , [37, 31, 34, 23]      )] // no-deriv | shl
+    #[case("int2e_cg_ssa10ssp2" , "s1"  , [[0, 12], [8, 18], [6, 15], [3, 10]]  , -23.165032397305538   , [37, 31, 34, 23, 48]  )] // deriv | shl
+    #[case("int2e"              , "s2ij", []                                    , 40.18960951457926     , [1176, 48, 48]        )] // no-deriv | s2ij
+    #[case("int2e_gg1"          , "s2ij", []                                    , 53.03167458535967     , [1176, 48, 48, 9]     )] // deriv | s2ij
+    #[case("int2e"              , "s2ij", [[8, 18], [8, 18], [6, 15], [3, 10]]  , -84.37906159867836    , [496, 34, 23]         )] // no-deriv | shl | s2ij
+    #[case("int2e_gg1"          , "s2ij", [[8, 18], [8, 18], [6, 15], [3, 10]]  , -18.774888488360734   , [496, 34, 23, 9]      )] // deriv | shl | s2ij
+    fn test_4c_cart(
+        #[case] intor: &str,
+        #[case] aosym: &str,
+        #[case] shls_slice: impl AsRef<[[usize; 2]]>,
+        #[case] ref_fp: f64,
+        #[case] ref_shape: impl AsRef<[usize]>,
+    ) {
+        let mut cint_data = init_h2o_def2_tzvp();
+
+        cint_data.with_cint_type(Cartesian, |cint_data| {
+            let (out, shape) = cint_data.integrate(intor, aosym, shls_slice).into();
+            assert_relative_eq!(ref_fp, cint_fp(&out), epsilon = 1e-11);
+            assert_eq!(shape, ref_shape.as_ref());
+        });
+    }
+
+    #[rstest]
+    #[case("int2e"              , "s1"  , []                                    , -4.074835677031094    , 0.0                   , [86, 86, 86, 86]      )] // no-deriv
+    #[case("int2e_ip1"          , "s1"  , []                                    , 65.47856903615192     , 3.951167514490777     , [86, 86, 86, 86, 3]   )] // deriv
+    #[case("int2e"              , "s1"  , [[0, 12], [8, 18], [6, 15], [3, 10]]  , 6.7689010236720835    , 0.0                   , [64, 52, 58, 42]      )] // no-deriv | shl
+    #[case("int2e_cg_ssa10ssp2" , "s1"  , [[0, 12], [8, 18], [6, 15], [3, 10]]  , 169.1237983415611     , -52.91956958665179    , [64, 52, 58, 42, 3]   )] // deriv | shl
+    fn test_4c_spinor(
+        #[case] intor: &str,
+        #[case] aosym: &str,
+        #[case] shls_slice: impl AsRef<[[usize; 2]]>,
+        #[case] ref_fp_re: f64,
+        #[case] ref_fp_im: f64,
+        #[case] ref_shape: impl AsRef<[usize]>,
+    ) {
+        let mut cint_data = init_h2o_def2_tzvp();
+
+        cint_data.with_cint_type(Spinor, |cint_data| {
+            let (out, shape) = cint_data.integrate_spinor(intor, aosym, shls_slice).into();
+            let fp = cint_fp(&out);
+            assert_relative_eq!(ref_fp_re, fp.re(), epsilon = 1e-11);
+            assert_relative_eq!(ref_fp_im, fp.im(), epsilon = 1e-11);
             assert_eq!(shape, ref_shape.as_ref());
         });
     }

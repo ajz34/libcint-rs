@@ -140,8 +140,12 @@ impl CInt {
 
         // prepare output and check size of output
         let mut out_shape = data.cgto_shape(&shls_slice, aosym);
-        if integrator.n_comp() > 1 {
-            out_shape.push(integrator.n_comp());
+        let n_comp = match self.cint_type {
+            Spheric | Cartesian => integrator.n_comp(),
+            Spinor => integrator.n_spinor_comp(),
+        };
+        if n_comp > 1 {
+            out_shape.push(n_comp);
         }
         let out_size = out_shape.iter().product();
 
@@ -206,21 +210,6 @@ impl CInt {
         out
     }
 
-    pub fn integral_s2ij_spinor<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> Vec<Complex<f64>>
-    where
-        T: Integrator + Default + ComplexFloat + Send + Sync,
-    {
-        if self.cint_type != Spinor {
-            panic!("Non-spinor should be called by `integral_s2ij<Integrator>`");
-        }
-        eprintln!(
-            "`integral_spinor_s2ij` should generally not be called, since spinor may not show s2ij symmetry."
-        );
-
-        let (out, _shape) = self.integral_inner::<T, Complex<f64>>(shls_slice, CIntSymm::S2ij);
-        out
-    }
-
     pub fn integral_inner<T, F>(
         &self,
         shls_slice: Option<&[[c_int; 2]]>,
@@ -243,9 +232,13 @@ impl CInt {
 
         // integral preparation and execution
         let mut out_shape = data.cgto_shape(shls_slice, aosym);
-        if integrator.n_comp() > 1 {
-            out_shape.push(integrator.n_comp())
+        let n_comp = match self.cint_type {
+            Spheric | Cartesian => integrator.n_comp(),
+            Spinor => integrator.n_spinor_comp(),
         };
+        if n_comp > 1 {
+            out_shape.push(n_comp);
+        }
         let out_size = out_shape.iter().product();
         let mut out = unsafe { aligned_uninitialized_vec::<F>(out_size) };
         let cint_opt = data.get_optimizer(&integrator);
@@ -707,7 +700,10 @@ impl CInt {
     /// ```
     pub fn max_buffer_size(&self, integrator: &dyn Integrator, shls_slice: &[[c_int; 2]]) -> usize {
         let ao_loc = self.ao_loc();
-        let n_comp = integrator.n_comp();
+        let n_comp = match self.cint_type {
+            Spheric | Cartesian => integrator.n_comp(),
+            Spinor => integrator.n_spinor_comp(),
+        };
 
         let mut result = n_comp;
         for &[shl0, shl1] in shls_slice {
@@ -912,7 +908,10 @@ impl CInt {
 
         // dimensions
 
-        let n_comp = integrator.n_comp(); // number of components for intor
+        let n_comp = match self.cint_type {
+            Spheric | Cartesian => integrator.n_comp(),
+            Spinor => integrator.n_spinor_comp(),
+        }; // number of components for intor
         let n_center = integrator.n_center(); // atom center number for intor
         let cgto_shape = self.cgto_shape_s1(shls_slice); // AO shape, without intor component
         let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
@@ -1085,7 +1084,10 @@ impl CInt {
 
         // dimensions
 
-        let n_comp = integrator.n_comp(); // number of components for intor
+        let n_comp = match self.cint_type {
+            Spheric | Cartesian => integrator.n_comp(),
+            Spinor => integrator.n_spinor_comp(),
+        }; // number of components for intor
         let n_center = integrator.n_center(); // atom center number for intor
         let cgto_shape = self.cgto_shape_s2ij(shls_slice); // AO shape, without intor component
         let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
