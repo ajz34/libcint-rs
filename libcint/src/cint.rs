@@ -137,8 +137,8 @@ pub enum CIntSymm {
 /// Note that currently, this is not intended to be used directly by users.
 #[derive(Debug, PartialEq)]
 pub enum CIntOptimizer {
-    Int(NonNull<*mut CINTOpt>),
-    Ecp(NonNull<*mut ECPOpt>),
+    Int(*mut CINTOpt),
+    Ecp(*mut ECPOpt),
 }
 
 /// Output of the integral evaluation.
@@ -236,8 +236,8 @@ unsafe impl Sync for CIntOptimizer {}
 impl Drop for CIntOptimizer {
     fn drop(&mut self) {
         match self {
-            Self::Int(opt) => unsafe { cint_ffi::CINTdel_optimizer(opt.as_mut()) },
-            Self::Ecp(opt) => unsafe { cecp_ffi::ECPdel_optimizer(opt.as_mut()) },
+            Self::Int(opt) => unsafe { cint_ffi::CINTdel_optimizer(opt) },
+            Self::Ecp(opt) => unsafe { cecp_ffi::ECPdel_optimizer(opt) },
         }
     }
 }
@@ -246,8 +246,8 @@ impl CIntOptimizer {
     #[inline]
     pub fn as_ptr(&self) -> *const c_void {
         match self {
-            Self::Int(opt) => unsafe { *opt.as_ptr() as *const c_void },
-            Self::Ecp(opt) => unsafe { *opt.as_ptr() as *const c_void },
+            Self::Int(opt) => *opt as *const c_void,
+            Self::Ecp(opt) => *opt as *const c_void,
         }
     }
 }

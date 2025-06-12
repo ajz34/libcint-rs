@@ -38,23 +38,23 @@ impl CInt {
         Ok(self.get_optimizer(&*integrator))
     }
 
-    pub fn intor(
+    pub fn integrate(
         &self,
         intor: &str,
         aosym: impl Into<CIntSymm>,
-        shls_slice: Option<&[[usize; 2]]>,
+        shls_slice: impl AsRef<[[usize; 2]]>,
     ) -> CIntOutput<f64> {
         let intor_args = self
             .intor_args_builder()
             .intor(intor)
             .aosym(aosym)
-            .shls_slice(shls_slice.unwrap_or(&[]))
+            .shls_slice(shls_slice.as_ref())
             .build()
             .unwrap();
-        self.intor_with_args_inner(intor_args).unwrap()
+        self.integrate_with_args_inner(intor_args).unwrap()
     }
 
-    pub fn intor_spinor(
+    pub fn integrate_spinor(
         &self,
         intor: &str,
         aosym: impl Into<CIntSymm>,
@@ -67,10 +67,24 @@ impl CInt {
             .shls_slice(shls_slice.unwrap_or(&[]))
             .build()
             .unwrap();
-        self.intor_with_args_inner(intor_args).unwrap()
+        self.integrate_with_args_inner(intor_args).unwrap()
     }
 
-    pub fn intor_with_args_inner<F>(&self, args: IntorArgs<F>) -> Result<CIntOutput<F>, CIntError>
+    pub fn integrate_with_args(&self, args: IntorArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
+        self.integrate_with_args_inner(args)
+    }
+
+    pub fn integrate_with_args_spinor(
+        &self,
+        args: IntorArgs<Complex<f64>>,
+    ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
+        self.integrate_with_args_inner(args)
+    }
+
+    pub fn integrate_with_args_inner<F>(
+        &self,
+        args: IntorArgs<F>,
+    ) -> Result<CIntOutput<F>, CIntError>
     where
         F: ComplexFloat + Send + Sync,
     {
@@ -84,7 +98,7 @@ impl CInt {
             .map(|&[shl0, shl1]| [shl0 as c_int, shl1 as c_int])
             .collect_vec();
         if shls_slice.is_empty() {
-            shls_slice = vec![[0, data.nbas() as c_int]];
+            shls_slice = vec![[0, data.nbas() as c_int]; integrator.n_center()];
         }
         let aosym = args.aosym;
         let cint_opt = data.get_optimizer(&*integrator);
@@ -636,7 +650,7 @@ impl CInt {
                 }
             })
             .max()
-            .unwrap() as usize
+            .unwrap_or(0) as usize
     }
 
     /// Obtain maximum buffer size for integral.
@@ -667,12 +681,14 @@ impl CInt {
 
         let mut result = n_comp;
         for &[shl0, shl1] in shls_slice {
+            let mut cgto_max = 0;
             for shl in shl0..shl1 {
                 let shl = shl as usize;
                 let p0 = ao_loc[shl];
                 let p1 = ao_loc[shl + 1];
-                result *= p1 - p0;
+                cgto_max = cgto_max.max(p1 - p0);
             }
+            result *= cgto_max;
         }
         result
     }
@@ -701,7 +717,7 @@ impl CInt {
                         env_ptr,
                     );
                 };
-                CIntOptimizer::Int(NonNull::new(&mut c_opt_ptr).unwrap())
+                CIntOptimizer::Int(c_opt_ptr)
             },
             CIntKind::Ecp => {
                 // Check if this cint_data has been merged with ECP data
@@ -722,7 +738,7 @@ impl CInt {
                         env_ptr,
                     );
                 };
-                CIntOptimizer::Ecp(NonNull::new(&mut c_opt_ptr).unwrap())
+                CIntOptimizer::Ecp(c_opt_ptr)
             },
         }
     }
@@ -838,6 +854,8 @@ impl CInt {
     where
         F: ComplexFloat + Send + Sync,
     {
+        let opt_ptr = cint_opt.map(|opt| opt.as_ptr()).unwrap_or(null());
+        println!("integral_inplace: aosym = {aosym:?}, opt_ptr = {opt_ptr:?}");
         match aosym {
             CIntSymm::S1 => self.integral_s1_inplace(integrator, out, shls_slice, cint_opt),
             CIntSymm::S2ij => self.integral_s2ij_inplace(integrator, out, shls_slice, cint_opt),
@@ -1552,7 +1570,7 @@ pub unsafe fn aligned_uninitialized_vec<T>(size: usize) -> Vec<T> {
             unsafe { v.set_len(size) };
             return v;
         } else {
-            panic!("Allocation failed (probably due to out-of-memory)")
+            panic!("Allocation failed (probably due to out-of-memory, of size {size})")
         }
     }
 }
