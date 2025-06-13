@@ -92,6 +92,20 @@ impl AsRef<[[usize; 2]]> for ShlsSlice {
 
 /* #endregion */
 
+/* #region mathematical computation */
+
+/// Computes the Gaussian integral:
+///
+/// $$
+/// \int_0^{+\inf} x^n e^{-\alpha x^2} dx = \frac{n!}{2\alpha^{(n+1)/2}}
+/// $$
+pub fn gaussian_int(n: f64, alpha: f64) -> f64 {
+    let n1 = (n + 1.0) / 2.0;
+    libm::tgamma(n1) / (2.0 * alpha.powf(n1))
+}
+
+/* #endregion */
+
 /* #region unsafe cast */
 
 #[allow(clippy::mut_from_ref)]

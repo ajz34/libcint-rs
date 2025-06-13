@@ -6,6 +6,7 @@
 
 #![allow(dead_code)]
 
+use crate::cint::{IntegrateArgsBuilder, IntorCrossArgs};
 use crate::prelude::*;
 use rayon::prelude::*;
 use rstsr_common::layout::IndexedIterLayout;
@@ -54,13 +55,13 @@ impl CInt {
         shls_slice: impl Into<ShlsSlice>,
     ) -> Result<CIntOutput<f64>, CIntError> {
         let shls_slice = shls_slice.into();
-        let intor_args = self
-            .intor_args_builder()
+        let integrate_args = self
+            .integrate_args_builder()
             .intor(intor)
             .aosym(aosym)
             .shls_slice(shls_slice.as_ref())
             .build()?;
-        self.integrate_with_args_inner(intor_args)
+        self.integrate_with_args_inner(integrate_args)
     }
 
     pub fn integrate_spinor(
@@ -79,43 +80,43 @@ impl CInt {
         shls_slice: impl Into<ShlsSlice>,
     ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
         let shls_slice = shls_slice.into();
-        let intor_args = self
-            .intor_args_builder_spinor()
+        let integrate_args = self
+            .integrate_args_builder_spinor()
             .intor(intor)
             .aosym(aosym)
             .shls_slice(shls_slice.as_ref())
             .build()?;
-        self.integrate_with_args_inner(intor_args)
+        self.integrate_with_args_inner(integrate_args)
     }
 
-    pub fn integrate_with_args(&self, args: IntorArgs<f64>) -> CIntOutput<f64> {
+    pub fn integrate_with_args(&self, args: IntegrateArgs<f64>) -> CIntOutput<f64> {
         self.integrate_with_args_inner(args).unwrap()
     }
 
     pub fn integrate_with_args_f(
         &self,
-        args: IntorArgs<f64>,
+        args: IntegrateArgs<f64>,
     ) -> Result<CIntOutput<f64>, CIntError> {
         self.integrate_with_args_inner(args)
     }
 
     pub fn integrate_with_args_spinor(
         &self,
-        args: IntorArgs<Complex<f64>>,
+        args: IntegrateArgs<Complex<f64>>,
     ) -> CIntOutput<Complex<f64>> {
         self.integrate_with_args_inner(args).unwrap()
     }
 
     pub fn integrate_with_args_spinor_f(
         &self,
-        args: IntorArgs<Complex<f64>>,
+        args: IntegrateArgs<Complex<f64>>,
     ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
         self.integrate_with_args_inner(args)
     }
 
     pub fn integrate_with_args_inner<F>(
         &self,
-        args: IntorArgs<F>,
+        args: IntegrateArgs<F>,
     ) -> Result<CIntOutput<F>, CIntError>
     where
         F: ComplexFloat + Send + Sync,
@@ -171,6 +172,144 @@ impl CInt {
         data.integral_inplace(&*integrator, out, &shls_slice, Some(&cint_opt), aosym)?;
 
         Ok(CIntOutput { out: out_vec, shape: out_shape })
+    }
+
+    pub fn integrate_cross<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> CIntOutput<f64> {
+        CInt::integrate_cross_f(intor, mols, aosym, shls_slice).unwrap()
+    }
+
+    pub fn integrate_cross_f<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> Result<CIntOutput<f64>, CIntError> {
+        let shls_slice = shls_slice.into();
+        let args = IntorCrossArgsBuilder::default()
+            .intor(intor)
+            .mols(mols.as_ref())
+            .shls_slice(shls_slice.as_ref())
+            .aosym(aosym.into())
+            .build()?;
+        CInt::integrate_cross_with_args_inner(args)
+    }
+
+    pub fn integrate_cross_spinor<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> CIntOutput<Complex<f64>> {
+        CInt::integrate_cross_spinor_f(intor, mols, aosym, shls_slice).unwrap()
+    }
+
+    pub fn integrate_cross_spinor_f<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
+        let shls_slice = shls_slice.into();
+        let args = IntorCrossArgsBuilder::default()
+            .intor(intor)
+            .mols(mols.as_ref())
+            .shls_slice(shls_slice.as_ref())
+            .aosym(aosym.into())
+            .build()?;
+        CInt::integrate_cross_with_args_inner(args)
+    }
+
+    pub fn integrate_cross_with_args_inner<F>(
+        args: IntorCrossArgs<F>,
+    ) -> Result<CIntOutput<F>, CIntError>
+    where
+        F: ComplexFloat + Send + Sync,
+    {
+        let IntorCrossArgs { intor, mols, shls_slice, aosym, out } = args;
+
+        let integrator = CInt::get_integrator_f(intor)?;
+        let n_center = integrator.n_center();
+        if mols.len() != n_center {
+            return Err(CIntError::InvalidValue(format!(
+                "Number of molecules ({}) does not match number of centers ({})",
+                mols.len(),
+                n_center
+            )));
+        }
+        let mut shls_slice = if shls_slice.is_empty() {
+            mols.iter().map(|mol| [0, mol.nbas()]).collect_vec()
+        } else {
+            if shls_slice.len() != n_center {
+                return Err(CIntError::InvalidValue(format!(
+                    "Number of shell slices ({}) does not match number of centers ({})",
+                    shls_slice.len(),
+                    n_center
+                )));
+            }
+            // check each slice
+            for i in 0..n_center {
+                let mol = &mols[i];
+                let slc = shls_slice[i];
+
+                if !(slc[0] <= slc[1] && slc[1] <= mol.nbas()) {
+                    return Err(CIntError::InvalidValue(format!(
+                        "Shell slice {:?} at index {} is not proper within [0, {}]",
+                        slc,
+                        i,
+                        mol.nbas()
+                    )));
+                }
+            }
+            shls_slice.to_vec()
+        };
+
+        // vec of [mol_to_concate, nbas_offset]
+        let mut to_concate = vec![(&mols[0], 0)];
+        let mut mol_concate = mols[0].clone();
+
+        for i in 1..n_center {
+            let mut has_equal = false;
+            for &(&mol_to_concate, nbas_offset) in to_concate.iter() {
+                if mols[i] == mol_to_concate {
+                    has_equal = true;
+                    // update nbas_offset
+                    shls_slice[i][0] += nbas_offset;
+                    shls_slice[i][1] += nbas_offset;
+                    break;
+                }
+            }
+            if !has_equal {
+                // add new molecule to concatenate
+                let nbas_offset = mol_concate.nbas();
+                mol_concate = &mol_concate + mols[i];
+                to_concate.push((&mols[i], nbas_offset));
+                // update shls_slice
+                shls_slice[i][0] += nbas_offset;
+                shls_slice[i][1] += nbas_offset;
+            }
+        }
+
+        let args = if out.is_some() {
+            IntegrateArgsBuilder::default()
+                .intor(intor)
+                .aosym(aosym)
+                .shls_slice(&shls_slice)
+                .out(out.unwrap())
+                .build()?
+        } else {
+            IntegrateArgsBuilder::default()
+                .intor(intor)
+                .aosym(aosym)
+                .shls_slice(&shls_slice)
+                .build()?
+        };
+
+        mol_concate.integrate_with_args_inner(args)
     }
 }
 

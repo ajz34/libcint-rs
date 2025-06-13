@@ -153,14 +153,14 @@ pub struct CIntOutput<F> {
 
 #[derive(Builder, Debug)]
 #[builder(pattern = "owned", build_fn(error = "CIntError"))]
-pub struct IntorArgs<'a, 'b, 'c, F> {
+pub struct IntegrateArgs<'l, F> {
     /// Integrator name, such as "int1e_ovlp", "int2e", etc.
     #[builder(setter(into))]
-    pub intor: &'a str,
+    pub intor: &'l str,
 
     /// Shell slices for evaluating sub-tensor of the total integral.
     #[builder(default = "&[]")]
-    pub shls_slice: &'b [[usize; 2]],
+    pub shls_slice: &'l [[usize; 2]],
 
     /// Symmetry of the integral. This will affect shape of output tensor.
     #[builder(default, setter(into))]
@@ -171,7 +171,36 @@ pub struct IntorArgs<'a, 'b, 'c, F> {
     /// If this is `None`, the integral engine will generate a buffer for
     /// output.
     #[builder(default, setter(strip_option))]
-    pub out: Option<&'c mut [F]>,
+    pub out: Option<&'l mut [F]>,
+}
+
+#[derive(Builder, Debug)]
+#[builder(pattern = "owned", build_fn(error = "CIntError"))]
+pub struct IntorCrossArgs<'l, F> {
+    /// Integrator name, such as "int1e_ovlp", "int2e", etc.
+    #[builder(setter(into))]
+    pub intor: &'l str,
+
+    /// Molecules for which the integral will be evaluated.
+    ///
+    /// The length of molecules must be accordance with the `shls_slice` and
+    /// number of centers of integrator.
+    pub mols: &'l [&'l CInt],
+
+    /// Shell slices for evaluating sub-tensor of the total integral.
+    #[builder(default = "&[]")]
+    pub shls_slice: &'l [[usize; 2]],
+
+    /// Symmetry of the integral. This will affect shape of output tensor.
+    #[builder(default, setter(into))]
+    pub aosym: CIntSymm,
+
+    /// Output buffer for the integral evaluation.
+    ///
+    /// If this is `None`, the integral engine will generate a buffer for
+    /// output.
+    #[builder(default, setter(strip_option))]
+    pub out: Option<&'l mut [F]>,
 }
 
 /* #endregion */
@@ -351,14 +380,20 @@ impl CInt {
         get_integrator_f(intor)
     }
 
-    pub fn intor_args_builder(&self) -> IntorArgsBuilder<'static, 'static, 'static, f64> {
-        IntorArgsBuilder::default()
+    pub fn integrate_args_builder(&self) -> IntegrateArgsBuilder<'static, f64> {
+        IntegrateArgsBuilder::default()
     }
 
-    pub fn intor_args_builder_spinor(
-        &self,
-    ) -> IntorArgsBuilder<'static, 'static, 'static, Complex<f64>> {
-        IntorArgsBuilder::default()
+    pub fn integrate_args_builder_spinor(&self) -> IntegrateArgsBuilder<'static, Complex<f64>> {
+        IntegrateArgsBuilder::default()
+    }
+
+    pub fn intor_cross_args_builder(&self) -> IntorCrossArgsBuilder<'static, f64> {
+        IntorCrossArgsBuilder::default()
+    }
+
+    pub fn intor_cross_args_builder_spinor(&self) -> IntorCrossArgsBuilder<'static, Complex<f64>> {
+        IntorCrossArgsBuilder::default()
     }
 }
 

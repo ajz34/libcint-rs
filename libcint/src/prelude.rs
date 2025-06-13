@@ -1,4 +1,5 @@
 pub use crate::cint::{CInt, CIntKind, CIntOptimizer, CIntOutput, CIntSymm, CIntType};
+pub use crate::cint_change::fakemol_for_charges;
 pub use crate::error::CIntError;
 pub use crate::ffi::wrapper_traits::Integrator;
 pub use crate::util::ShlsSlice;
@@ -7,7 +8,7 @@ pub use crate::util::ShlsSlice;
 pub use crate::test_mol::{cint_fingerprint, cint_fp, init_h2o_def2_tzvp, init_sb2me4_cc_pvtz};
 
 // for developing
-pub(crate) use crate::cint::IntorArgs;
+pub(crate) use crate::cint::*;
 pub(crate) use crate::ffi::cecp_ffi;
 pub(crate) use crate::ffi::cecp_ffi::ECPOpt;
 pub(crate) use crate::ffi::cint_ffi;
