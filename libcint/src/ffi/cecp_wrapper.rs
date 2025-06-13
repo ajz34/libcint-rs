@@ -28,7 +28,7 @@ impl_integrator!(
     ECPso_optimizer,
     ECPso_sph,
     ECPso_cart,
-    panic_spinor,
+    ECPso_spinor,
     true,
     true,
     true,
@@ -163,6 +163,7 @@ impl_integrator!(
 pub fn get_ecp_integrator(name: &str) -> Option<Box<dyn Integrator>> {
     match name {
         "ecpscalar" => Some(Box::new(ECPscalar)),
+        "ecpso" => Some(Box::new(ECPso)),
         "ecpscalar_ignuc" => Some(Box::new(ECPscalar_ignuc)),
         "ecpscalar_ipnuc" => Some(Box::new(ECPscalar_ipnuc)),
         "ecpscalar_ipipnuc" => Some(Box::new(ECPscalar_ipipnuc)),

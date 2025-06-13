@@ -7,14 +7,14 @@ use crate::prelude::*;
 impl CInt {
     /* #region cint_type */
 
-    pub fn set_cint_type(&mut self, cint_type: CIntType) -> &mut Self {
-        self.cint_type = cint_type;
+    pub fn set_cint_type(&mut self, cint_type: impl Into<CIntType>) -> &mut Self {
+        self.cint_type = cint_type.into();
         self
     }
 
     pub fn with_cint_type<R>(
         &mut self,
-        cint_type: CIntType,
+        cint_type: impl Into<CIntType>,
         func: impl FnOnce(&mut Self) -> R,
     ) -> R {
         let old_type = self.cint_type;

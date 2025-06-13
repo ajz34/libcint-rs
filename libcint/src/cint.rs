@@ -203,6 +203,22 @@ pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
 
 /* #endregion */
 
+/* #region CIntType impl */
+
+impl From<&str> for CIntType {
+    #[inline]
+    fn from(cint_type: &str) -> Self {
+        match cint_type.to_lowercase().as_str() {
+            "sph" | "spheric" | "spherical" => CIntType::Spheric,
+            "cart" | "cartesian" => CIntType::Cartesian,
+            "spinor" => CIntType::Spinor,
+            _ => panic!("Unknown integral type: {cint_type}"),
+        }
+    }
+}
+
+/* #endregion */
+
 /* #region CIntSymm impl */
 
 impl From<&str> for CIntSymm {
@@ -277,7 +293,6 @@ impl CInt {
     /// Should be called before integral calculations. Be careful this function
     /// should not called twice in consecutive.
     pub fn merge_ecpbas(&self) -> CInt {
-        println!("merging ECP data into CIntData...");
         if self.is_ecp_merged() {
             self.clone()
         } else {
