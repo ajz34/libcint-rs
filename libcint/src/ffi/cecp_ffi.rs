@@ -100,6 +100,14 @@ unsafe extern "C" {
         opt: *const ECPOpt,
         cache: *mut f64,
     ) -> c_int;
+    pub fn ECPso_optimizer(
+        opt: *mut *mut ECPOpt,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+    );
     pub fn ECPscalar_ignuc_sph(
         out: *mut f64,
         dims: *const c_int,

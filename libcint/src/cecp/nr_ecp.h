@@ -82,6 +82,7 @@ int ECPso_cart(double *out, int *dims, int *shls, int *atm, int natm,
                int *bas, int nbas, double *env, ECPOpt *opt, double *cache);
 int ECPso_spinor(double complex *out, int *dims, int *shls, int *atm, int natm,
                  int *bas, int nbas, double *env, ECPOpt *opt, double *cache);
+void ECPso_optimizer(ECPOpt **opt, int *atm, int natm, int *bas, int nbas, double *env);
 
 int ECPscalar_ignuc_sph(double *out, int *dims, int *shls, int *atm, int natm,
                   int *bas, int nbas, double *env, ECPOpt *opt, double *cache);
@@ -124,5 +125,3 @@ int ECPscalar_iprinvip_sph(double *out, int *dims, int *shls, int *atm, int natm
 int ECPscalar_iprinvip_cart(double *out, int *dims, int *shls, int *atm, int natm,
                    int *bas, int nbas, double *env, ECPOpt *opt, double *cache);
 void ECPscalar_iprinvip_optimizer(ECPOpt **opt, int *atm, int natm, int *bas, int nbas, double *env);
-
-

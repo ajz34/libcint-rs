@@ -994,3 +994,9 @@ make_optimizer(ipnucip)
 make_empty_optimizer(iprinv)
 make_empty_optimizer(ipiprinv)
 make_empty_optimizer(iprinvip)
+
+void ECPso_optimizer(ECPOpt **opt, int *atm, int natm,
+                     int *bas, int nbas, double *env)
+{
+        *opt = NULL;
+}

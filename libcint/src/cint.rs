@@ -189,9 +189,9 @@ pub fn get_integrator(intor: &str) -> Box<dyn Integrator> {
 
 pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
     // explicitly check cint and ecp differently
-    let intor = if let Some(intor) = get_cint_integrator(intor) {
+    let intor = if let Some(intor) = get_cint_integrator(&intor.to_lowercase()) {
         Ok(intor)
-    } else if let Some(intor) = get_ecp_integrator(intor) {
+    } else if let Some(intor) = get_ecp_integrator(&intor.to_lowercase()) {
         Ok(intor)
     } else {
         Err(CIntError::IntegratorNotFound(intor.to_string()))
@@ -277,6 +277,7 @@ impl CInt {
     /// Should be called before integral calculations. Be careful this function
     /// should not called twice in consecutive.
     pub fn merge_ecpbas(&self) -> CInt {
+        println!("merging ECP data into CIntData...");
         if self.is_ecp_merged() {
             self.clone()
         } else {

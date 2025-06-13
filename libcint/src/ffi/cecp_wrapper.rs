@@ -18,9 +18,26 @@ impl_integrator!(
     1,
     1,
     2,
-    vec![0, 0, 0, 0, 0, 1, 1, 1],
+    vec![0, 0, 0, 0, 0, 1, 0, 1],
     "ECP",
-    "ECPIntegratorBase",
+    "ECPscalar",
+    CIntKind::Ecp
+);
+impl_integrator!(
+    ECPso,
+    ECPso_optimizer,
+    ECPso_sph,
+    ECPso_cart,
+    panic_spinor,
+    true,
+    true,
+    true,
+    3,
+    1,
+    2,
+    vec![0, 0, 0, 0, 0, 3, 0, 1],
+    "ECP",
+    "ECPso",
     CIntKind::Ecp
 );
 impl_integrator!(
@@ -100,10 +117,10 @@ impl_integrator!(
     true,
     true,
     false,
-    9,
-    9,
+    3,
+    3,
     2,
-    vec![1, 1, 0, 0, 2, 1, 0, 9],
+    vec![1, 1, 0, 0, 2, 1, 0, 3],
     "ECP",
     "ECPscalar_iprinv",
     CIntKind::Ecp

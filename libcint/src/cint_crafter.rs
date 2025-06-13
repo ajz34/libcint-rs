@@ -118,7 +118,7 @@ impl CInt {
     where
         F: ComplexFloat + Send + Sync,
     {
-        let data = if self.is_ecp_merged() { &self.merge_ecpbas() } else { self };
+        let data = if self.is_ecp_merged() { self } else { &self.merge_ecpbas() };
 
         // unwrap and prepare (without output checking)
         let integrator = CInt::get_integrator(args.intor);
