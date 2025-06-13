@@ -293,14 +293,37 @@ impl CInt {
     /// Should be called before integral calculations. Be careful this function
     /// should not called twice in consecutive.
     pub fn merge_ecpbas(&self) -> CInt {
+        const AS_ECPBAS_OFFSET: usize = cecp_ffi::AS_ECPBAS_OFFSET as usize;
+        const AS_NECPBAS: usize = cecp_ffi::AS_NECPBAS as usize;
+
         if self.is_ecp_merged() {
             self.clone()
         } else {
             let mut merged = self.clone();
             merged.bas.extend_from_slice(&self.ecpbas);
-            merged.env[cecp_ffi::AS_ECPBAS_OFFSET as usize] = self.bas.len() as f64;
-            merged.env[cecp_ffi::AS_NECPBAS as usize] = self.ecpbas.len() as f64;
+            merged.env[AS_ECPBAS_OFFSET] = self.bas.len() as f64;
+            merged.env[AS_NECPBAS] = self.ecpbas.len() as f64;
             merged
+        }
+    }
+
+    pub fn decopule_ecpbas(&self) -> CInt {
+        const AS_ECPBAS_OFFSET: usize = cecp_ffi::AS_ECPBAS_OFFSET as usize;
+        const AS_NECPBAS: usize = cecp_ffi::AS_NECPBAS as usize;
+
+        if !self.is_ecp_merged() {
+            self.clone()
+        } else {
+            let mut decoupled = self.clone();
+            let nbas = self.env[AS_ECPBAS_OFFSET] as usize;
+            let (bas, ecpbas) = decoupled.bas.split_at(nbas);
+            let bas = bas.to_vec();
+            let ecpbas = ecpbas.to_vec();
+            decoupled.bas = bas;
+            decoupled.ecpbas = ecpbas;
+            decoupled.env[AS_ECPBAS_OFFSET] = 0.0;
+            decoupled.env[AS_NECPBAS] = 0.0;
+            decoupled
         }
     }
 
