@@ -9,3 +9,4 @@ pub mod error;
 pub mod ffi;
 pub mod prelude;
 pub mod test_mol;
+pub mod util;

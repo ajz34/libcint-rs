@@ -11,17 +11,17 @@ mod test {
         let mut cint_data = init_na_ecpso();
 
         cint_data.with_cint_type("sph", |cint_data| {
-            let (out, _) = cint_data.integrate("ECPso", "s1", []).into();
+            let (out, _) = cint_data.integrate("ECPso", "s1", None).into();
             assert_relative_eq!(16.31443178892987, cint_fp(&out), epsilon = 1e-10);
         });
 
         cint_data.with_cint_type("cart", |cint_data| {
-            let (out, _) = cint_data.integrate("ECPso", "s1", []).into();
+            let (out, _) = cint_data.integrate("ECPso", "s1", None).into();
             assert_relative_eq!(8.274184128427798, cint_fp(&out), epsilon = 1e-10);
         });
 
         cint_data.with_cint_type("spinor", |cint_data| {
-            let (out, _) = cint_data.integrate_spinor("ECPso", "s1", []).into();
+            let (out, _) = cint_data.integrate_spinor("ECPso", "s1", None).into();
             assert_relative_eq!(0.0, cint_fp(&out).re(), epsilon = 1e-10);
             assert_relative_eq!(30.596605690744546, cint_fp(&out).im(), epsilon = 1e-10);
         });

@@ -1,6 +1,7 @@
 pub use crate::cint::{CInt, CIntKind, CIntOptimizer, CIntOutput, CIntSymm, CIntType};
 pub use crate::error::CIntError;
 pub use crate::ffi::wrapper_traits::Integrator;
+pub use crate::util::ShlsSlice;
 
 // for doc testing
 pub use crate::test_mol::{cint_fingerprint, cint_fp, init_h2o_def2_tzvp, init_sb2me4_cc_pvtz};
@@ -11,6 +12,7 @@ pub(crate) use crate::ffi::cecp_ffi;
 pub(crate) use crate::ffi::cecp_ffi::ECPOpt;
 pub(crate) use crate::ffi::cint_ffi;
 pub(crate) use crate::ffi::cint_ffi::CINTOpt;
+pub(crate) use crate::util::*;
 pub(crate) use CIntType::{Cartesian, Spheric, Spinor};
 pub(crate) use derive_builder::Builder;
 pub(crate) use itertools::Itertools;

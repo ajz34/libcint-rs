@@ -42,17 +42,18 @@ impl CInt {
         &self,
         intor: &str,
         aosym: impl Into<CIntSymm>,
-        shls_slice: impl AsRef<[[usize; 2]]>,
+        shls_slice: impl Into<ShlsSlice>,
     ) -> CIntOutput<f64> {
-        self.integrate_f(intor, aosym, shls_slice).unwrap()
+        self.integrate_f(intor, aosym, shls_slice.into()).unwrap()
     }
 
     pub fn integrate_f(
         &self,
         intor: &str,
         aosym: impl Into<CIntSymm>,
-        shls_slice: impl AsRef<[[usize; 2]]>,
+        shls_slice: impl Into<ShlsSlice>,
     ) -> Result<CIntOutput<f64>, CIntError> {
+        let shls_slice = shls_slice.into();
         let intor_args = self
             .intor_args_builder()
             .intor(intor)
@@ -66,17 +67,18 @@ impl CInt {
         &self,
         intor: &str,
         aosym: impl Into<CIntSymm>,
-        shls_slice: impl AsRef<[[usize; 2]]>,
+        shls_slice: impl Into<ShlsSlice>,
     ) -> CIntOutput<Complex<f64>> {
-        self.integrate_spinor_f(intor, aosym, shls_slice).unwrap()
+        self.integrate_spinor_f(intor, aosym, shls_slice.into()).unwrap()
     }
 
     pub fn integrate_spinor_f(
         &self,
         intor: &str,
         aosym: impl Into<CIntSymm>,
-        shls_slice: impl AsRef<[[usize; 2]]>,
+        shls_slice: impl Into<ShlsSlice>,
     ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
+        let shls_slice = shls_slice.into();
         let intor_args = self
             .intor_args_builder_spinor()
             .intor(intor)
@@ -696,7 +698,7 @@ impl CInt {
     /// let integrator = CInt::get_integrator("int3c2e_ip1");
     /// let shls_slice = [[0, 7], [2, 6], [15, 19]];
     /// let max_buffer_size = cint_data.max_buffer_size(&*integrator, &shls_slice);
-    /// assert_eq!(max_buffer_size, 243);
+    /// assert_eq!(max_buffer_size, 81);
     /// ```
     pub fn max_buffer_size(&self, integrator: &dyn Integrator, shls_slice: &[[c_int; 2]]) -> usize {
         let ao_loc = self.ao_loc();
@@ -1237,360 +1239,6 @@ impl CInt {
         Ok(())
     }
 }
-
-/* #region util */
-
-#[allow(clippy::mut_from_ref)]
-pub(crate) unsafe fn cast_mut_slice<T>(slc: &[T]) -> &mut [T] {
-    let len = slc.len();
-    let ptr = slc.as_ptr() as *mut T;
-    unsafe { std::slice::from_raw_parts_mut(ptr, len) }
-}
-
-#[inline(always)]
-pub(crate) fn unravel_s2_indices(x: usize) -> [usize; 2] {
-    let j = (((x * 2 + 1) as f64).sqrt() - 0.5) as usize;
-    let i = x - j * (j + 1) / 2;
-    [i, j]
-}
-
-#[inline(always)]
-pub(crate) fn get_f_index_3d(indices: &[usize; 3], shape: &[usize; 3]) -> usize {
-    indices[0] + shape[0] * (indices[1] + shape[1] * (indices[2]))
-}
-
-#[inline(always)]
-pub(crate) fn get_f_index_4d(indices: &[usize; 4], shape: &[usize; 4]) -> usize {
-    indices[0] + shape[0] * (indices[1] + shape[1] * (indices[2] + shape[2] * (indices[3])))
-}
-
-#[inline(always)]
-pub(crate) fn get_f_index_5d(indices: &[usize; 5], shape: &[usize; 5]) -> usize {
-    indices[0]
-        + shape[0]
-            * (indices[1]
-                + shape[1] * (indices[2] + shape[2] * (indices[3] + shape[3] * (indices[4]))))
-}
-
-#[inline(always)]
-pub(crate) fn get_f_index_3d_s2ij(indices: &[usize; 3], shape: &[usize; 2]) -> usize {
-    indices[0] + indices[1] * (indices[1] + 1) / 2 + shape[0] * (indices[2])
-}
-
-#[inline(always)]
-pub(crate) fn get_f_index_4d_s2ij(indices: &[usize; 4], shape: &[usize; 3]) -> usize {
-    indices[0]
-        + indices[1] * (indices[1] + 1) / 2
-        + shape[0] * (indices[2] + shape[1] * (indices[3]))
-}
-
-#[inline(always)]
-pub(crate) fn get_f_index_5d_s2ij(indices: &[usize; 5], shape: &[usize; 4]) -> usize {
-    indices[0]
-        + indices[1] * (indices[1] + 1) / 2
-        + shape[0] * (indices[2] + shape[1] * (indices[3] + shape[2] * (indices[4])))
-}
-
-#[inline(always)]
-pub(crate) fn copy_3d_s1<T>(
-    out: &mut [T],
-    out_offsets: &[usize; 3],
-    out_shape: &[usize; 3],
-    buf: &[T],
-    buf_shape: &[usize; 3],
-) where
-    T: Copy,
-{
-    for c in 0..buf_shape[2] {
-        for j in 0..buf_shape[1] {
-            let out_indices = [out_offsets[0], out_offsets[1] + j, out_offsets[2] + c];
-            let buf_indices = [0, j, c];
-            let out_start = get_f_index_3d(&out_indices, out_shape);
-            let buf_start = get_f_index_3d(&buf_indices, buf_shape);
-            let out_stop = out_start + buf_shape[0];
-            let buf_stop = buf_start + buf_shape[0];
-            out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
-        }
-    }
-}
-
-#[inline(always)]
-pub(crate) fn copy_4d_s1<T>(
-    out: &mut [T],
-    out_offsets: &[usize; 4],
-    out_shape: &[usize; 4],
-    buf: &[T],
-    buf_shape: &[usize; 4],
-) where
-    T: Copy,
-{
-    for c in 0..buf_shape[3] {
-        for k in 0..buf_shape[2] {
-            for j in 0..buf_shape[1] {
-                let out_indices =
-                    [out_offsets[0], out_offsets[1] + j, out_offsets[2] + k, out_offsets[3] + c];
-                let buf_indices = [0, j, k, c];
-                let out_start = get_f_index_4d(&out_indices, out_shape);
-                let buf_start = get_f_index_4d(&buf_indices, buf_shape);
-                let out_stop = out_start + buf_shape[0];
-                let buf_stop = buf_start + buf_shape[0];
-                out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
-            }
-        }
-    }
-}
-
-#[inline(always)]
-pub(crate) fn copy_5d_s1<T>(
-    out: &mut [T],
-    out_offsets: &[usize; 5],
-    out_shape: &[usize; 5],
-    buf: &[T],
-    buf_shape: &[usize; 5],
-) where
-    T: Copy,
-{
-    for c in 0..buf_shape[4] {
-        for l in 0..buf_shape[3] {
-            for k in 0..buf_shape[2] {
-                for j in 0..buf_shape[1] {
-                    let out_indices = [
-                        out_offsets[0],
-                        out_offsets[1] + j,
-                        out_offsets[2] + k,
-                        out_offsets[3] + l,
-                        out_offsets[4] + c,
-                    ];
-                    let buf_indices = [0, j, k, l, c];
-                    let out_start = get_f_index_5d(&out_indices, out_shape);
-                    let buf_start = get_f_index_5d(&buf_indices, buf_shape);
-                    let out_stop = out_start + buf_shape[0];
-                    let buf_stop = buf_start + buf_shape[0];
-                    out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
-                }
-            }
-        }
-    }
-}
-
-#[inline(always)]
-pub(crate) fn copy_3d_s2ij<T>(
-    out: &mut [T],
-    out_offsets: &[usize; 3],
-    out_shape: &[usize; 2],
-    buf: &[T],
-    buf_shape: &[usize; 3],
-) where
-    T: Copy,
-{
-    if out_offsets[0] != out_offsets[1] {
-        // offdiag parts
-        for c in 0..buf_shape[2] {
-            for j in 0..buf_shape[1] {
-                let out_indices = [out_offsets[0], out_offsets[1] + j, out_offsets[2] + c];
-                let buf_indices = [0, j, c];
-                let out_start = get_f_index_3d_s2ij(&out_indices, out_shape);
-                let buf_start = get_f_index_3d(&buf_indices, buf_shape);
-                let out_stop = out_start + buf_shape[0];
-                let buf_stop = buf_start + buf_shape[0];
-                out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
-            }
-        }
-    } else {
-        // diag parts
-        for c in 0..buf_shape[2] {
-            for j in 0..buf_shape[1] {
-                let out_indices = [out_offsets[0], out_offsets[1] + j, out_offsets[2] + c];
-                let buf_indices = [0, j, c];
-                let out_start = get_f_index_3d_s2ij(&out_indices, out_shape);
-                let buf_start = get_f_index_3d(&buf_indices, buf_shape);
-                let out_stop = out_start + j + 1;
-                let buf_stop = buf_start + j + 1;
-                out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
-            }
-        }
-    }
-}
-
-#[inline(always)]
-pub(crate) fn copy_4d_s2ij<T>(
-    out: &mut [T],
-    out_offsets: &[usize; 4],
-    out_shape: &[usize; 3],
-    buf: &[T],
-    buf_shape: &[usize; 4],
-) where
-    T: Copy,
-{
-    if out_offsets[0] != out_offsets[1] {
-        // offdiag parts
-        for c in 0..buf_shape[3] {
-            for k in 0..buf_shape[2] {
-                for j in 0..buf_shape[1] {
-                    let out_indices = [
-                        out_offsets[0],
-                        out_offsets[1] + j,
-                        out_offsets[2] + k,
-                        out_offsets[3] + c,
-                    ];
-                    let buf_indices = [0, j, k, c];
-                    let out_start = get_f_index_4d_s2ij(&out_indices, out_shape);
-                    let buf_start = get_f_index_4d(&buf_indices, buf_shape);
-                    let out_stop = out_start + buf_shape[0];
-                    let buf_stop = buf_start + buf_shape[0];
-                    out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
-                }
-            }
-        }
-    } else {
-        // diag parts
-        for c in 0..buf_shape[3] {
-            for k in 0..buf_shape[2] {
-                for j in 0..buf_shape[1] {
-                    let out_indices = [
-                        out_offsets[0],
-                        out_offsets[1] + j,
-                        out_offsets[2] + k,
-                        out_offsets[3] + c,
-                    ];
-                    let buf_indices = [0, j, k, c];
-                    let out_start = get_f_index_4d_s2ij(&out_indices, out_shape);
-                    let buf_start = get_f_index_4d(&buf_indices, buf_shape);
-                    let out_stop = out_start + j + 1;
-                    let buf_stop = buf_start + j + 1;
-                    out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
-                }
-            }
-        }
-    }
-}
-
-#[inline(always)]
-pub(crate) fn copy_5d_s2ij<T>(
-    out: &mut [T],
-    out_offsets: &[usize; 5],
-    out_shape: &[usize; 4],
-    buf: &[T],
-    buf_shape: &[usize; 5],
-) where
-    T: Copy,
-{
-    if out_offsets[0] != out_offsets[1] {
-        // offdiag parts
-        for c in 0..buf_shape[4] {
-            for l in 0..buf_shape[3] {
-                for k in 0..buf_shape[2] {
-                    for j in 0..buf_shape[1] {
-                        let out_indices = [
-                            out_offsets[0],
-                            out_offsets[1] + j,
-                            out_offsets[2] + k,
-                            out_offsets[3] + l,
-                            out_offsets[4] + c,
-                        ];
-                        let buf_indices = [0, j, k, l, c];
-                        let out_start = get_f_index_5d_s2ij(&out_indices, out_shape);
-                        let buf_start = get_f_index_5d(&buf_indices, buf_shape);
-                        let out_stop = out_start + buf_shape[0];
-                        let buf_stop = buf_start + buf_shape[0];
-                        out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
-                    }
-                }
-            }
-        }
-    } else {
-        // diag parts
-        for c in 0..buf_shape[4] {
-            for l in 0..buf_shape[3] {
-                for k in 0..buf_shape[2] {
-                    for j in 0..buf_shape[1] {
-                        let out_indices = [
-                            out_offsets[0],
-                            out_offsets[1] + j,
-                            out_offsets[2] + k,
-                            out_offsets[3] + l,
-                            out_offsets[4] + c,
-                        ];
-                        let buf_indices = [0, j, k, l, c];
-                        let out_start = get_f_index_5d_s2ij(&out_indices, out_shape);
-                        let buf_start = get_f_index_5d(&buf_indices, buf_shape);
-                        let out_stop = out_start + j + 1;
-                        let buf_stop = buf_start + j + 1;
-                        out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Create an unaligned uninitialized vector with the given size.
-///
-/// # Safety
-///
-/// Caller must ensure that the vector is properly initialized before using it.
-///
-/// This is not a very good function, since `set_len` on uninitialized memory is
-/// undefined-behavior (UB).
-/// Nevertheless, if `T` is some type of `MaybeUninit`, then this will not UB.
-#[allow(clippy::uninit_vec)]
-#[inline]
-pub unsafe fn unaligned_uninitialized_vec<T>(size: usize) -> Vec<T> {
-    let mut v: Vec<T> = vec![];
-    v.try_reserve_exact(size).unwrap();
-    unsafe { v.set_len(size) };
-    v
-}
-
-/// Create an uninitialized vector with the given size and alignment.
-///
-/// - None: if the size is 0 or allocation fails.
-/// - Some: pointer to the allocated memory.
-///
-/// https://users.rust-lang.org/t/how-can-i-allocate-aligned-memory-in-rust/33293
-#[inline]
-pub fn aligned_alloc(numbytes: usize, alignment: usize) -> Option<NonNull<()>> {
-    extern crate alloc;
-
-    if numbytes == 0 {
-        return None;
-    }
-    let layout = alloc::alloc::Layout::from_size_align(numbytes, alignment).unwrap();
-    NonNull::new(unsafe { alloc::alloc::alloc(layout) }).map(|p| p.cast::<()>())
-}
-
-/// Create an conditionally aligned uninitialized vector with the given size.
-///
-/// # Safety
-///
-/// Caller must ensure that the vector is properly initialized before using it.
-///
-/// This is not a very good function, since `set_len` on uninitialized memory is
-/// undefined-behavior (UB).
-/// Nevertheless, if `T` is some type of `MaybeUninit`, then this will not UB.
-#[inline]
-pub unsafe fn aligned_uninitialized_vec<T>(size: usize) -> Vec<T> {
-    const MIN_ALIGN: usize = 64; // minimal number of elements in vector to be aligned
-    const ALIGNMENT: usize = 64; // 64 bytes alignment (minimal requirement for AVX-512)
-
-    if size == 0 {
-        vec![]
-    } else if size < MIN_ALIGN {
-        unsafe { unaligned_uninitialized_vec(size) }
-    } else {
-        let sizeof = core::mem::size_of::<T>();
-        let pointer = aligned_alloc(size * sizeof, ALIGNMENT);
-        if let Some(pointer) = pointer {
-            let mut v = unsafe { Vec::from_raw_parts(pointer.as_ptr() as *mut T, size, size) };
-            unsafe { v.set_len(size) };
-            return v;
-        } else {
-            panic!("Allocation failed (probably due to out-of-memory, of size {size})")
-        }
-    }
-}
-
-/* #endregion */
 
 #[cfg(test)]
 mod test {
