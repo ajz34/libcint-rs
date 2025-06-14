@@ -1,0 +1,12 @@
+[package]
+name = "h2o_rhf"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libcint = { path = "../../" }
+rstsr = { version = "0.3.6", features = ["openblas", "linalg", "sci"] }
+rstsr-openblas = { version = "0.3.6", features = ["openmp", "sci"] }
+
+[profile.dev]
+opt-level = 2
