@@ -344,6 +344,33 @@ impl CInt {
 
     /* #endregion */
 
+    /* #region rinv_orig_atom */
+
+    pub fn get_rinv_origin_atom(&self) -> usize {
+        const AS_RINV_ORIG_ATOM: usize = cecp_ffi::AS_RINV_ORIG_ATOM as usize;
+        self.env[AS_RINV_ORIG_ATOM] as usize
+    }
+
+    pub fn set_rinv_origin_atom(&mut self, atm_id: usize) -> &mut Self {
+        const AS_RINV_ORIG_ATOM: usize = cecp_ffi::AS_RINV_ORIG_ATOM as usize;
+        self.env[AS_RINV_ORIG_ATOM] = atm_id as f64;
+        self
+    }
+
+    pub fn with_rinv_origin_atom<R>(
+        &mut self,
+        atm_id: usize,
+        func: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let old_atm_id = self.get_rinv_origin_atom();
+        self.set_rinv_origin_atom(atm_id);
+        let result = func(self);
+        self.set_rinv_origin_atom(old_atm_id);
+        result
+    }
+
+    /* #endregion */
+
     /* #region range_coulomb */
 
     pub fn get_range_coulomb(&self) -> f64 {
@@ -463,6 +490,7 @@ impl CInt {
         let zeta = self.env[self.atm[atm_id][PTR_ZETA] as usize];
         let rinv = self.atom_coord(atm_id);
         self.set_rinv_origin(rinv);
+        self.set_rinv_origin_atom(atm_id);
         if zeta != 0.0 {
             self.set_rinv_zeta(zeta);
         }
@@ -476,10 +504,12 @@ impl CInt {
     ) -> R {
         let old_rinv = self.get_rinv_origin();
         let old_zeta = self.get_rinv_zeta();
+        let old_rinv_atom = self.get_rinv_origin_atom();
         self.set_rinv_at_nucleus(atm_id);
         let result = func(self);
         self.set_rinv_origin(old_rinv);
         self.set_rinv_zeta(old_zeta);
+        self.set_rinv_origin_atom(old_rinv_atom);
         result
     }
 

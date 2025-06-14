@@ -7,21 +7,39 @@ use crate::ffi::cint_wrapper::get_cint_integrator;
 
 /* #region structs */
 
-/// CInt data structure, which contains all the necessary information for
-/// integral evaluation.
+/// CInt data structure, which contains **all the necessary information** for
+/// GTO electronic integral evaluation, and almost **all methods to evaluate**
+/// GTO electronic integrals for basic usage.
+///
+/// Most users may wish to use the [`integrate`](Self::integrate) and
+/// [`integrate_spinor`](Self::integrate_spinor) methods, which correspond to
+/// PySCF's `mol.intor` method. We refer to those functions for more
+/// documentations.
+///
+/// Documentation and code conventions:
+///
+/// | code name | description |
+/// |------------|-------------|
+/// | `atm` | atom |
+/// | `bas` | shell |
+/// | `shl` | shell |
+/// | `ao` | atomic orbital basis (for users, absolute where starting shell is alway the first shell from `bas`) |
+/// | `cgto` | atomic orbital basis (for developers, relative to specified starting shell by `shls_slice`) |
+/// | `cint`, `CInt` | libcint's [`CInt`] structure or instances |
+/// | `c_int` | [`std::ffi::c_int`] type ([`i32`] in most cases) |
 #[derive(Debug, Clone, PartialEq)]
 pub struct CInt {
     /// Slots of atoms.
     ///
     /// Names of this field can be retrived in [`cint_ffi`].
     ///
-    /// | Index | Name          | Description |
-    /// |-------|---------------|-------------|
-    /// | 0 | `CHARGE_OF`       | atomic charge (ECP core electrons excluded)       |
-    /// | 1 | `PTR_COORD`       | coordinates location (pointer to `env` field)     |
-    /// | 2 | `NUC_MOD_OF`      | nuclear mode of the atom                          |
-    /// | 3 | `PTR_ZETA`        | pointer to zeta values (pointer to `env` field)   |
-    /// | 4 | `PTR_FRAC_CHARGE` | fractional charge (pointer to `env` field)        |
+    /// | Index | Name          | Description | Related getter | Related setter |
+    /// |-------|---------------|-------------|----------------|----------------|
+    /// | 0 | `CHARGE_OF`       | atomic charge (ECP core electrons excluded)       | [`atom_charge`](Self::atom_charge) <br/> [`atom_charges`](Self::atom_charges) |
+    /// | 1 | `PTR_COORD`       | coordinates location (pointer to `env` field)     | [`atom_coord`](Self::atom_coord) <br/> [`atom_coords`](Self::atom_coords) | [`set_geom`](Self::set_geom) |
+    /// | 2 | `NUC_MOD_OF`      | nuclear mode of the atom                          | | [`set_nuc_mod`](Self::set_nuc_mod) |
+    /// | 3 | `PTR_ZETA`        | pointer to zeta values (pointer to `env` field)   | | [`set_rinv_at_nucleus`](Self::set_rinv_at_nucleus) |
+    /// | 4 | `PTR_FRAC_CHARGE` | fractional charge (pointer to `env` field)        | [`atom_charge`](Self::atom_charge) <br/> [`atom_charges`](Self::atom_charges) |
     /// | 5 | `RESERVE_ATMSLOT` |
     /// | 6 | `ATM_SLOTS`       |
     ///
@@ -39,13 +57,13 @@ pub struct CInt {
 
     /// Slot of shells (as minimal building block of contracted GTO).
     ///
-    /// | Index | Name         | Description |
-    /// |-------|--------------|-------------|
+    /// | Index | Name          | Description | Related getter |
+    /// |-------|---------------|-------------|----------------|
     /// | 0 | `ATOM_OF`        | 0-based index of corresponding atom                            |
-    /// | 1 | `ANG_OF`         | angular momentum                                               |
-    /// | 2 | `NPRIM_OF`       | number of primitive GTO in basis                               |
-    /// | 3 | `NCTR_OF`        | number of contracted GTO in basis                              |
-    /// | 4 | `KAPPA_OF`       | kappa for spinor GTO                                           |
+    /// | 1 | `ANG_OF`         | angular momentum                                               | [`bas_angular`](Self::bas_angular) |
+    /// | 2 | `NPRIM_OF`       | number of primitive GTO in basis                               | [`bas_nprim`](Self::bas_nprim) |
+    /// | 3 | `NCTR_OF`        | number of contracted GTO in basis                              | [`bas_nctr`](Self::bas_nctr) |
+    /// | 4 | `KAPPA_OF`       | kappa for spinor GTO                                           | [`bas_kappa`](Self::bas_kappa) |
     /// | 5 | `PTR_EXP`        | exponents of primitive GTOs (pointer to `env` field)           |
     /// | 6 | `PTR_COEFF`      | column-major contraction coefficients (pointer to `env` field) |
     /// | 7 | `RESERVE_BASLOT` |
@@ -58,27 +76,27 @@ pub struct CInt {
     ///
     /// | Index | Name         | Description |
     /// |-------|--------------|-------------|
-    /// | 1 | `ANG_OF`         | angular momentum (refers to angular of U_L) |
-    /// | 3 | `RADI_POWER`     | number of maximum radial power to be summed |
-    /// | 4 | `SO_TYPE_OF`     | spin-orb type                               |
+    /// | 1 | `ANG_OF`         | angular momentum (refers to angular of $U_L$) |
+    /// | 3 | `RADI_POWER`     | number of maximum radial power to be summed   |
+    /// | 4 | `SO_TYPE_OF`     | spin-orb type                                 |
     pub ecpbas: Vec<[c_int; 8]>,
 
     /// Slot of floating-point variables.
     ///
-    /// | Index | Name         | Description |
-    /// |-------|--------------|-------------|
-    /// |  0 | `PTR_EXPCUTOFF`     | Overall cutoff for integral prescreening, value needs to be ln (threshold) |
-    /// |  1 | `PTR_COMMON_ORIG`   | R_C of (r-R_C) in dipole, GIAO operators                                   |
-    /// |  4 | `PTR_RINV_ORIG`     | R_O in 1/(r-R_O)                                                           |
-    /// |  7 | `PTR_RINV_ZETA`     | ZETA parameter for Gaussian charge distribution (Gaussian nuclear model)   |
-    /// |  8 | `PTR_RANGE_OMEGA`   | omega parameter in range-separated coulomb operator (>0 for LR, <0 for SR) |
-    /// |  9 | `PTR_F12_ZETA`      | Yukawa potential and Slater-type geminal e^(-zeta r)                       |
-    /// | 10 | `PTR_GTG_ZETA`      | Gaussian type geminal e^(-zeta r^2)                                        |
+    /// | Index | Name          | Description | Related getter | Related setter |
+    /// |-------|---------------|-------------|----------------|----------------|
+    /// |  0 | `PTR_EXPCUTOFF`     | Overall cutoff for integral prescreening, value needs to be ln (threshold) | [`get_integral_screen`](Self::get_integral_screen) | [`set_integral_screen`](Self::set_integral_screen) |
+    /// |  1 | `PTR_COMMON_ORIG`   | $R_C$ (common origin) of $r-R_C$ in dipole, GIAO operators                 | [`get_common_origin`](Self::get_common_origin) | [`set_common_origin`](Self::set_common_origin) |
+    /// |  4 | `PTR_RINV_ORIG`     | $R_O$ (rinv origin) of $1/(r-R_O)$                                         | [`get_rinv_origin`](Self::get_rinv_origin) | [`set_rinv_origin`](Self::set_rinv_origin) |
+    /// |  7 | `PTR_RINV_ZETA`     | ZETA parameter for Gaussian charge distribution (Gaussian nuclear model)   | [`get_rinv_zeta`](Self::get_rinv_zeta) | [`set_rinv_zeta`](Self::set_rinv_zeta) |
+    /// |  8 | `PTR_RANGE_OMEGA`   | omega parameter in range-separated coulomb operator (>0 for LR, <0 for SR) | [`get_range_coulomb`](Self::get_range_coulomb) <br/> [`omega`](`Self::omega`) | [`set_range_coulomb`](Self::set_range_coulomb) <br/> [`set_omega`](Self::set_omega) |
+    /// |  9 | `PTR_F12_ZETA`      | Yukawa potential and Slater-type geminal $e^{-\zeta r}$                    |
+    /// | 10 | `PTR_GTG_ZETA`      | Gaussian type geminal $e^{-\zeta r^2}$                                     |
     /// | 11 | `NGRIDS`            | For hybrid integrals with grids                                            |
     /// | 12 | `PTR_GRIDS`         | Location of grids for `int1e_grids` or variants                            |
-    /// | 17 | `AS_RINV_ORIG_ATOM` | Position of atom to be used as origin in 1/(r-R_O) for ECP derivatives     |
-    /// | 18 | `AS_ECPBAS_OFFSET`  | Offset of ECP basis in `bas` field, used for ECP integrals                 |
-    /// | 19 | `AS_NECPBAS`        | Number of ECP shells in `ecpbas` field                                     |
+    /// | 17 | `AS_RINV_ORIG_ATOM` | Position of atom to be used as origin in $1/(r-R_O)$ for ECP derivatives   | [`get_rinv_origin_atom`](Self::get_rinv_origin_atom) <br/> [`set_rinv_origin_atom`](Self::set_rinv_origin_atom) |
+    /// | 18 | `AS_ECPBAS_OFFSET`  | Offset of ECP basis in `bas` field, used for ECP integrals                 | | [`merge_ecpbas`](Self::merge_ecpbas) <br/> [`decopule_ecpbas`](Self::decopule_ecpbas) |
+    /// | 19 | `AS_NECPBAS`        | Number of ECP shells in `ecpbas` field                                     | | [`merge_ecpbas`](Self::merge_ecpbas) <br/> [`decopule_ecpbas`](Self::decopule_ecpbas) |
     /// | 20 | `PTR_ENV_START`     | Start of data                                                              |
     pub env: Vec<f64>,
 
@@ -314,86 +332,56 @@ impl<F> From<CIntOutput<F>> for (Vec<F>, Vec<usize>) {
 
 /* #endregion */
 
-/// Merge ECP data for integral evaluation.
+/// Implementation of integral at higher API level (for basic user usage).
 impl CInt {
-    /// Creates a new `CIntData` instance, with ECP integral information
-    /// written to `bas` field, and properly initializes values in `env` field.
-    ///
-    /// Should be called before integral calculations. Be careful this function
-    /// should not called twice in consecutive.
-    pub fn merge_ecpbas(&self) -> CInt {
-        const AS_ECPBAS_OFFSET: usize = cecp_ffi::AS_ECPBAS_OFFSET as usize;
-        const AS_NECPBAS: usize = cecp_ffi::AS_NECPBAS as usize;
-
-        if self.is_ecp_merged() {
-            self.clone()
-        } else {
-            let mut merged = self.clone();
-            merged.bas.extend_from_slice(&self.ecpbas);
-            merged.env[AS_ECPBAS_OFFSET] = self.bas.len() as f64;
-            merged.env[AS_NECPBAS] = self.ecpbas.len() as f64;
-            merged
-        }
+    pub fn integrate(
+        &self,
+        intor: &str,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> CIntOutput<f64> {
+        self.integrate_f(intor, aosym, shls_slice.into()).unwrap()
     }
 
-    pub fn decopule_ecpbas(&self) -> CInt {
-        const AS_ECPBAS_OFFSET: usize = cecp_ffi::AS_ECPBAS_OFFSET as usize;
-        const AS_NECPBAS: usize = cecp_ffi::AS_NECPBAS as usize;
-
-        if !self.is_ecp_merged() {
-            self.clone()
-        } else {
-            let mut decoupled = self.clone();
-            let nbas = self.env[AS_ECPBAS_OFFSET] as usize;
-            let (bas, ecpbas) = decoupled.bas.split_at(nbas);
-            let bas = bas.to_vec();
-            let ecpbas = ecpbas.to_vec();
-            decoupled.bas = bas;
-            decoupled.ecpbas = ecpbas;
-            decoupled.env[AS_ECPBAS_OFFSET] = 0.0;
-            decoupled.env[AS_NECPBAS] = 0.0;
-            decoupled
-        }
+    pub fn integrate_f(
+        &self,
+        intor: &str,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> Result<CIntOutput<f64>, CIntError> {
+        let shls_slice = shls_slice.into();
+        let integrate_args = self
+            .integrate_args_builder()
+            .intor(intor)
+            .aosym(aosym)
+            .shls_slice(shls_slice.as_ref())
+            .build()?;
+        self.integrate_with_args_inner(integrate_args)
     }
 
-    /// Check whether the `CInt` instance has been merged with ECP data.
-    pub fn is_ecp_merged(&self) -> bool {
-        self.env[cecp_ffi::AS_ECPBAS_OFFSET as usize] != 0.0
-    }
-}
-
-/// Obtaining integrator and argument builder.
-impl CInt {
-    /// Obtain integrator by name.
-    ///
-    /// This function does not require `CInt` instance. Make it here only for
-    /// convenience.
-    ///
-    /// # Panics
-    ///
-    /// - integrator not found
-    pub fn get_integrator(intor: &str) -> Box<dyn Integrator> {
-        get_integrator(intor)
+    pub fn integrate_spinor(
+        &self,
+        intor: &str,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> CIntOutput<Complex<f64>> {
+        self.integrate_spinor_f(intor, aosym, shls_slice.into()).unwrap()
     }
 
-    pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
-        get_integrator_f(intor)
-    }
-
-    pub fn integrate_args_builder(&self) -> IntegrateArgsBuilder<'static, f64> {
-        IntegrateArgsBuilder::default()
-    }
-
-    pub fn integrate_args_builder_spinor(&self) -> IntegrateArgsBuilder<'static, Complex<f64>> {
-        IntegrateArgsBuilder::default()
-    }
-
-    pub fn intor_cross_args_builder(&self) -> IntorCrossArgsBuilder<'static, f64> {
-        IntorCrossArgsBuilder::default()
-    }
-
-    pub fn intor_cross_args_builder_spinor(&self) -> IntorCrossArgsBuilder<'static, Complex<f64>> {
-        IntorCrossArgsBuilder::default()
+    pub fn integrate_spinor_f(
+        &self,
+        intor: &str,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
+        let shls_slice = shls_slice.into();
+        let integrate_args = self
+            .integrate_args_builder_spinor()
+            .intor(intor)
+            .aosym(aosym)
+            .shls_slice(shls_slice.as_ref())
+            .build()?;
+        self.integrate_with_args_inner(integrate_args)
     }
 }
 

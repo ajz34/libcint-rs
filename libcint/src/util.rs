@@ -427,7 +427,7 @@ pub unsafe fn unaligned_uninitialized_vec<T>(size: usize) -> Vec<T> {
 /// - None: if the size is 0 or allocation fails.
 /// - Some: pointer to the allocated memory.
 ///
-/// https://users.rust-lang.org/t/how-can-i-allocate-aligned-memory-in-rust/33293
+/// <https://users.rust-lang.org/t/how-can-i-allocate-aligned-memory-in-rust/33293>
 #[inline]
 pub fn aligned_alloc(numbytes: usize, alignment: usize) -> Option<NonNull<()>> {
     extern crate alloc;

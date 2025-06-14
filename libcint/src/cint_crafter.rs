@@ -12,7 +12,7 @@ use rayon::prelude::*;
 use rstsr_common::layout::IndexedIterLayout;
 use rstsr_common::prelude::*;
 
-/// Implementation of integral at higher API level (for user usage).
+/// Implementation of integral at higher API level (for advanced user usage).
 impl CInt {
     /// Obtain integrator optimizer.
     ///
@@ -37,56 +37,6 @@ impl CInt {
         let shls_slice = vec![[0, 0]; n_center];
         self.check_shls_slice(&*integrator, &shls_slice, cint_symm)?;
         Ok(self.get_optimizer(&*integrator))
-    }
-
-    pub fn integrate(
-        &self,
-        intor: &str,
-        aosym: impl Into<CIntSymm>,
-        shls_slice: impl Into<ShlsSlice>,
-    ) -> CIntOutput<f64> {
-        self.integrate_f(intor, aosym, shls_slice.into()).unwrap()
-    }
-
-    pub fn integrate_f(
-        &self,
-        intor: &str,
-        aosym: impl Into<CIntSymm>,
-        shls_slice: impl Into<ShlsSlice>,
-    ) -> Result<CIntOutput<f64>, CIntError> {
-        let shls_slice = shls_slice.into();
-        let integrate_args = self
-            .integrate_args_builder()
-            .intor(intor)
-            .aosym(aosym)
-            .shls_slice(shls_slice.as_ref())
-            .build()?;
-        self.integrate_with_args_inner(integrate_args)
-    }
-
-    pub fn integrate_spinor(
-        &self,
-        intor: &str,
-        aosym: impl Into<CIntSymm>,
-        shls_slice: impl Into<ShlsSlice>,
-    ) -> CIntOutput<Complex<f64>> {
-        self.integrate_spinor_f(intor, aosym, shls_slice.into()).unwrap()
-    }
-
-    pub fn integrate_spinor_f(
-        &self,
-        intor: &str,
-        aosym: impl Into<CIntSymm>,
-        shls_slice: impl Into<ShlsSlice>,
-    ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
-        let shls_slice = shls_slice.into();
-        let integrate_args = self
-            .integrate_args_builder_spinor()
-            .intor(intor)
-            .aosym(aosym)
-            .shls_slice(shls_slice.as_ref())
-            .build()?;
-        self.integrate_with_args_inner(integrate_args)
     }
 
     pub fn integrate_with_args(&self, args: IntegrateArgs<f64>) -> CIntOutput<f64> {
@@ -313,6 +263,45 @@ impl CInt {
     }
 }
 
+/// Obtaining integrator and argument builder.
+///
+/// These functions are mostly not for basic users, but for internal use or
+/// advanced users. For basic users, you can use [`CInt::integrate`] (and
+/// [`CInt::integrate_spinor`] for spinor integrals) to evaluate integrals.
+impl CInt {
+    /// Obtain integrator by name.
+    ///
+    /// This function does not require `CInt` instance. Make it here only for
+    /// convenience.
+    ///
+    /// # Panics
+    ///
+    /// - integrator not found
+    pub fn get_integrator(intor: &str) -> Box<dyn Integrator> {
+        get_integrator(intor)
+    }
+
+    pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
+        get_integrator_f(intor)
+    }
+
+    pub fn integrate_args_builder(&self) -> IntegrateArgsBuilder<'static, f64> {
+        IntegrateArgsBuilder::default()
+    }
+
+    pub fn integrate_args_builder_spinor(&self) -> IntegrateArgsBuilder<'static, Complex<f64>> {
+        IntegrateArgsBuilder::default()
+    }
+
+    pub fn intor_cross_args_builder(&self) -> IntorCrossArgsBuilder<'static, f64> {
+        IntorCrossArgsBuilder::default()
+    }
+
+    pub fn intor_cross_args_builder_spinor(&self) -> IntorCrossArgsBuilder<'static, Complex<f64>> {
+        IntorCrossArgsBuilder::default()
+    }
+}
+
 /// Implementation of integral at higher API level (legacy support).
 impl CInt {
     pub fn integral_s1<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> Vec<f64>
@@ -385,6 +374,59 @@ impl CInt {
         let cint_opt = data.get_optimizer(&integrator);
         data.integral_inplace(&integrator, &mut out, shls_slice, Some(&cint_opt), aosym).unwrap();
         (out, out_shape)
+    }
+}
+
+/// Merge ECP data for integral evaluation.
+impl CInt {
+    /// Creates a new `CIntData` instance, with ECP integral information
+    /// written to `bas` field, and properly initializes values in `env` field.
+    ///
+    /// This function is not intended to be used directly by users. This
+    /// function is often used internally for data preparation.
+    pub fn merge_ecpbas(&self) -> CInt {
+        const AS_ECPBAS_OFFSET: usize = cecp_ffi::AS_ECPBAS_OFFSET as usize;
+        const AS_NECPBAS: usize = cecp_ffi::AS_NECPBAS as usize;
+
+        if self.is_ecp_merged() {
+            self.clone()
+        } else {
+            let mut merged = self.clone();
+            merged.bas.extend_from_slice(&self.ecpbas);
+            merged.env[AS_ECPBAS_OFFSET] = self.bas.len() as f64;
+            merged.env[AS_NECPBAS] = self.ecpbas.len() as f64;
+            merged
+        }
+    }
+
+    /// Decouples ECP data from the `CInt` instance, returning a new `CInt`
+    /// instance that have basis data and ecp data separated.
+    ///
+    /// This function is not intended to be used directly by users. This
+    /// function is often used internally for data preparation.
+    pub fn decopule_ecpbas(&self) -> CInt {
+        const AS_ECPBAS_OFFSET: usize = cecp_ffi::AS_ECPBAS_OFFSET as usize;
+        const AS_NECPBAS: usize = cecp_ffi::AS_NECPBAS as usize;
+
+        if !self.is_ecp_merged() {
+            self.clone()
+        } else {
+            let mut decoupled = self.clone();
+            let nbas = self.env[AS_ECPBAS_OFFSET] as usize;
+            let (bas, ecpbas) = decoupled.bas.split_at(nbas);
+            let bas = bas.to_vec();
+            let ecpbas = ecpbas.to_vec();
+            decoupled.bas = bas;
+            decoupled.ecpbas = ecpbas;
+            decoupled.env[AS_ECPBAS_OFFSET] = 0.0;
+            decoupled.env[AS_NECPBAS] = 0.0;
+            decoupled
+        }
+    }
+
+    /// Check whether the `CInt` instance has been merged with ECP data.
+    pub fn is_ecp_merged(&self) -> bool {
+        self.env[cecp_ffi::AS_ECPBAS_OFFSET as usize] != 0.0
     }
 }
 
