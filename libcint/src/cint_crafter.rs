@@ -1,4 +1,4 @@
-//! Integral crafter for `CInt` instance (the main integral functions).
+//! Integral crafter for [`CInt`] instance (the main integral functions).
 //!
 //! Code naming conventions:
 //! - `cgto_`: shell slices related variables, indicating shell -> basis
@@ -59,10 +59,23 @@ impl CInt {
     where
         F: ComplexFloat + Send + Sync,
     {
-        let data = if self.is_ecp_merged() { self } else { &self.merge_ecpbas() };
+        let mut data = if self.is_ecp_merged() { self.clone() } else { self.merge_ecpbas() };
+
+        // parse intor sph/cart/spinor
+        let mut intor = args.intor;
+        if intor.ends_with("_sph") {
+            intor = &intor[..intor.len() - 4];
+            data.cint_type = Spheric;
+        } else if intor.ends_with("_cart") {
+            intor = &intor[..intor.len() - 5];
+            data.cint_type = Cartesian;
+        } else if intor.ends_with("_spinor") {
+            intor = &intor[..intor.len() - 7];
+            data.cint_type = Spinor;
+        }
 
         // unwrap and prepare (without output checking)
-        let integrator = CInt::get_integrator(args.intor);
+        let integrator = CInt::get_integrator(intor);
         let mut shls_slice = args.shls_slice.iter().map(|&[shl0, shl1]| [shl0 as c_int, shl1 as c_int]).collect_vec();
         if shls_slice.is_empty() {
             shls_slice = vec![[0, data.nbas() as c_int]; integrator.n_center()];
@@ -77,7 +90,7 @@ impl CInt {
 
         // prepare output and check size of output
         let mut out_shape = data.cgto_shape(&shls_slice, aosym);
-        let n_comp = match self.cint_type {
+        let n_comp = match data.cint_type {
             Spheric | Cartesian => integrator.n_comp(),
             Spinor => integrator.n_spinor_comp(),
         };
@@ -151,6 +164,22 @@ impl CInt {
             .shls_slice(shls_slice.as_ref())
             .aosym(aosym.into())
             .build()?;
+        CInt::integrate_cross_with_args_inner(args)
+    }
+
+    pub fn integrate_cross_with_args(args: IntorCrossArgs<f64>) -> CIntOutput<f64> {
+        CInt::integrate_cross_with_args_inner(args).unwrap()
+    }
+
+    pub fn integrate_cross_with_args_f<F>(args: IntorCrossArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
+        CInt::integrate_cross_with_args_inner(args)
+    }
+
+    pub fn integrate_cross_with_args_spinor(args: IntorCrossArgs<Complex<f64>>) -> CIntOutput<Complex<f64>> {
+        CInt::integrate_cross_with_args_inner(args).unwrap()
+    }
+
+    pub fn integrate_cross_with_args_spinor_f<F>(args: IntorCrossArgs<Complex<f64>>) -> Result<CIntOutput<Complex<f64>>, CIntError> {
         CInt::integrate_cross_with_args_inner(args)
     }
 
@@ -262,11 +291,11 @@ impl CInt {
         IntegrateArgsBuilder::default()
     }
 
-    pub fn intor_cross_args_builder(&self) -> IntorCrossArgsBuilder<'static, f64> {
+    pub fn integrate_cross_args_builder(&self) -> IntorCrossArgsBuilder<'static, f64> {
         IntorCrossArgsBuilder::default()
     }
 
-    pub fn intor_cross_args_builder_spinor(&self) -> IntorCrossArgsBuilder<'static, Complex<f64>> {
+    pub fn integrate_cross_args_builder_spinor(&self) -> IntorCrossArgsBuilder<'static, Complex<f64>> {
         IntorCrossArgsBuilder::default()
     }
 }
@@ -580,7 +609,9 @@ impl CInt {
         };
         let actual = std::mem::size_of::<F>();
         if actual != expected {
-            Err(CIntError::InvalidValue(format!("Expected float type size {expected} bytes, but got {actual} bytes")))
+            Err(CIntError::InvalidValue(format!(
+                "Expected float type size {expected} bytes, but got {actual} bytes. This is probably because your `cint_type` does not match integral (`integral_spinor` for spinor, otherwise `integral` for spheric/cartesian)."
+            )))
         } else {
             Ok(())
         }

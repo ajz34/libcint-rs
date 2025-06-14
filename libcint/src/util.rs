@@ -1,4 +1,4 @@
-use duplicate::duplicate_item;
+//! Utility functions and structs (not for users).
 
 use crate::prelude::*;
 

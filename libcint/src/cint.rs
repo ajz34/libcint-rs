@@ -1,4 +1,5 @@
-//! Main CInt struct definition, and some essential utilities.
+//! Main [`CInt`] with related struct definition, and impl of
+//! [`CInt::integrate`].
 
 use crate::prelude::*;
 
@@ -109,6 +110,17 @@ pub struct CInt {
     pub cint_type: CIntType,
 }
 
+/// Error for [`CInt`] operations.
+#[derive(Debug, Clone)]
+pub enum CIntError {
+    IntegratorNotFound(String),
+    IntegratorNotAvailable(String),
+    RuntimeError(String),
+    InvalidValue(String),
+    Miscellaneous(String),
+    UninitializedFieldError(UninitializedFieldError),
+}
+
 /// Distinguish between general integral or ECP (effective core potential)
 /// integral.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,25 +162,37 @@ pub enum CIntSymm {
     S8,
 }
 
-/// CInt optimizer, which is used to optimize the integral evaluation.
-///
-/// Note that currently, this is not intended to be used directly by users.
+/// Optimizer to be used in integral evaluation (not intended for user).
 #[derive(Debug, PartialEq)]
 pub enum CIntOptimizer {
     Int(*mut CINTOpt),
     Ecp(*mut ECPOpt),
 }
 
-/// Output of the integral evaluation.
+/// Output of the integral evaluation (output buffer with col-major shape).
 ///
 /// You can use `.into()` to convert it to a tuple of `(Vec<F>, Vec<usize>)`,
 /// where `F` is `f64` for sph and cart integrals, and `Complex<f64>` for spinor
 /// integrals.
 pub struct CIntOutput<F> {
+    /// Output buffer.
+    ///
+    /// It can be `None` when user provided the output buffer for integral: the
+    /// integral will be written directly to the buffer user provided, and this
+    /// crate will not allocate an output buffer. Note that in this case,
+    /// `.into()` will panic.
     pub out: Option<Vec<F>>,
+
+    /// Column-major shape of the output buffer. Please see [`CInt::integrate`]
+    /// for more information.
     pub shape: Vec<usize>,
 }
 
+/// Integrate arguments for function [`CInt::integrate_with_args`] and
+/// [`CInt::integrate_with_args_spinor`].
+///
+/// Builder of this struct can be retrived by [`CInt::integrate_args_builder`]
+/// and [`CInt::integrate_args_builder_spinor`].
 #[derive(Builder, Debug)]
 #[builder(pattern = "owned", build_fn(error = "CIntError"))]
 pub struct IntegrateArgs<'l, F> {
@@ -192,6 +216,12 @@ pub struct IntegrateArgs<'l, F> {
     pub out: Option<&'l mut [F]>,
 }
 
+/// Integrate arguments for function [`CInt::integrate_cross_with_args`] and
+/// [`CInt::integrate_cross_with_args_spinor`].
+///
+/// Builder of this struct can be retrived by
+/// [`CInt::integrate_cross_args_builder`]
+/// and [`CInt::integrate_cross_args_builder_spinor`].
 #[derive(Builder, Debug)]
 #[builder(pattern = "owned", build_fn(error = "CIntError"))]
 pub struct IntorCrossArgs<'l, F> {
@@ -246,6 +276,24 @@ pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
 
     // should have checked anything, gracefully returns
     Ok(intor)
+}
+
+/* #endregion */
+
+/* #region CIntError impl */
+
+impl Display for CIntError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(self, f)
+    }
+}
+
+impl Error for CIntError {}
+
+impl From<UninitializedFieldError> for CIntError {
+    fn from(err: UninitializedFieldError) -> Self {
+        CIntError::UninitializedFieldError(err)
+    }
 }
 
 /* #endregion */
@@ -334,10 +382,253 @@ impl<F> From<CIntOutput<F>> for (Vec<F>, Vec<usize>) {
 
 /// Implementation of integral at higher API level (for basic user usage).
 impl CInt {
+    /// Main electronic integral driver (for non-spinor type).
+    ///
+    /// # PySCF equivalent
+    ///
+    /// `mol.intor(intor, aosym, shls_slice)`
+    ///
+    /// # Arguments
+    ///
+    /// - `intor`: name of the integral to be evaluated, such as `"int1e_ovlp"`,
+    ///   `"int2e"`, `"ECPscalar_iprinvip"`, `"int2e_giao_sa10sp1spsp2"`, etc.
+    /// - `aosym`: symmetry of the integral, such as `"s1"`, `"s2ij"`, etc.
+    ///   **Currently only `"s1"` and `"s2ij"` are supported**; other symmetries
+    ///   will be supported later.
+    /// - `shls_slice`: shell slices for evaluating sub-tensor of the total
+    ///   integral. Please note that this is either be `None`, or a slice of
+    ///   type `&[[usize; 2]]` or something similar (vectors, arrays) **with
+    ///   length the same to the number of components in integral**.
+    ///
+    /// # Outputs
+    ///
+    /// Returns a [`CIntOutput<f64>`] for the integral evaluation, which
+    /// contains
+    /// - `out` (`Vec<f64>`): the output buffer for the integral evaluation.
+    /// - `shape` (`Vec<usize>`): the shape of the output buffer.
+    ///
+    /// You can use `.into()` to convert it to a tuple of `(Vec<f64>,
+    /// Vec<usize>)`:
+    ///
+    /// ```ignore
+    /// # use libcint::prelude::*;
+    /// # let cint_data = init_h2o_def2_tzvp();
+    /// let (out, shape) = cint_data.integrate("int1e_ovlp", "s2ij", None).into();
+    /// ```
+    ///
+    /// # Examples
+    ///
+    /// The following example uses a pre-defined water molecule with def2-TZVP
+    /// basis set.
+    ///
+    /// The construction of [`CInt`] is not performed in this crate,
+    /// but should be provided by user. We refer to function
+    /// [`init_h2o_def2_tzvp`] for how to define a [`CInt`] instance.
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    ///
+    /// // aosym default: "s1"
+    /// // shls_slice default: None (evaluating all shells)
+    /// let (out, shape) = cint_data.integrate("int1e_ovlp", None, None).into();
+    /// assert_eq!(shape, vec![43, 43]);
+    ///
+    /// // utilize "s2ij" symmetry
+    /// let (out, shape) = cint_data.integrate("int3c2e_ip2", "s2ij", None).into();
+    /// assert_eq!(shape, vec![946, 43, 3]);
+    ///
+    /// // calculate sub-tensor of the integral
+    /// let nbas = cint_data.nbas();
+    /// let shl_slices = [[0, nbas], [0, nbas], [3, 12]]; // 3-centers for int3c2e_ip2
+    /// let (out, shape) = cint_data.integrate("int3c2e_ip2", "s2ij", shl_slices).into();
+    /// assert_eq!(shape, vec![946, 29, 3]);
+    ///
+    /// let shls_slice = [[0, nbas], [0, nbas], [3, 12], [4, 15]]; // 4-centers for int2e_ip2
+    /// let (out, shape) = cint_data.integrate("int2e_ip2", "s2ij", shls_slice).into();
+    /// assert_eq!(shape, vec![946, 29, 33, 3]);
+    /// ```
+    ///
+    /// ECP (effective core potential) integrals are also supported.
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_sb2me4_cc_pvtz();
+    ///
+    /// let (out, shape) = cint_data.integrate("ECPscalar_iprinvip", "s1", None).into();
+    /// assert_eq!(shape, vec![366, 366, 9]);
+    /// ```
+    ///
+    /// # Column-major convention
+    ///
+    /// <div class="warning">
+    ///
+    /// [`CInt`] always returns column-major shape with its output buffer.
+    ///
+    /// **Please note that [`CInt`] is somehow different to PySCF's
+    /// convention.** The user should be very clear about the convention
+    /// before using this function, especially when you are evaluating
+    /// integrals with derivatives or using `shls_slice` option.
+    ///
+    /// </div>
+    ///
+    /// The following table summarizes difference between PySCF and [`CInt`]
+    /// conventions.
+    /// - "Strides" are indicated by numbers. Recall that a tensor is defined by
+    ///   its data buffer in RAM and layout; the layouot contains shape, strides
+    ///   and offset.
+    ///
+    ///   Those numbers are not the actual stride size, but actually indicates
+    ///   the relative size of that axis in  tensor. For row-major tensors of
+    ///   3-dimensional tensor, it is $[2, 1, 0]$; for col-major tensors, it is
+    ///   $[0, 1, 2]$.
+    /// - $t$ indicates the number of components in the integral.
+    /// - $\mu, \nu, \kappa, \lambda$ indicate the indices of the atomic
+    ///   orbitals (basis).
+    /// - $\mathrm{tp}(\mu \nu)$ means triangular-packed shape of the $(\mu,
+    ///   \nu)$ indices pair. This is always packed by upper-triangular indices
+    ///   for col-major, or equilvalently lower-triangular indices for
+    ///   row-major.
+    /// - "same data layout" means the underlying data is the same, regardless
+    ///   of how shape and strides are defined. If same data layout, it means
+    ///   [`CInt`] data is the transposed PySCF's data, without any additional
+    ///   copy or memory allocation.
+    ///
+    /// | centers | comp | symm   | PySCF shape | PySCF strides | [`CInt`] shape | [`CInt`] strides | same data layout |
+    /// |---------|------|--------|-------------|---------------|----------------|------------------|------------------|
+    /// | 2       | ✘    | `s1`   | $[\mu, \nu]$                                   | $[0, 1]$          | $[\mu, \nu]$                                  | $[0, 1]$          | ✔ |
+    /// | 2       | ✔    | `s1`   | $[t, \mu, \nu]$                                | $[2, 0, 1]$       | $[\mu, \nu, t]$                               | $[0, 1, 2]$       | ✔ |
+    /// | 2       | ✘    | `s2ij` | Not supported                                  | -                 | $[\mathrm{tp}(\mu \nu)]$                      | $\[0\]$           | - |
+    /// | 2       | ✔    | `s2ij` | Not supported                                  | -                 | $[\mathrm{tp}(\mu \nu), t]$                   | $[0, 1]$          | - |
+    /// | 3       | ✘    | `s1`   | $[\mu, \nu, \kappa]$                           | $[0, 1, 2]$       | $[\mu, \nu, \kappa]$                          | $[0, 1, 2]$       | ✔ |
+    /// | 3       | ✔    | `s1`   | $[t, \mu, \nu, \kappa]$                        | $[3, 0, 1, 2]$    | $[\mu, \nu, \kappa, t]$                       | $[0, 1, 2, 3]$    | ✔ |
+    /// | 3       | ✘    | `s2ij` | $[\mathrm{tp}(\mu \nu), \kappa]$               | $[0, 1]$          | $[\mathrm{tp}(\mu \nu), \kappa]$              | $[0, 1]$          | ✔ |
+    /// | 3       | ✔    | `s2ij` | $[t, \mathrm{tp}(\mu \nu), \kappa]$            | $[2, 0, 1]$       | $[\mathrm{tp}(\mu \nu), \kappa, t]$           | $[0, 1, 2]$       | ✔ |
+    /// | 4       | ✘    | `s1`   | $[\mu, \nu, \kappa, \lambda]$                  | $[3, 2, 1, 0]$    | $[\mu, \nu, \kappa, \lambda]$                 | $[0, 1, 2, 3]$    | ✘ |
+    /// | 4       | ✔    | `s1`   | $[t, \mu, \nu, \kappa, \lambda]$               | $[4, 3, 2, 1, 0]$ | $[\mu, \nu, \kappa, \lambda, t]$              | $[0, 1, 2, 3, 4]$ | ✘ |
+    /// | 4       | ✘    | `s2ij` | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$      | $[2, 1, 0]$       | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$     | $[0, 1, 2]$       | ✘ |
+    /// | 4       | ✔    | `s2ij` | $[t, \mathrm{tp}(\mu \nu), \kappa, \lambda]$   | $[3, 2, 1, 0]$    | $[\mathrm{tp}(\mu \nu), \kappa, \lambda, t]$  | $[0, 1, 2, 3]$    | ✘ |
+    ///
+    /// # Spheric or Cartesian
+    ///
+    /// The `CInt` supports both spherical and cartesian integrals. You can
+    /// either set [`CInt::cint_type`] or use `_sph` or `_cart` suffix in
+    /// integrator name argument `intor`:
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let mut cint_data = init_h2o_def2_tzvp();
+    ///
+    /// // spherical integral
+    /// let (out, shape) = cint_data.integrate("int1e_ovlp", None, None).into();
+    /// assert_eq!(shape, vec![43, 43]);
+    ///
+    /// // cartesian integral using with-clause
+    /// let (out, shape) = cint_data.with_cint_type("cart", |cint_data| {
+    ///     cint_data.integrate("int1e_ovlp", None, None).into()
+    /// });
+    /// assert_eq!(shape, vec![48, 48]);
+    ///
+    /// // cartesian integral using suffix
+    /// let (out, shape) = cint_data.integrate("int1e_ovlp_cart", None, None).into();
+    /// assert_eq!(shape, vec![48, 48]);
+    /// ```
+    ///
+    /// <div class="warning">
+    ///
+    /// **This function cannot handle spinor integral**
+    ///
+    /// Due to rust's strict type system, it is very difficult to handle both
+    /// spinor and spheric/cartesian integrals in the same function. So spinor
+    /// integral should be called by
+    /// [`integrate_spinor`](Self::integrate_spinor), which output is
+    /// [`Complex<f64>`].
+    ///
+    /// </div>
+    ///
+    /// ```should_panic
+    /// # use libcint::prelude::*;
+    /// # let cint_data = init_h2o_def2_tzvp();
+    /// let (out, shape) = cint_data.integrate("int1e_ovlp_spinor", None, None).into();
+    /// // panics: Expected float type size 16 bytes, but got 8 bytes.
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_f`](Self::integrate_f) for fallible counterpart.
+    /// - [`integrate_spinor`](Self::integrate_spinor) for spinor type
+    ///   integrals.
+    /// - [`integrate_cross`](Self::integrate_cross) for cross integrals between
+    ///   multiple molecules.
+    /// - [`integrate_with_args`](Self::integrate_with_args) and
+    ///   [`integrate_cross_with_args`](Self::integrate_cross_with_args) for
+    ///   more advanced usage (full arguments that this crate supports).
     pub fn integrate(&self, intor: &str, aosym: impl Into<CIntSymm>, shls_slice: impl Into<ShlsSlice>) -> CIntOutput<f64> {
         self.integrate_f(intor, aosym, shls_slice.into()).unwrap()
     }
 
+    /// Main electronic integral driver (for spinor type).
+    ///
+    /// We refer most documentation to [`integrate`](Self::integrate).
+    ///
+    /// # PySCF equivalent
+    ///
+    /// `mol.intor(f"{intor}_spinor", aosym, shls_slice)`
+    ///
+    /// # Examples
+    ///
+    /// The following example uses a pre-defined water molecule with def2-TZVP
+    /// basis set.
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let mut cint_data = init_h2o_def2_tzvp();
+    ///
+    /// // spinor integral using with-clause
+    /// let (out, shape) = cint_data.with_cint_type("spinor", |cint_data| {
+    ///    cint_data.integrate_spinor("int1e_ovlp", None, None).into()
+    /// });
+    /// assert_eq!(shape, vec![86, 86]);
+    ///
+    /// // spinor integral using suffix
+    /// let (out, shape) = cint_data.integrate_spinor("int1e_ovlp_spinor", None, None).into();
+    /// assert_eq!(shape, vec![86, 86]);
+    /// ```
+    ///
+    /// <div class="warning">
+    ///
+    /// **This function cannot handle spheric or cartesian integral**
+    ///
+    /// </div>
+    ///
+    /// ```should_panic
+    /// # use libcint::prelude::*;
+    /// # let cint_data = init_h2o_def2_tzvp();
+    /// let (out, shape) = cint_data.integrate_spinor("int1e_ovlp_sph", None, None).into();
+    /// // panics: Expected float type size 8 bytes, but got 16 bytes.
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`integrate`](Self::integrate) for non-spinor type integrals.
+    /// - [`integrate_spinor_f`](Self::integrate_spinor_f) for fallible
+    ///   counterpart.
+    /// - [`integrate_cross_spinor`](Self::integrate_cross_spinor) for cross
+    ///   integrals between multiple molecules.
+    /// - [`integrate_with_args_spinor`](Self::integrate_with_args_spinor) and
+    ///   [`integrate_cross_with_args_spinor`](Self::integrate_cross_with_args_spinor)
+    ///   for more advanced usage (full arguments that this crate supports).
+    pub fn integrate_spinor(&self, intor: &str, aosym: impl Into<CIntSymm>, shls_slice: impl Into<ShlsSlice>) -> CIntOutput<Complex<f64>> {
+        self.integrate_spinor_f(intor, aosym, shls_slice.into()).unwrap()
+    }
+
+    /// Main electronic integral driver (for non-spinor type).
+    ///
+    /// This function is fallible.
+    ///
+    /// # See also
+    ///
+    /// - [`integrate`](Self::integrate) for non-fallible counterpart.
     pub fn integrate_f(
         &self,
         intor: &str,
@@ -349,10 +640,14 @@ impl CInt {
         self.integrate_with_args_inner(integrate_args)
     }
 
-    pub fn integrate_spinor(&self, intor: &str, aosym: impl Into<CIntSymm>, shls_slice: impl Into<ShlsSlice>) -> CIntOutput<Complex<f64>> {
-        self.integrate_spinor_f(intor, aosym, shls_slice.into()).unwrap()
-    }
-
+    /// Main electronic integral driver (for spinor type).
+    ///
+    /// This function is fallible.
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_spinor`](Self::integrate_spinor) for non-fallible
+    ///   counterpart.
     pub fn integrate_spinor_f(
         &self,
         intor: &str,

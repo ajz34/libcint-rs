@@ -16,6 +16,7 @@ fn dev_link() {
         );
         println!("cargo:rustc-link-lib=cint");
         println!("cargo:rustc-link-lib=openblas");
+        println!("cargo:rustc-link-lib=gomp");
     }
 }
 

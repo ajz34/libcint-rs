@@ -1,4 +1,4 @@
-//! Temporary changes to `CInt` instance.
+//! Getter/setter and with-clause temporary changes to [`CInt`] instance.
 
 use crate::prelude::*;
 use core::ops::Add;

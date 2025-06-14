@@ -1,4 +1,4 @@
-//! CInt data only for doc and unit testing.
+//! Data and functions only for doc and unit testing.
 
 use crate::prelude::*;
 use num::{Complex, ToPrimitive};

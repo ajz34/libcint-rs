@@ -1,3 +1,5 @@
+//! FFI binding and basic wrapper.
+
 pub mod cecp_ffi;
 pub mod cecp_wrapper;
 pub mod cint_ffi;

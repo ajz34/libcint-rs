@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-libcint = { path = "../../" }
+libcint = { path = "../../libcint" }
 rstsr = { version = "0.3.6", features = ["openblas", "linalg", "sci"] }
 rstsr-openblas = { version = "0.3.6", features = ["openmp", "sci"] }
 

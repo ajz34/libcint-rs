@@ -1,5 +1,5 @@
-//! Properties of the `CInt` instance (compute and memory cost is not essential
-//! in this module).
+//! Properties of the [`CInt`] instance (compute and memory cost is not
+//! essential in this module).
 
 use crate::prelude::*;
 

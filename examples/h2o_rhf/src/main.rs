@@ -1,4 +1,3 @@
-use core::f64;
 use libcint::prelude::*;
 use rstsr::prelude::*;
 
@@ -7,9 +6,12 @@ pub type TsrView<'a> = TensorView<'a, f64, DeviceBLAS>;
 
 /// Obtain integrals (in row-major, same to PySCF but reverse of libcint)
 pub fn intor_row_major(cint_data: &CInt, intor: &str) -> Tsr {
-    let device = DeviceBLAS::default(); // use up all rayon available threads for tensor operations
-    let (out, shape) = cint_data.integrate(intor, None, None).into(); // intor, "s1", full_shls_slice
-    rt::asarray((out, shape.f(), &device)).into_reverse_axes() // row-major by transposition of col-major shape
+    // use up all rayon available threads for tensor operations
+    let device = DeviceBLAS::default();
+    // intor, "s1", full_shls_slice
+    let (out, shape) = cint_data.integrate(intor, None, None).into();
+    // row-major by transposition of col-major shape
+    rt::asarray((out, shape.f(), &device)).into_reverse_axes()
 }
 
 fn main() {
