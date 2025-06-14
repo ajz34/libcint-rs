@@ -473,11 +473,7 @@ impl CInt {
         const ATOM_OF: usize = cint_ffi::ATOM_OF as usize;
 
         let nbas = self.nbas();
-        self.bas[..nbas]
-            .iter()
-            .enumerate()
-            .filter_map(|(i, bas)| if bas[ATOM_OF] as usize == atm_id { Some(i) } else { None })
-            .collect()
+        self.bas[..nbas].iter().enumerate().filter_map(|(i, bas)| if bas[ATOM_OF] as usize == atm_id { Some(i) } else { None }).collect()
     }
 
     #[inline]

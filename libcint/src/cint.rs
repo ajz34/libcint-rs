@@ -334,12 +334,7 @@ impl<F> From<CIntOutput<F>> for (Vec<F>, Vec<usize>) {
 
 /// Implementation of integral at higher API level (for basic user usage).
 impl CInt {
-    pub fn integrate(
-        &self,
-        intor: &str,
-        aosym: impl Into<CIntSymm>,
-        shls_slice: impl Into<ShlsSlice>,
-    ) -> CIntOutput<f64> {
+    pub fn integrate(&self, intor: &str, aosym: impl Into<CIntSymm>, shls_slice: impl Into<ShlsSlice>) -> CIntOutput<f64> {
         self.integrate_f(intor, aosym, shls_slice.into()).unwrap()
     }
 
@@ -350,21 +345,11 @@ impl CInt {
         shls_slice: impl Into<ShlsSlice>,
     ) -> Result<CIntOutput<f64>, CIntError> {
         let shls_slice = shls_slice.into();
-        let integrate_args = self
-            .integrate_args_builder()
-            .intor(intor)
-            .aosym(aosym)
-            .shls_slice(shls_slice.as_ref())
-            .build()?;
+        let integrate_args = self.integrate_args_builder().intor(intor).aosym(aosym).shls_slice(shls_slice.as_ref()).build()?;
         self.integrate_with_args_inner(integrate_args)
     }
 
-    pub fn integrate_spinor(
-        &self,
-        intor: &str,
-        aosym: impl Into<CIntSymm>,
-        shls_slice: impl Into<ShlsSlice>,
-    ) -> CIntOutput<Complex<f64>> {
+    pub fn integrate_spinor(&self, intor: &str, aosym: impl Into<CIntSymm>, shls_slice: impl Into<ShlsSlice>) -> CIntOutput<Complex<f64>> {
         self.integrate_spinor_f(intor, aosym, shls_slice.into()).unwrap()
     }
 
@@ -375,12 +360,7 @@ impl CInt {
         shls_slice: impl Into<ShlsSlice>,
     ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
         let shls_slice = shls_slice.into();
-        let integrate_args = self
-            .integrate_args_builder_spinor()
-            .intor(intor)
-            .aosym(aosym)
-            .shls_slice(shls_slice.as_ref())
-            .build()?;
+        let integrate_args = self.integrate_args_builder_spinor().intor(intor).aosym(aosym).shls_slice(shls_slice.as_ref()).build()?;
         self.integrate_with_args_inner(integrate_args)
     }
 }

@@ -172,16 +172,8 @@ pub union CINTEnvVars__bindgen_ty_3 {
     pub rl: *mut f64,
     pub grids: *mut f64,
 }
-pub type CINTOptimizerFunction = Option<
-    unsafe extern "C" fn(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    ),
->;
+pub type CINTOptimizerFunction =
+    Option<unsafe extern "C" fn(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64)>;
 pub type CINTIntegralFunctionReal = Option<
     unsafe extern "C" fn(
         out: *mut f64,
@@ -229,30 +221,10 @@ unsafe extern "C" {
     pub fn CINTshells_spinor_offset(ao_loc: *mut c_int, bas: *const c_int, nbas: c_int);
     pub fn CINTc2s_bra_sph(sph: *mut f64, nket: c_int, cart: *mut f64, l: c_int) -> *mut f64;
     pub fn CINTc2s_ket_sph(sph: *mut f64, nket: c_int, cart: *mut f64, l: c_int) -> *mut f64;
-    pub fn CINTc2s_ket_sph1(
-        sph: *mut f64,
-        cart: *mut f64,
-        lds: c_int,
-        ldc: c_int,
-        l: c_int,
-    ) -> *mut f64;
+    pub fn CINTc2s_ket_sph1(sph: *mut f64, cart: *mut f64, lds: c_int, ldc: c_int, l: c_int) -> *mut f64;
     pub fn CINTgto_norm(n: c_int, a: f64) -> f64;
-    pub fn CINTinit_2e_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *mut c_int,
-        natm: c_int,
-        bas: *mut c_int,
-        nbas: c_int,
-        env: *mut f64,
-    );
-    pub fn CINTinit_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *mut c_int,
-        natm: c_int,
-        bas: *mut c_int,
-        nbas: c_int,
-        env: *mut f64,
-    );
+    pub fn CINTinit_2e_optimizer(opt: *mut *mut CINTOpt, atm: *mut c_int, natm: c_int, bas: *mut c_int, nbas: c_int, env: *mut f64);
+    pub fn CINTinit_optimizer(opt: *mut *mut CINTOpt, atm: *mut c_int, natm: c_int, bas: *mut c_int, nbas: c_int, env: *mut f64);
     pub fn CINTdel_2e_optimizer(opt: *mut *mut CINTOpt);
     pub fn CINTdel_optimizer(opt: *mut *mut CINTOpt);
     pub fn cint2e_cart(
@@ -265,14 +237,7 @@ unsafe extern "C" {
         env: *mut f64,
         opt: *mut CINTOpt,
     ) -> c_int;
-    pub fn cint2e_cart_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *mut c_int,
-        natm: c_int,
-        bas: *mut c_int,
-        nbas: c_int,
-        env: *mut f64,
-    );
+    pub fn cint2e_cart_optimizer(opt: *mut *mut CINTOpt, atm: *mut c_int, natm: c_int, bas: *mut c_int, nbas: c_int, env: *mut f64);
     pub fn cint2e_sph(
         opijkl: *mut f64,
         shls: *mut c_int,
@@ -283,14 +248,7 @@ unsafe extern "C" {
         env: *mut f64,
         opt: *mut CINTOpt,
     ) -> c_int;
-    pub fn cint2e_sph_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *mut c_int,
-        natm: c_int,
-        bas: *mut c_int,
-        nbas: c_int,
-        env: *mut f64,
-    );
+    pub fn cint2e_sph_optimizer(opt: *mut *mut CINTOpt, atm: *mut c_int, natm: c_int, bas: *mut c_int, nbas: c_int, env: *mut f64);
     pub fn cint2e(
         opijkl: *mut f64,
         shls: *mut c_int,
@@ -301,14 +259,7 @@ unsafe extern "C" {
         env: *mut f64,
         opt: *mut CINTOpt,
     ) -> c_int;
-    pub fn cint2e_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *mut c_int,
-        natm: c_int,
-        bas: *mut c_int,
-        nbas: c_int,
-        env: *mut f64,
-    );
+    pub fn cint2e_optimizer(opt: *mut *mut CINTOpt, atm: *mut c_int, natm: c_int, bas: *mut c_int, nbas: c_int, env: *mut f64);
     pub fn CINTc2s_ket_spinor_sf1(
         gspa: *mut __BindgenComplex<f64>,
         gspb: *mut __BindgenComplex<f64>,
@@ -349,14 +300,7 @@ unsafe extern "C" {
         l: c_int,
         kappa: c_int,
     );
-    pub fn int1e_a01gp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_a01gp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_a01gp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -437,14 +381,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_cg_irxp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_cg_irxp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_cg_irxp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -613,14 +550,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_drinv_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_drinv_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_drinv_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -657,14 +587,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ggkin_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ggkin_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ggkin_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -701,14 +624,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ggnuc_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ggnuc_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ggnuc_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -745,14 +661,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ggovlp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ggovlp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ggovlp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -1009,14 +918,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_gnuc_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_gnuc_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_gnuc_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -1053,14 +955,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_govlp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_govlp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_govlp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -1097,14 +992,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_grids_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_grids_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_grids_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -1317,14 +1205,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_grjxp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_grjxp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_grjxp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -1361,14 +1242,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ia01p_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ia01p_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ia01p_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -1405,14 +1279,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_igkin_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_igkin_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_igkin_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -1449,14 +1316,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ignuc_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ignuc_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ignuc_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -1493,14 +1353,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_igovlp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_igovlp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_igovlp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -1801,14 +1654,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ipipkin_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ipipkin_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ipipkin_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -1845,14 +1691,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ipipnuc_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ipipnuc_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ipipnuc_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -2065,14 +1904,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ipipr_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ipipr_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ipipr_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -2373,14 +2205,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ipkin_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ipkin_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ipkin_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -2417,14 +2242,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ipkinip_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ipkinip_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ipkinip_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -2461,14 +2279,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ipnuc_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ipnuc_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ipnuc_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -2505,14 +2316,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ipnucip_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ipnucip_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ipnucip_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -2549,14 +2353,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ipovlp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ipovlp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ipovlp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -2637,14 +2434,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ippnucp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ippnucp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ippnucp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -2813,14 +2603,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_iprinv_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_iprinv_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_iprinv_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -2945,14 +2728,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_iprinvr_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_iprinvr_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_iprinvr_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -2989,14 +2765,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_iprip_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_iprip_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_iprip_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3209,14 +2978,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_irp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_irp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_irp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3253,14 +3015,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_irpr_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_irpr_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_irpr_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3297,14 +3052,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_irrp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_irrp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_irrp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3341,14 +3089,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_kin_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_kin_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_kin_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3385,14 +3126,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_kinip_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_kinip_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_kinip_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3429,14 +3163,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_nuc_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_nuc_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_nuc_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3473,14 +3200,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ovlp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ovlp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ovlp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3517,14 +3237,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_ovlpip_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_ovlpip_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_ovlpip_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3561,14 +3274,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_p4_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_p4_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_p4_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3605,14 +3311,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_pnucp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_pnucp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_pnucp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3649,14 +3348,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_pnucxp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_pnucxp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_pnucxp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3693,14 +3385,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_prinvp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_prinvp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_prinvp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3737,14 +3422,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_prinvxp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_prinvxp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_prinvxp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3781,14 +3459,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_r_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_r_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_r_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -3825,14 +3496,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_r2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_r2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_r2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4001,14 +3665,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_r4_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_r4_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_r4_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4177,14 +3834,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_r_origj_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_r_origj_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_r_origj_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4221,14 +3871,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_rinv_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_rinv_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_rinv_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4309,14 +3952,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_rr_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_rr_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_rr_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4397,14 +4033,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_rrr_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_rrr_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_rrr_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4441,14 +4070,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_rrrr_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_rrrr_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_rrrr_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4485,14 +4107,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_sa01sp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_sa01sp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_sa01sp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4529,14 +4144,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_sigma_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_sigma_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_sigma_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4573,14 +4181,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_sp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_sp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_sp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4661,14 +4262,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_spgsa01_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_spgsa01_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_spgsa01_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4705,14 +4299,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_spgsp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_spgsp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_spgsp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4749,14 +4336,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_spnuc_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_spnuc_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_spnuc_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4793,14 +4373,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_spnucsp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_spnucsp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_spnucsp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4881,14 +4454,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_sprsp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_sprsp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_sprsp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -4969,14 +4535,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_spsp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_spsp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_spsp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5013,14 +4572,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_spspsp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_spspsp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_spspsp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5057,14 +4609,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_sr_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_sr_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_sr_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5101,14 +4646,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_srnucsr_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_srnucsr_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_srnucsr_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5145,14 +4683,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_srsp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_srsp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_srsp_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5189,14 +4720,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_srsr_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_srsr_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_srsr_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5233,14 +4757,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_z_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_z_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_z_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5277,14 +4794,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_z_origj_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_z_origj_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_z_origj_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5321,14 +4831,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int1e_zz_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int1e_zz_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int1e_zz_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5409,14 +4912,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2c2e_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2c2e_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2c2e_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5453,14 +4949,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2c2e_ip1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2c2e_ip1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2c2e_ip1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5541,14 +5030,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2c2e_ip2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2c2e_ip2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2c2e_ip2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5585,14 +5067,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2c2e_ipip1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2c2e_ipip1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2c2e_ipip1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5629,14 +5104,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5893,14 +5361,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_g1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_g1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_g1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5937,14 +5398,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_g1g2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_g1g2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_g1g2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -5981,14 +5435,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_g1spsp2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_g1spsp2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_g1spsp2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -6377,14 +5824,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_gg1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_gg1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_gg1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -6597,14 +6037,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_ig1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_ig1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_ig1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -6641,14 +6074,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_ip1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_ip1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_ip1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -6685,14 +6111,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_ip1ip2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_ip1ip2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_ip1ip2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -6817,14 +6236,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_ip1v_r1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_ip1v_r1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_ip1v_r1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -6905,14 +6317,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_ip2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_ip2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_ip2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -6949,14 +6354,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_ipip1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_ipip1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_ipip1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -7037,14 +6435,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_ipspsp1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_ipspsp1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_ipspsp1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -7125,14 +6516,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_ipsrsr1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_ipsrsr1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_ipsrsr1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -7301,14 +6685,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_ipvip1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_ipvip1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_ipvip1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -7389,14 +6766,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_p1vxp1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_p1vxp1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_p1vxp1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -7433,14 +6803,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_pp1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_pp1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_pp1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -7477,14 +6840,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_pp1pp2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_pp1pp2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_pp1pp2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -7521,14 +6877,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_pp2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_pp2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_pp2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -7565,14 +6914,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_spgsp1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_spgsp1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_spgsp1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -7741,14 +7083,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_spsp1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_spsp1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_spsp1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -7829,14 +7164,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_spsp2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_spsp2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_spsp2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -7873,14 +7201,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_spv1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_spv1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_spv1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -8049,14 +7370,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_srsr1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_srsr1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_srsr1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -8225,14 +7539,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_vsp1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_vsp1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_vsp1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -8401,14 +7708,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c1e_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c1e_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c1e_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -8445,14 +7745,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c1e_ip1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c1e_ip1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c1e_ip1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -8665,14 +7958,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c1e_p2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c1e_p2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c1e_p2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -8841,14 +8127,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c1e_rinv_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c1e_rinv_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c1e_rinv_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -8885,14 +8164,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c2e_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c2e_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c2e_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -8929,14 +8201,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c2e_ig1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c2e_ig1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c2e_ig1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -8973,14 +8238,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c2e_ip1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c2e_ip1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c2e_ip1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -9061,14 +8319,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c2e_ip2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c2e_ip2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c2e_ip2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -9105,14 +8356,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c2e_ipip1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c2e_ipip1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c2e_ipip1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -9149,14 +8393,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c2e_ipip2_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c2e_ipip2_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c2e_ipip2_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -9281,14 +8518,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c2e_pvp1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c2e_pvp1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c2e_pvp1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -9325,14 +8555,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c2e_pvxp1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c2e_pvxp1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c2e_pvxp1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -9369,14 +8592,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int3c2e_spsp1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int3c2e_spsp1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int3c2e_spsp1_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -9457,14 +8673,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int4c1e_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int4c1e_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int4c1e_cart(
         out: *mut f64,
         dims: *const c_int,
@@ -9501,14 +8710,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_stg_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_stg_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_stg_sph(
         out: *mut f64,
         dims: *const c_int,
@@ -9521,14 +8723,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_stg_ip1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_stg_ip1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_stg_ip1_sph(
         out: *mut f64,
         dims: *const c_int,
@@ -9601,14 +8796,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_yp_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_yp_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_yp_sph(
         out: *mut f64,
         dims: *const c_int,
@@ -9621,14 +8809,7 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
-    pub fn int2e_yp_ip1_optimizer(
-        opt: *mut *mut CINTOpt,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    pub fn int2e_yp_ip1_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     pub fn int2e_yp_ip1_sph(
         out: *mut f64,
         dims: *const c_int,

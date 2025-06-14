@@ -43,31 +43,19 @@ impl CInt {
         self.integrate_with_args_inner(args).unwrap()
     }
 
-    pub fn integrate_with_args_f(
-        &self,
-        args: IntegrateArgs<f64>,
-    ) -> Result<CIntOutput<f64>, CIntError> {
+    pub fn integrate_with_args_f(&self, args: IntegrateArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
         self.integrate_with_args_inner(args)
     }
 
-    pub fn integrate_with_args_spinor(
-        &self,
-        args: IntegrateArgs<Complex<f64>>,
-    ) -> CIntOutput<Complex<f64>> {
+    pub fn integrate_with_args_spinor(&self, args: IntegrateArgs<Complex<f64>>) -> CIntOutput<Complex<f64>> {
         self.integrate_with_args_inner(args).unwrap()
     }
 
-    pub fn integrate_with_args_spinor_f(
-        &self,
-        args: IntegrateArgs<Complex<f64>>,
-    ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
+    pub fn integrate_with_args_spinor_f(&self, args: IntegrateArgs<Complex<f64>>) -> Result<CIntOutput<Complex<f64>>, CIntError> {
         self.integrate_with_args_inner(args)
     }
 
-    pub fn integrate_with_args_inner<F>(
-        &self,
-        args: IntegrateArgs<F>,
-    ) -> Result<CIntOutput<F>, CIntError>
+    pub fn integrate_with_args_inner<F>(&self, args: IntegrateArgs<F>) -> Result<CIntOutput<F>, CIntError>
     where
         F: ComplexFloat + Send + Sync,
     {
@@ -75,11 +63,7 @@ impl CInt {
 
         // unwrap and prepare (without output checking)
         let integrator = CInt::get_integrator(args.intor);
-        let mut shls_slice = args
-            .shls_slice
-            .iter()
-            .map(|&[shl0, shl1]| [shl0 as c_int, shl1 as c_int])
-            .collect_vec();
+        let mut shls_slice = args.shls_slice.iter().map(|&[shl0, shl1]| [shl0 as c_int, shl1 as c_int]).collect_vec();
         if shls_slice.is_empty() {
             shls_slice = vec![[0, data.nbas() as c_int]; integrator.n_center()];
         }
@@ -111,11 +95,7 @@ impl CInt {
             None => out_vec.as_mut().unwrap(),
         };
         if out.len() < out_size {
-            return Err(CIntError::InvalidValue(format!(
-                "Output vector size {} is smaller than required size {}",
-                out.len(),
-                out_size
-            )));
+            return Err(CIntError::InvalidValue(format!("Output vector size {} is smaller than required size {}", out.len(), out_size)));
         }
 
         // actual integral execution
@@ -174,9 +154,7 @@ impl CInt {
         CInt::integrate_cross_with_args_inner(args)
     }
 
-    pub fn integrate_cross_with_args_inner<F>(
-        args: IntorCrossArgs<F>,
-    ) -> Result<CIntOutput<F>, CIntError>
+    pub fn integrate_cross_with_args_inner<F>(args: IntorCrossArgs<F>) -> Result<CIntOutput<F>, CIntError>
     where
         F: ComplexFloat + Send + Sync,
     {
@@ -245,18 +223,9 @@ impl CInt {
         }
 
         let args = if out.is_some() {
-            IntegrateArgsBuilder::default()
-                .intor(intor)
-                .aosym(aosym)
-                .shls_slice(&shls_slice)
-                .out(out.unwrap())
-                .build()?
+            IntegrateArgsBuilder::default().intor(intor).aosym(aosym).shls_slice(&shls_slice).out(out.unwrap()).build()?
         } else {
-            IntegrateArgsBuilder::default()
-                .intor(intor)
-                .aosym(aosym)
-                .shls_slice(&shls_slice)
-                .build()?
+            IntegrateArgsBuilder::default().intor(intor).aosym(aosym).shls_slice(&shls_slice).build()?
         };
 
         mol_concate.integrate_with_args_inner(args)
@@ -340,11 +309,7 @@ impl CInt {
         out
     }
 
-    pub fn integral_inner<T, F>(
-        &self,
-        shls_slice: Option<&[[c_int; 2]]>,
-        aosym: CIntSymm,
-    ) -> (Vec<F>, Vec<usize>)
+    pub fn integral_inner<T, F>(&self, shls_slice: Option<&[[c_int; 2]]>, aosym: CIntSymm) -> (Vec<F>, Vec<usize>)
     where
         T: Integrator + Default,
         F: ComplexFloat + Send + Sync,
@@ -477,12 +442,7 @@ impl CInt {
     /// let check = cint_data.check_shls_slice(&*integrator, shls_slice, CIntSymm::S2ij);
     /// assert!(check.is_err());
     /// ```
-    pub fn check_shls_slice(
-        &self,
-        integrator: &dyn Integrator,
-        shls_slice: &[[c_int; 2]],
-        cint_symm: CIntSymm,
-    ) -> Result<(), CIntError> {
+    pub fn check_shls_slice(&self, integrator: &dyn Integrator, shls_slice: &[[c_int; 2]], cint_symm: CIntSymm) -> Result<(), CIntError> {
         let n_center = integrator.n_center();
 
         // length of shls_slice must be the same value to number of centers of
@@ -588,10 +548,7 @@ impl CInt {
                         n_center
                     )));
                 }
-                if shls_slice[0] != shls_slice[1]
-                    || shls_slice[0] != shls_slice[2]
-                    || shls_slice[0] != shls_slice[3]
-                {
+                if shls_slice[0] != shls_slice[1] || shls_slice[0] != shls_slice[2] || shls_slice[0] != shls_slice[3] {
                     return Err(CIntError::InvalidValue(format!(
                         "Integrator {} does not support S8 symmetry with different shell slices {:?}",
                         integrator.name(),
@@ -623,9 +580,7 @@ impl CInt {
         };
         let actual = std::mem::size_of::<F>();
         if actual != expected {
-            Err(CIntError::InvalidValue(format!(
-                "Expected float type size {expected} bytes, but got {actual} bytes"
-            )))
+            Err(CIntError::InvalidValue(format!("Expected float type size {expected} bytes, but got {actual} bytes")))
         } else {
             Ok(())
         }
@@ -635,26 +590,16 @@ impl CInt {
     ///
     /// This check only involves that ECP and general integrals have different
     /// optimizers.
-    pub fn check_optimizer(
-        &self,
-        integrator: &dyn Integrator,
-        optimizer: &CIntOptimizer,
-    ) -> Result<(), CIntError> {
+    pub fn check_optimizer(&self, integrator: &dyn Integrator, optimizer: &CIntOptimizer) -> Result<(), CIntError> {
         match optimizer {
             CIntOptimizer::Int(_) => {
                 if integrator.kind() != CIntKind::Int {
-                    return Err(CIntError::InvalidValue(format!(
-                        "Optimizer is for Int, but integrator is {:?}",
-                        integrator.kind()
-                    )));
+                    return Err(CIntError::InvalidValue(format!("Optimizer is for Int, but integrator is {:?}", integrator.kind())));
                 }
             },
             CIntOptimizer::Ecp(_) => {
                 if integrator.kind() != CIntKind::Ecp {
-                    return Err(CIntError::InvalidValue(format!(
-                        "Optimizer is for Ecp, but integrator is {:?}",
-                        integrator.kind()
-                    )));
+                    return Err(CIntError::InvalidValue(format!("Optimizer is for Ecp, but integrator is {:?}", integrator.kind())));
                 }
             },
         }
@@ -917,14 +862,7 @@ impl CInt {
                 let n_bas = self.bas.len() as c_int;
                 let mut c_opt_ptr: *mut CINTOpt = null_mut();
                 unsafe {
-                    integrator.optimizer(
-                        &mut c_opt_ptr as *mut *mut CINTOpt as *mut *mut c_void,
-                        atm_ptr,
-                        n_atm,
-                        bas_ptr,
-                        n_bas,
-                        env_ptr,
-                    );
+                    integrator.optimizer(&mut c_opt_ptr as *mut *mut CINTOpt as *mut *mut c_void, atm_ptr, n_atm, bas_ptr, n_bas, env_ptr);
                 };
                 CIntOptimizer::Int(c_opt_ptr)
             },
@@ -938,14 +876,7 @@ impl CInt {
                 let n_bas = merged.bas.len() as c_int;
                 let mut c_opt_ptr: *mut ECPOpt = null_mut();
                 unsafe {
-                    integrator.optimizer(
-                        &mut c_opt_ptr as *mut *mut ECPOpt as *mut *mut c_void,
-                        atm_ptr,
-                        n_atm,
-                        bas_ptr,
-                        n_bas,
-                        env_ptr,
-                    );
+                    integrator.optimizer(&mut c_opt_ptr as *mut *mut ECPOpt as *mut *mut c_void, atm_ptr, n_atm, bas_ptr, n_bas, env_ptr);
                 };
                 CIntOptimizer::Ecp(c_opt_ptr)
             },
@@ -1102,12 +1033,8 @@ impl CInt {
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
         let buffer_size = self.max_buffer_size(integrator, shls_slice);
-        let thread_cache = (0..rayon::current_num_threads())
-            .map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) })
-            .collect_vec();
-        let thread_buffer = (0..rayon::current_num_threads())
-            .map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) })
-            .collect_vec();
+        let thread_cache = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) }).collect_vec();
+        let thread_buffer = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) }).collect_vec();
 
         /* #endregion */
 
@@ -1148,9 +1075,7 @@ impl CInt {
                     let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
-                    unsafe {
-                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
-                    }
+                    unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };
@@ -1185,9 +1110,7 @@ impl CInt {
                     let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
-                    unsafe {
-                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
-                    }
+                    unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };
@@ -1197,8 +1120,7 @@ impl CInt {
                 });
             },
             4 => {
-                let out_shape =
-                    [cgto_shape[I], cgto_shape[J], cgto_shape[K], cgto_shape[L], n_comp];
+                let out_shape = [cgto_shape[I], cgto_shape[J], cgto_shape[K], cgto_shape[L], n_comp];
 
                 let nidx_k = (shls_slice[K][1] - shls_slice[K][0]) as usize;
                 let nidx_l = (shls_slice[L][1] - shls_slice[L][0]) as usize;
@@ -1227,9 +1149,7 @@ impl CInt {
                     let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
-                    unsafe {
-                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
-                    }
+                    unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };
@@ -1278,12 +1198,8 @@ impl CInt {
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
         let buffer_size = self.max_buffer_size(integrator, shls_slice);
-        let thread_cache = (0..rayon::current_num_threads())
-            .map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) })
-            .collect_vec();
-        let thread_buffer = (0..rayon::current_num_threads())
-            .map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) })
-            .collect_vec();
+        let thread_cache = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) }).collect_vec();
+        let thread_buffer = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) }).collect_vec();
 
         /* #endregion */
 
@@ -1319,9 +1235,7 @@ impl CInt {
                     let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
-                    unsafe {
-                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
-                    }
+                    unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };
@@ -1358,9 +1272,7 @@ impl CInt {
                     let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
-                    unsafe {
-                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
-                    }
+                    unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };
@@ -1401,9 +1313,7 @@ impl CInt {
                     let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
-                    unsafe {
-                        self.integral_block(integrator, buf, &shls, &[], cint_opt, cache);
-                    }
+                    unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
 
                     // copy buffer to output slice
                     let out = unsafe { cast_mut_slice(&*out) };

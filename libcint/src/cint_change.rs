@@ -129,13 +129,7 @@ impl FakeMolForChargeArg for f64 {
         let coef = 1.0 / (2.0 * PI.sqrt() * gaussian_int(2.0, exponent));
         fake_env.extend_from_slice(&[exponent, coef]);
 
-        CInt {
-            atm: fake_atm,
-            bas: fake_bas,
-            ecpbas: vec![],
-            env: fake_env,
-            cint_type: CIntType::default(),
-        }
+        CInt { atm: fake_atm, bas: fake_bas, ecpbas: vec![], env: fake_env, cint_type: CIntType::default() }
     }
 }
 
@@ -185,13 +179,7 @@ impl FakeMolForChargeArg for &[f64] {
             ptr += 2;
         });
 
-        CInt {
-            atm: fake_atm,
-            bas: fake_bas,
-            ecpbas: vec![],
-            env: fake_env,
-            cint_type: CIntType::default(),
-        }
+        CInt { atm: fake_atm, bas: fake_bas, ecpbas: vec![], env: fake_env, cint_type: CIntType::default() }
     }
 }
 
@@ -239,28 +227,20 @@ impl FakeMolForChargeArg for (&[f64], &[f64]) {
         });
 
         // bas, env
-        exponents.iter().zip(contr_coeffs.iter()).enumerate().for_each(
-            |(i, (&exponent, &contr_coeff))| {
-                let mut bas = [0; BAS_SLOTS];
-                bas[ATOM_OF] = i as c_int;
-                bas[NPRIM_OF] = 1;
-                bas[NCTR_OF] = 1;
-                bas[PTR_EXP] = ptr as c_int;
-                bas[PTR_COEFF] = (ptr + 1) as c_int;
-                let coef = contr_coeff / (2.0 * PI.sqrt() * gaussian_int(2.0, exponent));
-                fake_bas.push(bas);
-                fake_env.extend_from_slice(&[exponent, coef]);
-                ptr += 2;
-            },
-        );
+        exponents.iter().zip(contr_coeffs.iter()).enumerate().for_each(|(i, (&exponent, &contr_coeff))| {
+            let mut bas = [0; BAS_SLOTS];
+            bas[ATOM_OF] = i as c_int;
+            bas[NPRIM_OF] = 1;
+            bas[NCTR_OF] = 1;
+            bas[PTR_EXP] = ptr as c_int;
+            bas[PTR_COEFF] = (ptr + 1) as c_int;
+            let coef = contr_coeff / (2.0 * PI.sqrt() * gaussian_int(2.0, exponent));
+            fake_bas.push(bas);
+            fake_env.extend_from_slice(&[exponent, coef]);
+            ptr += 2;
+        });
 
-        CInt {
-            atm: fake_atm,
-            bas: fake_bas,
-            ecpbas: vec![],
-            env: fake_env,
-            cint_type: CIntType::default(),
-        }
+        CInt { atm: fake_atm, bas: fake_bas, ecpbas: vec![], env: fake_env, cint_type: CIntType::default() }
     }
 }
 
@@ -276,11 +256,7 @@ impl CInt {
         self
     }
 
-    pub fn with_cint_type<R>(
-        &mut self,
-        cint_type: impl Into<CIntType>,
-        func: impl FnOnce(&mut Self) -> R,
-    ) -> R {
+    pub fn with_cint_type<R>(&mut self, cint_type: impl Into<CIntType>, func: impl FnOnce(&mut Self) -> R) -> R {
         let old_type = self.cint_type;
         self.set_cint_type(cint_type);
         let result = func(self);
@@ -303,11 +279,7 @@ impl CInt {
         self
     }
 
-    pub fn with_common_origin<R>(
-        &mut self,
-        origin: [f64; 3],
-        func: impl FnOnce(&mut Self) -> R,
-    ) -> R {
+    pub fn with_common_origin<R>(&mut self, origin: [f64; 3], func: impl FnOnce(&mut Self) -> R) -> R {
         let old_origin = self.get_common_origin();
         self.set_common_origin(origin);
         let result = func(self);
@@ -330,11 +302,7 @@ impl CInt {
         self
     }
 
-    pub fn with_rinv_origin<R>(
-        &mut self,
-        origin: [f64; 3],
-        func: impl FnOnce(&mut Self) -> R,
-    ) -> R {
+    pub fn with_rinv_origin<R>(&mut self, origin: [f64; 3], func: impl FnOnce(&mut Self) -> R) -> R {
         let old_origin = self.get_rinv_origin();
         self.set_rinv_origin(origin);
         let result = func(self);
@@ -357,11 +325,7 @@ impl CInt {
         self
     }
 
-    pub fn with_rinv_origin_atom<R>(
-        &mut self,
-        atm_id: usize,
-        func: impl FnOnce(&mut Self) -> R,
-    ) -> R {
+    pub fn with_rinv_origin_atom<R>(&mut self, atm_id: usize, func: impl FnOnce(&mut Self) -> R) -> R {
         let old_atm_id = self.get_rinv_origin_atom();
         self.set_rinv_origin_atom(atm_id);
         let result = func(self);
@@ -400,19 +364,11 @@ impl CInt {
         self.set_range_coulomb(omega)
     }
 
-    pub fn with_long_range_coulomb<R>(
-        &mut self,
-        omega: f64,
-        func: impl FnOnce(&mut Self) -> R,
-    ) -> R {
+    pub fn with_long_range_coulomb<R>(&mut self, omega: f64, func: impl FnOnce(&mut Self) -> R) -> R {
         self.with_range_coulomb(omega, func)
     }
 
-    pub fn with_short_range_coulomb<R>(
-        &mut self,
-        omega: f64,
-        func: impl FnOnce(&mut Self) -> R,
-    ) -> R {
+    pub fn with_short_range_coulomb<R>(&mut self, omega: f64, func: impl FnOnce(&mut Self) -> R) -> R {
         self.with_range_coulomb(-omega, func)
     }
 
@@ -497,11 +453,7 @@ impl CInt {
         self
     }
 
-    pub fn with_rinv_at_nucleus<R>(
-        &mut self,
-        atm_id: usize,
-        func: impl FnOnce(&mut Self) -> R,
-    ) -> R {
+    pub fn with_rinv_at_nucleus<R>(&mut self, atm_id: usize, func: impl FnOnce(&mut Self) -> R) -> R {
         let old_rinv = self.get_rinv_origin();
         let old_zeta = self.get_rinv_zeta();
         let old_rinv_atom = self.get_rinv_origin_atom();
@@ -555,11 +507,7 @@ impl CInt {
         const PTR_COORD: usize = cint_ffi::PTR_COORD as usize;
 
         if self.natm() != coords.len() {
-            panic!(
-                "Number of coordinates ({}) does not match number of atoms ({})",
-                coords.len(),
-                self.natm()
-            );
+            panic!("Number of coordinates ({}) does not match number of atoms ({})", coords.len(), self.natm());
         }
 
         coords.iter().enumerate().for_each(|(i, coord)| {

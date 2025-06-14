@@ -4,15 +4,7 @@ use crate::prelude::*;
 
 pub trait Integrator: Send + Sync {
     /// # Safety
-    unsafe fn optimizer(
-        &self,
-        opt: *mut *mut c_void,
-        atm: *const c_int,
-        natm: c_int,
-        bas: *const c_int,
-        nbas: c_int,
-        env: *const f64,
-    );
+    unsafe fn optimizer(&self, opt: *mut *mut c_void, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
     /// # Safety
     unsafe fn integral_sph(
         &self,
@@ -115,9 +107,7 @@ macro_rules! impl_integrator {
                 opt: *const c_void,
                 cache: *mut f64,
             ) -> c_int {
-                unsafe {
-                    $integral_sph(out, dims, shls, atm, natm, bas, nbas, env, opt as _, cache)
-                }
+                unsafe { $integral_sph(out, dims, shls, atm, natm, bas, nbas, env, opt as _, cache) }
             }
 
             unsafe fn integral_cart(
@@ -133,9 +123,7 @@ macro_rules! impl_integrator {
                 opt: *const c_void,
                 cache: *mut f64,
             ) -> c_int {
-                unsafe {
-                    $integral_cart(out, dims, shls, atm, natm, bas, nbas, env, opt as _, cache)
-                }
+                unsafe { $integral_cart(out, dims, shls, atm, natm, bas, nbas, env, opt as _, cache) }
             }
 
             unsafe fn integral_spinor(
@@ -151,11 +139,7 @@ macro_rules! impl_integrator {
                 opt: *const c_void,
                 cache: *mut f64,
             ) -> c_int {
-                unsafe {
-                    $integral_spinor(
-                        out as _, dims, shls, atm, natm, bas, nbas, env, opt as _, cache,
-                    )
-                }
+                unsafe { $integral_spinor(out as _, dims, shls, atm, natm, bas, nbas, env, opt as _, cache) }
             }
 
             fn is_sph_available(&self) -> bool {
