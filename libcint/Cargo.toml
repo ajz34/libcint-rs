@@ -26,6 +26,7 @@ approx = "0.5"
 rstest = "0.25"
 
 [features]
+default = []
 with_f12 = ["libcint-src/with_f12"]
 with_4c1e = ["libcint-src/with_4c1e"]
 build_from_source = ["libcint-src/build_from_source"]
