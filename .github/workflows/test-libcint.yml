@@ -20,7 +20,8 @@ jobs:
           cd libcint
           mkdir build; cd build
           cmake .. -DCMAKE_INSTALL_PREFIX=/usr
-          make -j4 install
+          make -j4
+          sudo make install
 
       - name: build and test
         run: |
