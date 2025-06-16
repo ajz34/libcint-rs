@@ -72,21 +72,11 @@ fn link_cint() {
         println!("cargo:rustc-link-search=native={}", path.display());
     }
 
-    match (cfg!(feature = "static"), cfg!(feature = "qcint")) {
-        (false, false) => {
-            println!("cargo:rustc-link-lib=cint");
-        },
-        (false, true) => {
-            println!("cargo:rustc-link-lib=qcint");
-        },
-        (true, false) => {
-            println!("cargo:rustc-link-lib=static=cint");
-            println!("cargo:rustc-link-lib=quadmath");
-        },
-        (true, true) => {
-            println!("cargo:rustc-link-lib=static=qcint");
-            println!("cargo:rustc-link-lib=quadmath");
-        },
+    if cfg!(feature = "static") {
+        println!("cargo:rustc-link-lib=static=cint");
+        println!("cargo:rustc-link-lib=quadmath");
+    } else {
+        println!("cargo:rustc-link-lib=cint");
     }
 }
 
@@ -103,6 +93,6 @@ fn build_ecp() {
 }
 
 fn main() {
-    build_ecp();
     link_cint();
+    build_ecp();
 }

@@ -5,20 +5,76 @@
 # - This file must be manually modified (specify `dir_libcint_src`) to be executed.
 # - Please let bindgen (`sudo apt install bindgen` or `cargo install bindgen-cli`) in bash `$PATH`.
 
+import os
+import glob
+import subprocess
+import re
+
 # ## User Specifications
 
 # -- libcint source code location --
 # the same to `git clone https://github.com/sunqm/libcint`
 dir_libcint_src = "/home/a/Software/source/libcint-6.1.2/"
+dir_qcint_src = "/home/a/Git-Others/qcint/"
+
+# ## Preparasion (qcint)
+
+# +
+# only certain files are compiled by qcint, defined by CMakeLists
+with open(f"{dir_qcint_src}/CMakeLists.txt", "r") as f:
+    raw_cmakelists = f.read()
+
+lines = raw_cmakelists.split("\n")
+for n, l in enumerate(lines):
+    if l.startswith("set(cintSrc"):
+        break
+files = []
+for l in lines[n+1:]:
+    if l.strip() == "":
+        break
+    files += l.strip().replace(")", "").split()
+qcint_src_paths = [f"{dir_qcint_src}/{f}" for f in files]
+
+# +
+# -- configure list of integrals known to source code, autocode included --
+# all intor generated in source code (autocode included)
+# pattern: 
+#   CACHE_SIZE_T <intor>(...
+#   FINT ng[] = {...};
+# pattern rule:
+#   <intor> ends with _sph, _cart, _spinor; no # in <intor>
+
+actual_intor = {}
+valid_suffix = ("_sph", "_cart", "_spinor")
+for src_path in list(qcint_src_paths):
+    with open(src_path, "r") as f:
+        lines = f.readlines()
+        for n, line in enumerate(lines):
+            if line.startswith("CACHE_SIZE_T int"):
+                # match pattern for intor
+                intor = line.split("(")[0].split()[-1].strip()
+                is_intor_valid = False
+                for suffix in valid_suffix:
+                    if intor.endswith(suffix):
+                        intor = intor.replace(suffix, "")
+                        is_intor_valid = True
+                if "#" in intor or intor in actual_intor or not is_intor_valid:
+                    continue
+                # match pattern for ng
+                ng = None
+                for l in lines[n:n+5]:
+                    if l.strip().startswith("FINT ng[]") or l.strip().startswith("int ng[]"):
+                        ng = [int(i) for i in l.strip().replace(";", "").replace("}", "").split("{")[-1].split(",")]
+                if ng is None:
+                    raise ValueError(f"{intor}")
+                actual_intor[intor] = ng
+# -
+
+actual_intor_qcint = actual_intor
 
 # ## Preparasion
 
 # ### python import
-
-import os
-import glob
-import subprocess
-import re
 
 # +
 with open(f"{dir_libcint_src}/include/cint.h.in", "r") as f:
@@ -40,19 +96,6 @@ for line in raw_cint_funcs_h.split("\n"):
     if line.startswith("extern CINTOptimizerFunction"):
         known_intor.append(line.strip().replace(";", "").split()[-1].replace("_optimizer", ""))
 known_intor = sorted(set(known_intor))
-
-# +
-# -- configure list of integrals known to source code, autocode included --
-# all intor generated in source code (autocode included)
-# pattern: ALL_CINT(<intor>)
-# pattern: ALL_CINT1E(<intor>)
-# actual_intor = []
-# for src_path in list(glob.iglob(f"{dir_libcint_src}/src/**/*.c", recursive=True)):
-#     with open(src_path, "r") as f:
-#         for line in f.readlines():
-#             if line.startswith("ALL_CINT(") or line.startswith("ALL_CINT1E("):
-#                 actual_intor.append(line.split("(")[-1].replace(")", "").replace(";", "").strip())
-# actual_intor = sorted(set(actual_intor))
 
 # +
 # -- configure list of integrals known to source code, autocode included --
@@ -82,7 +125,7 @@ for src_path in list(glob.iglob(f"{dir_libcint_src}/src/**/*.c", recursive=True)
                 # match pattern for ng
                 ng = None
                 for l in lines[n:n+5]:
-                    if l.strip().startswith("FINT ng[]"):
+                    if l.strip().startswith("FINT ng[]") or l.strip().startswith("int ng[]"):
                         ng = [int(i) for i in l.strip().replace(";", "").replace("}", "").split("{")[-1].split(",")]
                 if ng is None:
                     raise ValueError(f"{intor}")
@@ -94,6 +137,10 @@ assert len(set(known_intor) - set(actual_intor)) == 0
 
 
 # ### Declare exceptions
+
+def rule_qcint_exclusion(intor):
+    return (intor in actual_intor) and (intor not in actual_intor_qcint)
+
 
 def rule_with_f12(intor):
     return "_stg" in intor or "_yp" in intor
@@ -171,17 +218,6 @@ cint_funcs = cint_funcs + "".join([
     for intor in sorted(set(actual_intor))
     if rule_with_f12(intor)])
 cint_funcs = cint_funcs.replace("#include <cint.h>", "#include \"cint.h\"")
-
-# +
-# libcint2 interface compability
-# token = """
-# extern CINTOptimizerFunction       c{0:}_optimizer;
-# extern CINTIntegralFunctionReal    c{0:}_cart;
-# extern CINTIntegralFunctionReal    c{0:}_sph;
-# extern CINTIntegralFunctionComplex c{0:}_spinor;
-# """
-# cint_funcs = cint_funcs + "".join([token.format(intor) for intor in sorted(actual_intor) if intor not in ["int2e"]])
-# -
 
 # ### Merge `cint.h` and `cint_funcs.h`
 
@@ -315,6 +351,8 @@ def gen_impl_integrator(intor):
         token = '#[cfg(feature = "with_f12")]\n' + token
     if rule_with_4c1e(intor):
         token = '#[cfg(feature = "with_4c1e")]\n' + token
+    if rule_qcint_exclusion(intor):
+        token = '#[cfg(not(feature = "qcint"))]\n' + token
         
     return token
 
@@ -335,6 +373,8 @@ for intor in actual_intor:
         token_wrapper += '#[cfg(feature = "with_f12")]\n'
     if rule_with_4c1e(intor):
         token_wrapper += '#[cfg(feature = "with_4c1e")]\n'
+    if rule_qcint_exclusion(intor):
+        token_wrapper += '#[cfg(not(feature = "qcint"))]\n'
         
     token_wrapper += f"""
         "{intor}" => Some(Box::new({intor})),

@@ -1,21 +1,23 @@
 [package]
 name = "libcint"
-version = "0.1.0"
-edition = "2024"
 description = "FFI binding and GTO wrapper for libcint"
-repository = "https://github.com/ajz34/libcint-rs"
-keywords = ["chemistry", "integral", "scientific"]
-categories = ["science"]
-license = "Apache-2.0"
+
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
 
 [dependencies]
+libcint-src = { workspace = true }
 itertools = "0.14"
 rayon = "1.10"
 num = "0.4"
 libm = "0.2"
 duplicate = "2.0"
-rstsr-common = { version = "0.3.6", features = ["rayon"] }
 derive_builder = "0.20"
+rstsr-common = { version = "0.3.6", features = ["rayon"] }
 
 [build-dependencies]
 cc = "1.0"
@@ -27,11 +29,11 @@ approx = "0.5"
 rstest = "0.25"
 
 [features]
-with_f12 = []
-with_4c1e = []
-
-static = []
-qcint = []
+with_f12 = ["libcint-src/with_f12"]
+with_4c1e = ["libcint-src/with_4c1e"]
+build_from_source = ["libcint-src/build_from_source"]
+static = ["libcint-src/static"]
+qcint = ["libcint-src/qcint"]
 
 [profile.dev]
 opt-level = 2

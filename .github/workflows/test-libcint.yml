@@ -7,25 +7,53 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  test-custom-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: conda-incubator/setup-miniconda@v3
 
-      - name: build libcint
+      - name: build libcint.so
         run: |
           cd ~
           git clone https://github.com/sunqm/libcint.git
           cd libcint
           mkdir build; cd build
-          cmake .. -DCMAKE_INSTALL_PREFIX=/usr
+          cmake ..
           make -j4
           sudo make install
 
-      - name: build and test
+      - name: test crate libcint
         run: |
           cd libcint
-          export CINT_DEV=1
-          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib
           cargo test
+
+  test-build-dynamic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+      - name: test crate libcint
+        run: |
+          cd libcint
+          cargo test --features="build_from_source"
+
+  test-build-static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+      - name: test crate libcint
+        run: |
+          cd libcint
+          cargo test --features="build_from_source static"
+
+  test-build-static-qcint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+      - name: test crate libcint
+        run: |
+          cd libcint
+          cargo test --features="build_from_source static qcint"

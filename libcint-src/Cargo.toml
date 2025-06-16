@@ -1,19 +1,20 @@
 [package]
 name = "libcint-src"
-version = "0.1.0"
-edition = "2024"
 description = "FFI binding and GTO wrapper for libcint"
-repository = "https://github.com/ajz34/libcint-rs"
-keywords = ["chemistry", "integral", "scientific"]
-categories = ["science"]
-license = "Apache-2.0"
 
-[dev-dependencies]
-libcint = { path = "../libcint" }
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
 
 [build-dependencies]
 cmake = { version = "0.1" }
 
 [features]
+with_f12 = []
+with_4c1e = []
 build_from_source = []
 static = []
+qcint = []

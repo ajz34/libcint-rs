@@ -1,3 +1,7 @@
+# Please note that options (`CINT_SRC`, `CINT_VER`, etc.) will be always be overrided
+# in build.rs building script. However, this CMakeLists.txt is also valid for standalone
+# building.
+
 cmake_minimum_required(VERSION 3.15)
 project(dep-libcint)
 
@@ -7,22 +11,11 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 endif()
 
-set(CINT_SRC "" CACHE PATH "User specified directory of source code (libcint)")
-if(NOT CINT_SRC AND (NOT $ENV{CINT_SRC} EQUAL ""))
-    set(CINT_SRC $ENV{CINT_SRC})
-endif()
-
 if(CINT_SRC)
     message(STATUS "User specified directory of source code (libcint): ${CINT_SRC}")
 else()
     set(CINT_SRC https://github.com/sunqm/libcint.git)
-    # set(CINT_SRC /home/a/Git-Others/libcint)
     message(STATUS "Download source code (libcint): ${CINT_SRC}")
-endif()
-
-set(CINT_VER "" CACHE PATH "User specified version of library (git tag) (libcint)")
-if(NOT CINT_VER AND (NOT $ENV{CINT_VER} EQUAL ""))
-    set(CINT_VER $ENV{CINT_VER})
 endif()
 
 if(CINT_VER)
@@ -45,8 +38,8 @@ ExternalProject_Add(cint
         -DWITH_RANGE_COULOMB:STRING=1
         -DWITH_FORTRAN:STRING=0
         -DWITH_CINT2_INTERFACE:STRING=1
-        -DWITH_F12:STRING=1
-        -DWITH_4C1E:STRING=1
+        -DWITH_F12:STRING=${WITH_F12}
+        -DWITH_4C1E:STRING=${WITH_4C1E}
 )
 
 install(DIRECTORY ${PROJECT_BINARY_DIR}/deps/lib DESTINATION ${CMAKE_INSTALL_PREFIX})
