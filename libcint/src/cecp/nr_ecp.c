@@ -1,6 +1,6 @@
 /* File from pyscf/pyscf: lib/gto/nr_ecp.c
 
-   Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -4499,7 +4499,7 @@ static double _factorial[] = {
         1.1240007277776077e+21, 2.5852016738884978e+22,
 };
 
-static const double _factorial2[] = {
+const static double _factorial2[] = {
         1., 1., 2., 3., 8.,
         15., 48., 105., 384., 945.,
         3840., 10395., 46080., 135135., 645120.,
@@ -4523,7 +4523,7 @@ static double factorial2(int n)
         }
 }
 
-static const double _binom[] = {
+const static double _binom[] = {
         1,
         1, 1,
         1, 2, 1,
@@ -5314,7 +5314,7 @@ static int _loc_ecpbas(int *ecploc, int *ecpbas, int necpbas)
         return nslots;
 }
 
-double distance_square(const double *r1, const double *r2)
+static double distance_square(const double *r1, const double *r2)
 {
         double r12[3];
         r12[0] = r1[0] - r2[0];
@@ -5582,7 +5582,7 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         // be careful with the factor 1/2 for the spin operator  s = 1/2 Pauli matrix
         // The ECPso_cart and ECPso_sph integral code evaluates the integrals
         // <i|H^{SO}|j> as shown in NWChem ECP doc
-        //   http://www.nwchem-sw.org/index.php/ECP
+        //   https://nwchemgit.github.io/ECP.html
         // Note when calling ECPso_spinor function to evaluate the integrals in
         // spinor basis pyscf evaluates the expression like
         //      einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_sph, ui.conj(), uj)
@@ -5901,7 +5901,8 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         for (i = 0; i < d3; i++) { rad_all[i] = 0; }
 
         for (iloc = 0; iloc < nslots; iloc++) {
-                if (ecpbas[ANG_OF+ecploc[iloc]*BAS_SLOTS] != -1) {
+                if (ecpbas[ANG_OF+ecploc[iloc]*BAS_SLOTS] != -1 ||
+                    ecpbas[SO_TYPE_OF+ecploc[iloc]*BAS_SLOTS] == 1) {
                         continue;
                 }
                 atm_id = ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS];
