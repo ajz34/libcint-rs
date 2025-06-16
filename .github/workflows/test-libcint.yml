@@ -1,0 +1,29 @@
+name: test-libcint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-from-miniconda:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+
+      - name: build libcint
+        run: |
+          cd ~
+          git clone https://github.com/sunqm/libcint.git
+          cd libcint
+          mkdir build; cd build
+          cmake ..
+          make -j4 install
+          
+      - name: build and test
+        run: |
+          cd libcint
+          export CINT_DEV=1
+          cargo test

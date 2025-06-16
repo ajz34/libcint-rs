@@ -1,0 +1,26 @@
+name: test-libcint-src
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: run tests directly
+        run: |
+          cd libcint-src
+          cargo test --test "*" -vv --features="build_from_source static" -- --nocapture
+  
+  build-dynamic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: run tests directly
+        run: |
+          cd libcint-src
+          cargo test --test "*" -vv --features="build_from_source" -- --nocapture
