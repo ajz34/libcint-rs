@@ -57,7 +57,7 @@ If access to github is not available, you can use environment variable `CINT_SRC
 ### Cargo features
 
 - Default features: None of any listed below (use library provided by system or user, using [sunqm/libcint](https://github.com/sunqm/libcint), dynamic linking, without F12 and 4c1e support).
-- `build_from_source`: Trigger of C language library libcint building. This performs by CMake, will source code download from github (if environment variable `CINT_SRC` not specified).
+- `build_from_source`: Trigger of C language library libcint building. This performs by CMake; source code will be automatically downloaded from github (if environment variable `CINT_SRC` not specified).
 - `static`: Use static library for linking. This will require static link `libcint.a`, and dynamic link `libquadmath.so`.
 - `qcint`: Use [sunqm/qcint](https://github.com/sunqm/qcint) instead of [sunqm/libcint](https://github.com/sunqm/libcint). Some integrals will not be available if `qcint` does not supports that. This will also change URL source if cargo feature `build_from_source` specified.
 - `with_f12`: Whether F12 integrals (`int2e_stg`, `int2e_yp`, etc.) are supported.

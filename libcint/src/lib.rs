@@ -120,8 +120,8 @@
 //!   or user, using [sunqm/libcint](https://github.com/sunqm/libcint), dynamic
 //!   linking, without F12 and 4c1e support).
 //! - `build_from_source`: Trigger of C language library libcint building. This
-//!   performs by CMake, will source code download from github (if environment
-//!   variable `CINT_SRC` not specified).
+//!   performs by CMake; source code will be automatically downloaded from
+//!   github (if environment variable `CINT_SRC` not specified).
 //! - `static`: Use static library for linking. This will require static link
 //!   `libcint.a`, and dynamic link `libquadmath.so`.
 //! - `qcint`: Use [sunqm/qcint](https://github.com/sunqm/qcint) instead of [sunqm/libcint](https://github.com/sunqm/libcint).
