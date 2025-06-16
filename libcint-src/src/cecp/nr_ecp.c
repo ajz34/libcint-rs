@@ -4499,7 +4499,7 @@ static double _factorial[] = {
         1.1240007277776077e+21, 2.5852016738884978e+22,
 };
 
-const static double _factorial2[] = {
+static const double _factorial2[] = {
         1., 1., 2., 3., 8.,
         15., 48., 105., 384., 945.,
         3840., 10395., 46080., 135135., 645120.,
@@ -4523,7 +4523,7 @@ static double factorial2(int n)
         }
 }
 
-const static double _binom[] = {
+static const double _binom[] = {
         1,
         1, 1,
         1, 2, 1,

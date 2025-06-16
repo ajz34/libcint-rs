@@ -19,10 +19,6 @@ duplicate = "2.0"
 derive_builder = "0.20"
 rstsr-common = { version = "0.3.6", features = ["rayon"] }
 
-[build-dependencies]
-cc = "1.0"
-cmake = "0.1"
-
 [dev-dependencies]
 ndarray = "0.15"
 approx = "0.5"

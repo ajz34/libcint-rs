@@ -11,6 +11,7 @@ license.workspace = true
 
 [build-dependencies]
 cmake = { version = "0.1" }
+cc = { version = "1.0" }
 
 [features]
 with_f12 = []

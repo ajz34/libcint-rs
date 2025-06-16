@@ -16,6 +16,7 @@ pub fn intor_row_major(cint_data: &CInt, intor: &str) -> Tsr {
 
 fn main() {
     let device = DeviceBLAS::default();
+    // Assuming H2O/def2-TZVP data for `CInt` has been prepared
     let cint_data = init_h2o_def2_tzvp();
 
     /* #region rhf total energy algorithms */
