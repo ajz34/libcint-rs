@@ -117,56 +117,6 @@ impl CInt {
         Ok(CIntOutput { out: out_vec, shape: out_shape })
     }
 
-    pub fn integrate_cross<'l>(
-        intor: &str,
-        mols: impl AsRef<[&'l CInt]>,
-        aosym: impl Into<CIntSymm>,
-        shls_slice: impl Into<ShlsSlice>,
-    ) -> CIntOutput<f64> {
-        CInt::integrate_cross_f(intor, mols, aosym, shls_slice).unwrap()
-    }
-
-    pub fn integrate_cross_f<'l>(
-        intor: &str,
-        mols: impl AsRef<[&'l CInt]>,
-        aosym: impl Into<CIntSymm>,
-        shls_slice: impl Into<ShlsSlice>,
-    ) -> Result<CIntOutput<f64>, CIntError> {
-        let shls_slice = shls_slice.into();
-        let args = IntorCrossArgsBuilder::default()
-            .intor(intor)
-            .mols(mols.as_ref())
-            .shls_slice(shls_slice.as_ref())
-            .aosym(aosym.into())
-            .build()?;
-        CInt::integrate_cross_with_args_inner(args)
-    }
-
-    pub fn integrate_cross_spinor<'l>(
-        intor: &str,
-        mols: impl AsRef<[&'l CInt]>,
-        aosym: impl Into<CIntSymm>,
-        shls_slice: impl Into<ShlsSlice>,
-    ) -> CIntOutput<Complex<f64>> {
-        CInt::integrate_cross_spinor_f(intor, mols, aosym, shls_slice).unwrap()
-    }
-
-    pub fn integrate_cross_spinor_f<'l>(
-        intor: &str,
-        mols: impl AsRef<[&'l CInt]>,
-        aosym: impl Into<CIntSymm>,
-        shls_slice: impl Into<ShlsSlice>,
-    ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
-        let shls_slice = shls_slice.into();
-        let args = IntorCrossArgsBuilder::default()
-            .intor(intor)
-            .mols(mols.as_ref())
-            .shls_slice(shls_slice.as_ref())
-            .aosym(aosym.into())
-            .build()?;
-        CInt::integrate_cross_with_args_inner(args)
-    }
-
     pub fn integrate_cross_with_args(args: IntorCrossArgs<f64>) -> CIntOutput<f64> {
         CInt::integrate_cross_with_args_inner(args).unwrap()
     }

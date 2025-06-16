@@ -1,4 +1,4 @@
-//! You are adviced to use `libcint::prelude::*` to import this crate.
+//! Use `libcint::prelude::*` to import this crate.
 
 pub use crate::cint::{CInt, CIntError, CIntKind, CIntOptimizer, CIntOutput, CIntSymm, CIntType};
 pub use crate::cint_change::fakemol_for_charges;

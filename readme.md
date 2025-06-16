@@ -1,8 +1,10 @@
 # libcint FFI Bindings and Wrapper
 
-This project contains libcint FFI bindings, wrapper and build-from-source.
+This project contains libcint (C language) FFI bindings, wrapper and build-from-source.
 
-[libcint](https://github.com/sunqm/libcint) is a C library for GTO (gaussian-type orbital) electronic integral, can be applied in computational chemistry, and has already be applied extensively in [PySCF](https://github.com/pyscf/pyscf).
+[libcint](https://github.com/sunqm/libcint) is a C library for GTO (gaussian-type orbital) electronic integral, can be applied in computational chemistry, and has already been applied extensively in [PySCF](https://github.com/pyscf/pyscf).
+
+**This is an alpha version and will soon be promoted to v0.1.** After some documentation update and probably symmetry enhancements, a version v0.1 will be released.
 
 | Resources | Badges |
 |--|--|
@@ -30,7 +32,7 @@ let (out, shape): (Vec<f64>, Vec<usize>) = cint_data.integrate("int1e_ipkin", No
 assert_eq!(shape, [43, 43, 3]);
 ```
 
-## Installation
+## Installation and Cargo Features
 
 ### Install with pre-compiled `libcint.so` (recommended)
 
@@ -38,7 +40,7 @@ If you have already compiled `libcint.so`, then put path of this shared library 
 
 ```toml
 [dependencies]
-libcint = { version = "0.1" }
+libcint = { version = "0.0.1" }
 ```
 
 ### Install and also build-from-source
@@ -47,7 +49,7 @@ If you have not compiled `libcint.so` or `libcint.a`, then you are suggested to 
 
 ```toml
 [dependencies]
-libcint = { version = "0.1", features = ["build_from_source", "static"] }
+libcint = { version = "0.0.1", features = ["build_from_source", "static"] }
 ```
 
 If access to github is not available, you can use environment variable `CINT_SRC` to specify source mirror of [sunqm/libcint](https://github.com/sunqm/libcint) or [sunqm/qcint](https://github.com/sunqm/qcint).

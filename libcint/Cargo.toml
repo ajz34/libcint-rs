@@ -12,12 +12,12 @@ license.workspace = true
 
 [dependencies]
 libcint-src = { workspace = true }
-itertools = "0.14"
-rayon = "1.10"
-num = "0.4"
-libm = "0.2"
-duplicate = "2.0"
-derive_builder = "0.20"
+itertools = { version = "0.14" }
+rayon = { version = "1.10" }
+num = { version = "0.4" }
+libm = { version = "0.2" }
+duplicate = { version = "2.0"}
+derive_builder = { version = "0.20"}
 rstsr-common = { version = "0.3.6", features = ["rayon"] }
 
 [dev-dependencies]

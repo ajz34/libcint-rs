@@ -410,7 +410,7 @@ impl CInt {
     /// You can use `.into()` to convert it to a tuple of `(Vec<f64>,
     /// Vec<usize>)`:
     ///
-    /// ```ignore
+    /// ```rust
     /// # use libcint::prelude::*;
     /// # let cint_data = init_h2o_def2_tzvp();
     /// let (out, shape) = cint_data.integrate("int1e_ovlp", "s2ij", None).into();
@@ -599,6 +599,11 @@ impl CInt {
     ///
     /// **This function cannot handle spheric or cartesian integral**
     ///
+    /// Due to rust's strict type system, it is very difficult to handle both
+    /// spinor and spheric/cartesian integrals in the same function. So spheric
+    /// and cartesian integral should be called by
+    /// [`integrate`](Self::integrate), which output is `f64`.
+    ///
     /// </div>
     ///
     /// ```should_panic
@@ -657,6 +662,56 @@ impl CInt {
         let shls_slice = shls_slice.into();
         let integrate_args = self.integrate_args_builder_spinor().intor(intor).aosym(aosym).shls_slice(shls_slice.as_ref()).build()?;
         self.integrate_with_args_inner(integrate_args)
+    }
+
+    pub fn integrate_cross<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> CIntOutput<f64> {
+        CInt::integrate_cross_f(intor, mols, aosym, shls_slice).unwrap()
+    }
+
+    pub fn integrate_cross_f<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> Result<CIntOutput<f64>, CIntError> {
+        let shls_slice = shls_slice.into();
+        let args = IntorCrossArgsBuilder::default()
+            .intor(intor)
+            .mols(mols.as_ref())
+            .shls_slice(shls_slice.as_ref())
+            .aosym(aosym.into())
+            .build()?;
+        CInt::integrate_cross_with_args_inner(args)
+    }
+
+    pub fn integrate_cross_spinor<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> CIntOutput<Complex<f64>> {
+        CInt::integrate_cross_spinor_f(intor, mols, aosym, shls_slice).unwrap()
+    }
+
+    pub fn integrate_cross_spinor_f<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
+        let shls_slice = shls_slice.into();
+        let args = IntorCrossArgsBuilder::default()
+            .intor(intor)
+            .mols(mols.as_ref())
+            .shls_slice(shls_slice.as_ref())
+            .aosym(aosym.into())
+            .build()?;
+        CInt::integrate_cross_with_args_inner(args)
     }
 }
 

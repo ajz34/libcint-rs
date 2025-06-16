@@ -1,10 +1,37 @@
 #![allow(clippy::excessive_precision)]
 #![allow(clippy::needless_range_loop)]
 
-//! FFI bindings and wrapper for libcint (C language) electronic integral
-//! library for rust.
+//! This project contains libcint (C language) FFI bindings, wrapper and
+//! build-from-source.
+//!
+//! [libcint](https://github.com/sunqm/libcint) is a C library for GTO
+//! (gaussian-type orbital) electronic integral, can be applied in
+//! computational chemistry, and has already been applied extensively in
+//! [PySCF](https://github.com/pyscf/pyscf).
+//!
+//! **This is an alpha version and will soon be promoted to v0.1.** After some
+//! documentation update and probably symmetry enhancements, a version v0.1 will
+//! be released.
+//!
+//! | Resources | Badges |
+//! |--|--|
+//! | Crate | [![Crate](https://img.shields.io/crates/v/libcint.svg)](https://crates.io/crates/libcint) |
+//! | API Document | [![API Documentation](https://docs.rs/libcint/badge.svg)](https://docs.rs/libcint) |
+//! | FFI Binding (libcint) | [v6.1.2](https://github.com/sunqm/libcint/tree/v6.1.2) |
+//! | FFI Binding (qcint) | [v6.1.2](https://github.com/sunqm/qcint/tree/v6.1.2) |
+//! | ECP Source Code (PySCF) | [v2.9.0](https://github.com/pyscf/pyscf/tree/v2.9.0) |
+//!
+//! This crate is not official bindgen project, nither
+//! [libcint](https://github.com/sunqm/libcint),
+//! [PySCF](https://github.com/pyscf/pyscf),
+//! nor [REST](https://gitee.com/RESTGroup/rest).
+//! It is originally intended to be some pioneer work for possible future
+//! development of [rest_libcint](https://gitee.com/RESTGroup/rest_libcint) wrapper.
 //!
 //! # Minimal Example
+//!
+//! The most important function is be [`CInt::integrate`]. It is somehow similar
+//! to PySCF's `mol.intor(intor, aosym, shls_slice)`.
 //!
 //! ```rust
 //! use libcint::prelude::*;
@@ -17,23 +44,6 @@
 //! let (out, shape) = cint_data.integrate("int1e_ipkin", None, None).into();
 //! assert_eq!(shape, [43, 43, 3]);
 //! ```
-//!
-//! # To use this library
-//!
-//! Firstly, to use this library, you need to link the C library `cint` in your
-//! `build.rs`:
-//!
-//! ```ignore
-//! // build.rs
-//! println!("cargo:rustc-link-search=native={<your_libcint.so_path>}");
-//! println!("cargo:rustc-link-lib=cint");
-//! ```
-//!
-//! Or either use the `libcint-src` crate, which will also link the libcint
-//! library with some proper configurations.
-//!
-//! We refer to github actions for hints of how to setup crate `libcint` with
-//! `libcint-src`.
 //!
 //! # For most users
 //!
@@ -75,6 +85,63 @@
 //!   [`CInt`], it only handles the last part.
 //! - This library does not handle molecule input (coords, spin, charge, etc.)
 //!   and basis set parse. Molecule initialization should be performed by user.
+//!
+//! # Installation and Cargo Features
+//!
+//! ## Install with pre-compiled `libcint.so` (recommended)
+//!
+//! If you have already compiled `libcint.so`, then put path of this shared
+//! library in `CINT_DIR` or `LD_LIBRARY_PATH` (or `REST_EXT_DIR`). Then you
+//! just use this library in your `Cargo.toml` file by
+//!
+//! ```toml
+//! [dependencies]
+//! libcint = { version = "0.0.1" }
+//! ```
+//!
+//! ## Install and also build-from-source
+//!
+//! If you have not compiled `libcint.so` or `libcint.a`, then you are suggested
+//! to use this library by specifying some cargo features:
+//!
+//! ```toml
+//! [dependencies]
+//! libcint = { version = "0.0.1", features = ["build_from_source", "static"] }
+//! ```
+//!
+//! If access to github is not available, you can use environment variable
+//! `CINT_SRC` to specify source mirror of
+//! [sunqm/libcint](https://github.com/sunqm/libcint)
+//! or [sunqm/qcint](https://github.com/sunqm/qcint).
+//!
+//! ## Cargo features
+//!
+//! - Default features: None of any listed below (use library provided by system
+//!   or user, using [sunqm/libcint](https://github.com/sunqm/libcint), dynamic
+//!   linking, without F12 and 4c1e support).
+//! - `build_from_source`: Trigger of C language library libcint building. This
+//!   performs by CMake, will source code download from github (if environment
+//!   variable `CINT_SRC` not specified).
+//! - `static`: Use static library for linking. This will require static link
+//!   `libcint.a`, and dynamic link `libquadmath.so`.
+//! - `qcint`: Use [sunqm/qcint](https://github.com/sunqm/qcint) instead of [sunqm/libcint](https://github.com/sunqm/libcint).
+//!   Some integrals will not be available if `qcint` does not supports that.
+//!   This will also change URL source if cargo feature `build_from_source`
+//!   specified.
+//! - `with_f12`: Whether F12 integrals (`int2e_stg`, `int2e_yp`, etc.) are
+//!   supported.
+//! - `with_4c1e`: Whether 4c1e integrals (`int4c1e`, etc.) are supported.
+//!
+//! ## Shell environment variables
+//!
+//! - `CINT_DIR`, `LD_LIBRARY_PATH`, `REST_EXT_DIR`: Your compiled library path
+//!   of `libcint.so` and `libcint.a`. This crate will try to find if this
+//!   library is in directory root, or `directory_root/lib`. May override the
+//!   library built by cargo feature `build_from_source`.
+//! - `CINT_SRC`: Source of libcint or qcint (must be a git repository). Only
+//!   works with cargo feature `build_from_source`.
+//! - `CINT_VIR`: Version of libcint or qcint (e.g. `v6.1.2`, must starts with
+//!   `v` prefix). Only works with cargo feature `build_from_source`.
 //!
 //! # 50 lines RHF with Rust
 //!
