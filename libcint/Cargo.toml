@@ -1,6 +1,6 @@
 [package]
 name = "libcint"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 description = "FFI binding and GTO wrapper for libcint"
 repository = "https://github.com/ajz34/libcint-rs"
