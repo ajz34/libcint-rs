@@ -1,6 +1,7 @@
 [package]
 name = "libcint-src"
-description = "FFI binding and GTO wrapper for libcint"
+description = "libcint (C library) source or build specification"
+readme = "readme.md"
 
 version.workspace = true
 edition.workspace = true

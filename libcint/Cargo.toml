@@ -1,6 +1,7 @@
 [package]
 name = "libcint"
-description = "FFI binding and GTO wrapper for libcint"
+description = "FFI binding and GTO wrapper for libcint (C library)"
+readme = "readme.md"
 
 version.workspace = true
 edition.workspace = true
