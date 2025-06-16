@@ -31,7 +31,7 @@ else()
     message(STATUS "Download version of library (libcint): ${CINT_VER}")
 endif()
 
-ExternalProject_Add(s-dftd3
+ExternalProject_Add(cint
     GIT_REPOSITORY ${CINT_SRC}
     GIT_TAG ${CINT_VER}
     GIT_SHALLOW TRUE

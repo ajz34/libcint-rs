@@ -9,7 +9,7 @@ categories = ["science"]
 license = "Apache-2.0"
 
 [dependencies]
-itertools = "0.12"
+itertools = "0.14"
 rayon = "1.10"
 num = "0.4"
 libm = "0.2"

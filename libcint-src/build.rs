@@ -80,7 +80,7 @@ fn main() {
 
     if cfg!(feature = "static") {
         println!("cargo:rustc-link-lib=static=cint");
-        println!("cargo:rustc-link-lib=static=quadmath");
+        println!("cargo:rustc-link-lib=quadmath");
     } else {
         println!("cargo:rustc-link-lib=cint");
     }

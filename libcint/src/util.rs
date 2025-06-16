@@ -397,7 +397,7 @@ pub unsafe fn aligned_uninitialized_vec<T>(size: usize) -> Vec<T> {
         if let Some(pointer) = pointer {
             let mut v = unsafe { Vec::from_raw_parts(pointer.as_ptr() as *mut T, size, size) };
             unsafe { v.set_len(size) };
-            return v;
+            v
         } else {
             panic!("Allocation failed (probably due to out-of-memory, of size {size})")
         }

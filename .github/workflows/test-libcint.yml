@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  test-from-miniconda:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,11 +19,12 @@ jobs:
           git clone https://github.com/sunqm/libcint.git
           cd libcint
           mkdir build; cd build
-          cmake ..
+          cmake .. -DCMAKE_INSTALL_PREFIX=/usr
           make -j4 install
-          
+
       - name: build and test
         run: |
           cd libcint
           export CINT_DEV=1
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib
           cargo test
