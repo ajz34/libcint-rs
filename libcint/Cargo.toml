@@ -30,6 +30,9 @@ rstest = "0.25"
 with_f12 = []
 with_4c1e = []
 
+static = []
+qcint = []
+
 [profile.dev]
 opt-level = 2
 
