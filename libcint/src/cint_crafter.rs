@@ -597,9 +597,7 @@ impl CInt {
             CIntSymm::S2ij => self.cgto_shape_s2ij(shls_slice),
             CIntSymm::S2kl => self.cgto_shape_s2kl(shls_slice),
             CIntSymm::S4 => self.cgto_shape_s4(shls_slice),
-            _ => {
-                panic!("Currently only S1 and S2ij symmetries are supported.");
-            },
+            CIntSymm::S8 => self.cgto_shape_s8(shls_slice),
         }
     }
 
@@ -742,6 +740,27 @@ impl CInt {
             shape.push(np * (np + 1) / 2);
         }
         shape
+    }
+
+    /// Shape of integral (in atomic orbital basis, symmetry s8), for
+    /// specified slices of shell, without integrator components.
+    ///
+    /// This function does not check the validity of the `shls_slice`.
+    pub fn cgto_shape_s8(&self, shls_slice: &[[c_int; 2]]) -> Vec<usize> {
+        let ao_loc = self.ao_loc();
+
+        if shls_slice[0] != shls_slice[1] || shls_slice[0] != shls_slice[2] || shls_slice[0] != shls_slice[3] {
+            panic!("shls_slice must have the same first four elements for S8 symmetry");
+        }
+
+        let shl_slice = shls_slice[0];
+        let p0 = ao_loc[shl_slice[0] as usize];
+        let p1 = ao_loc[shl_slice[1] as usize];
+        let np = p1 - p0;
+
+        let np_s2 = np * (np + 1) / 2;
+        let np_s8 = np_s2 * (np_s2 + 1) / 2;
+        vec![np_s8]
     }
 
     /// Obtain atomic orbital locations for integral, starting from 0 (instead
@@ -1052,7 +1071,7 @@ impl CInt {
             CIntSymm::S2ij => self.integral_s2ij_inplace(integrator, out, shls_slice, cint_opt),
             CIntSymm::S2kl => self.integral_s2kl_inplace(integrator, out, shls_slice, cint_opt),
             CIntSymm::S4 => self.integral_s4_inplace(integrator, out, shls_slice, cint_opt),
-            _ => Err(CIntError::InvalidValue(format!("CIntSymm {aosym:?} is not supported"))),
+            CIntSymm::S8 => self.integral_s8_inplace(integrator, out, shls_slice, cint_opt),
         }
     }
 
@@ -1498,7 +1517,7 @@ impl CInt {
             Spheric | Cartesian => integrator.n_comp(),
             Spinor => integrator.n_spinor_comp(),
         }; // number of components for intor
-        // n_center must be 4 for S2kl symmetry, checked in `check_shls_slice`
+        // n_center must be 4 for S4 symmetry, checked in `check_shls_slice`
         let cgto_shape = self.cgto_shape_s4(shls_slice); // AO shape, without intor component
         let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
         let out_shape = [cgto_shape[0], cgto_shape[1], n_comp];
@@ -1557,6 +1576,104 @@ impl CInt {
             let out_offsets = [cgto_loc_i, cgto_loc_j, cgto_loc_k, cgto_loc_l, 0];
             let buf_shape = [cgto_i, cgto_j, cgto_k, cgto_l, n_comp];
             copy_5d_s4(out, &out_offsets, &out_shape, buf, &buf_shape);
+        });
+
+        /* #endregion */
+
+        Ok(())
+    }
+
+    pub fn integral_s8_inplace<F>(
+        &self,
+        integrator: &dyn Integrator,
+        out: &mut [F],
+        shls_slice: &[[c_int; 2]],
+        cint_opt: Option<&CIntOptimizer>,
+    ) -> Result<(), CIntError>
+    where
+        F: ComplexFloat + Send + Sync,
+    {
+        /* #region sanity check and preparation */
+
+        self.check_float_type::<F>()?;
+        self.check_shls_slice(integrator, shls_slice, CIntSymm::S4)?;
+        if let Some(cint_opt) = cint_opt {
+            self.check_optimizer(integrator, cint_opt)?;
+        }
+
+        // dimensions
+
+        let n_comp = match self.cint_type {
+            Spheric | Cartesian => integrator.n_comp(),
+            Spinor => integrator.n_spinor_comp(),
+        }; // number of components for intor
+        // n_center must be 4 for S8 symmetry, checked in `check_shls_slice`
+        let cgto_shape = self.cgto_shape_s8(shls_slice); // AO shape, without intor component
+        let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
+        let out_shape = [cgto_shape[0], n_comp];
+
+        // cache (thread local)
+        let cache_size = self.max_cache_size(integrator, shls_slice);
+        let buffer_size = self.max_buffer_size(integrator, shls_slice);
+        let thread_cache = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) }).collect_vec();
+        let thread_buffer = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) }).collect_vec();
+
+        /* #endregion */
+
+        /* #region parallel integration generation */
+
+        const I: usize = 0; // index of first shell
+        const J: usize = 1; // index of second shell
+        const K: usize = 2; // index of third shell
+        const L: usize = 3; // index of fourth shell
+
+        // Following code will perform redundant iterations:
+        // - l >= k
+        // - l >= j >= i
+        // where l >= k and j >= i are promised, but l >= j will be conditionally
+        // skipped.
+        let nidx_i = (shls_slice[I][1] - shls_slice[I][0]) as usize;
+        let nidx_ij = nidx_i * (nidx_i + 1) / 2;
+        let nidx_kl = nidx_ij;
+        let iter_layout = [nidx_ij, nidx_kl].f();
+        let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
+
+        iter_indices.into_par_iter().for_each(|([idx_ij, idx_kl], _)| {
+            let [idx_i, idx_j] = unravel_s2_indices(idx_ij);
+            let [idx_k, idx_l] = unravel_s2_indices(idx_kl);
+            if idx_l < idx_j {
+                // skip redundant iteration
+                return;
+            }
+
+            let shl_i = idx_i as c_int + shls_slice[I][0];
+            let shl_j = idx_j as c_int + shls_slice[J][0];
+            let shl_k = idx_k as c_int + shls_slice[K][0];
+            let shl_l = idx_l as c_int + shls_slice[L][0];
+            let cgto_loc_i = cgto_locs[I][idx_i];
+            let cgto_loc_j = cgto_locs[J][idx_j];
+            let cgto_loc_k = cgto_locs[K][idx_k];
+            let cgto_loc_l = cgto_locs[L][idx_l];
+            let cgto_i = cgto_locs[I][idx_i + 1] - cgto_loc_i;
+            let cgto_j = cgto_locs[J][idx_j + 1] - cgto_loc_j;
+            let cgto_k = cgto_locs[K][idx_k + 1] - cgto_loc_k;
+            let cgto_l = cgto_locs[L][idx_l + 1] - cgto_loc_l;
+
+            let shls = [shl_i, shl_j, shl_k, shl_l];
+
+            // prepare cache and buffer
+            let thread_idx = rayon::current_thread_index().unwrap_or(0);
+            let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
+            let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
+
+            // call integral function
+            unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
+
+            // copy buffer to output slice
+            let out = unsafe { cast_mut_slice(&*out) };
+            let out_offsets = [cgto_loc_i, cgto_loc_j, cgto_loc_k, cgto_loc_l, 0];
+            let buf_shape = [cgto_i, cgto_j, cgto_k, cgto_l, n_comp];
+            copy_5d_s8(out, &out_offsets, &out_shape, buf, &buf_shape);
         });
 
         /* #endregion */

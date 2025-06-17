@@ -173,6 +173,15 @@ pub(crate) fn get_f_index_5d_s4(indices: &[usize; 5], shape: &[usize; 3]) -> usi
     indices_ij + s0 * (indices_kl + s1 * i4)
 }
 
+#[inline(always)]
+pub(crate) fn get_f_index_5d_s8(indices: &[usize; 5], shape: &[usize; 2]) -> usize {
+    let [i0, i1, i2, i3, i4] = indices;
+    let [s0, _] = shape;
+    let indices_ij = i0 + i1 * (i1 + 1) / 2;
+    let indices_kl = i2 + i3 * (i3 + 1) / 2;
+    indices_ij + indices_kl * (indices_kl + 1) / 2 + s0 * i4
+}
+
 /* #endregion */
 
 /* #region integral block copy */
@@ -380,8 +389,8 @@ pub(crate) fn copy_5d_s4<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: 
 where
     T: Copy,
 {
-    let is_diag_kl = out_offsets[2] == out_offsets[3];
     let is_diag_ij = out_offsets[0] == out_offsets[1];
+    let is_diag_kl = out_offsets[2] == out_offsets[3];
     for c in 0..buf_shape[4] {
         for l in 0..buf_shape[3] {
             let k_max = if is_diag_kl { l + 1 } else { buf_shape[2] };
@@ -391,6 +400,41 @@ where
                     let out_indices = [out_offsets[0], out_offsets[1] + j, out_offsets[2] + k, out_offsets[3] + l, out_offsets[4] + c];
                     let buf_indices = [0, j, k, l, c];
                     let out_start = get_f_index_5d_s4(&out_indices, out_shape);
+                    let buf_start = get_f_index_5d(&buf_indices, buf_shape);
+                    let out_stop = out_start + i_max;
+                    let buf_stop = buf_start + i_max;
+                    out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
+                }
+            }
+        }
+    }
+}
+
+#[inline]
+pub(crate) fn copy_5d_s8<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 2], buf: &[T], buf_shape: &[usize; 5])
+where
+    T: Copy,
+{
+    let is_diag_ij = out_offsets[0] == out_offsets[1];
+    let is_diag_kl = out_offsets[2] == out_offsets[3];
+    let is_diag_jl = out_offsets[1] == out_offsets[3];
+    let is_i_gt_k = out_offsets[0] > out_offsets[2];
+    let is_diag_ik = out_offsets[0] == out_offsets[2];
+    for c in 0..buf_shape[4] {
+        for l in 0..buf_shape[3] {
+            let k_max = if is_diag_kl { l + 1 } else { buf_shape[2] };
+            for k in 0..k_max {
+                let j_max = if is_diag_jl { l + 1 } else { buf_shape[1] };
+                for j in 0..j_max {
+                    if is_diag_jl && j == l && is_i_gt_k {
+                        continue;
+                    }
+                    let i_max = if is_diag_ij { j + 1 } else { buf_shape[0] };
+                    let i_max = if is_diag_jl && j == l && is_diag_ik { i_max.min(k + 1) } else { i_max };
+
+                    let out_indices = [out_offsets[0], out_offsets[1] + j, out_offsets[2] + k, out_offsets[3] + l, out_offsets[4] + c];
+                    let buf_indices = [0, j, k, l, c];
+                    let out_start = get_f_index_5d_s8(&out_indices, out_shape);
                     let buf_start = get_f_index_5d(&buf_indices, buf_shape);
                     let out_stop = out_start + i_max;
                     let buf_stop = buf_start + i_max;
