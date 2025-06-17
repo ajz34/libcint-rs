@@ -11,7 +11,7 @@ use rayon::prelude::*;
 /// `pyscf.lib.fingerprint`
 pub fn cint_fingerprint<T>(v: &T) -> T::Output
 where
-    T: FingerPrint,
+    T: FingerPrint + ?Sized,
 {
     v.fingerprint()
 }

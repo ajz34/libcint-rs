@@ -156,6 +156,14 @@ pub(crate) fn get_f_index_5d_s2ij(indices: &[usize; 5], shape: &[usize; 4]) -> u
     indices[0] + indices[1] * (indices[1] + 1) / 2 + shape[0] * (indices[2] + shape[1] * (indices[3] + shape[2] * (indices[4])))
 }
 
+#[inline(always)]
+pub(crate) fn get_f_index_5d_s2kl(indices: &[usize; 5], shape: &[usize; 4]) -> usize {
+    let [i0, i1, i2, i3, i4] = indices;
+    let [s0, s1, s2, _] = shape;
+    let indices_kl = i2 + i3 * (i3 + 1) / 2;
+    i0 + s0 * (i1 + s1 * (indices_kl + s2 * i4))
+}
+
 /* #endregion */
 
 /* #region integral block copy */
@@ -328,6 +336,30 @@ where
                         let buf_stop = buf_start + j + 1;
                         out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
                     }
+                }
+            }
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn copy_5d_s2kl<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 4], buf: &[T], buf_shape: &[usize; 5])
+where
+    T: Copy,
+{
+    let is_diag = out_offsets[2] == out_offsets[3];
+    for c in 0..buf_shape[4] {
+        for l in 0..buf_shape[3] {
+            let k_max = if is_diag { l + 1 } else { buf_shape[2] };
+            for k in 0..k_max {
+                for j in 0..buf_shape[1] {
+                    let out_indices = [out_offsets[0], out_offsets[1] + j, out_offsets[2] + k, out_offsets[3] + l, out_offsets[4] + c];
+                    let buf_indices = [0, j, k, l, c];
+                    let out_start = get_f_index_5d_s2kl(&out_indices, out_shape);
+                    let buf_start = get_f_index_5d(&buf_indices, buf_shape);
+                    let out_stop = out_start + buf_shape[0];
+                    let buf_stop = buf_start + buf_shape[0];
+                    out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
                 }
             }
         }

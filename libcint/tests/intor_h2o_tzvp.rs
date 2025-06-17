@@ -221,5 +221,27 @@ mod test {
         });
     }
 
+    #[rstest]
+    // s2kl
+    #[case("int2e"              , "s2kl", None                                  , -135.42091888440837   , [43, 43, 946]         )] // no-deriv
+    #[case("int2e_ip1"          , "s2kl", None                                  , 71.84356356407886     , [43, 43, 946, 3]      )] // deriv
+    #[case("int2e"              , "s2kl", [[0, 12], [8, 18], [6, 15], [6, 15]]  , -11.318569065551744   , [32, 26, 435]         )] // no-deriv | shl
+    #[case("int2e_ip1"          , "s2kl", [[0, 12], [8, 18], [6, 15], [6, 15]]  , 30.740874132068775    , [32, 26, 435, 3]      )] // deriv
+    fn test_4c_other_sym_sph(
+        #[case] intor: &str,
+        #[case] aosym: &str,
+        #[case] shls_slice: impl Into<ShlsSlice>,
+        #[case] ref_fp: f64,
+        #[case] ref_shape: impl AsRef<[usize]>,
+    ) {
+        let mut cint_data = init_h2o_def2_tzvp();
+
+        cint_data.with_cint_type(Spheric, |cint_data| {
+            let (out, shape) = cint_data.integrate(intor, aosym, shls_slice).into();
+            assert_relative_eq!(ref_fp, cint_fp(&out), epsilon = 1e-11);
+            assert_eq!(shape, ref_shape.as_ref());
+        });
+    }
+
     /* #endregion */
 }
