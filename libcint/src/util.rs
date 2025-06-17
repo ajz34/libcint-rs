@@ -491,6 +491,21 @@ pub(crate) fn get_c_index_5d_s2ij(indices: &[usize; 5], shape: &[usize; 4]) -> u
     i4 + s3 * (i3 + s2 * (i2 + i1 * (i1 + 1) / 2 + i0 * s1))
 }
 
+#[inline(always)]
+pub(crate) fn get_c_index_5d_s2kl(indices: &[usize; 5], shape: &[usize; 4]) -> usize {
+    let [i0, i1, i2, i3, i4] = indices;
+    let [_, s1, s2, s3] = shape;
+    i4 + i3 * (i3 + 1) / 2 + s3 * (i2 + s2 * (i1 + i0 * s1))
+}
+
+pub(crate) fn get_c_index_5d_s4(indices: &[usize; 5], shape: &[usize; 3]) -> usize {
+    let [i0, i1, i2, i3, i4] = indices;
+    let [_, s1, s2] = shape;
+    let indices_ij = i2 + i1 * (i1 + 1) / 2;
+    let indices_kl = i4 + i3 * (i3 + 1) / 2;
+    indices_kl + s2 * (indices_ij + i0 * s1)
+}
+
 /* #endregion */
 
 /* #region integral block copy (row out from col buffer) */
@@ -616,6 +631,58 @@ where
                     let out_idx = get_c_index_5d_s2ij(&out_indices, out_shape);
                     let buf_idx = get_f_index_5d(&buf_indices, buf_shape);
                     for l in 0..buf_shape[3] {
+                        out[out_idx + l] = buf[buf_idx + l * buf_stride];
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[inline]
+pub(crate) fn copy_c_5d_s2kl<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 4], buf: &[T], buf_shape: &[usize; 5])
+where
+    T: Copy,
+{
+    let buf_stride = buf_shape[0] * buf_shape[1] * buf_shape[2];
+    let is_diag_kl = out_offsets[3] == out_offsets[4];
+    for c in 0..buf_shape[4] {
+        for i in 0..buf_shape[0] {
+            for j in 0..buf_shape[1] {
+                for k in 0..buf_shape[2] {
+                    let out_indices = [out_offsets[0] + c, out_offsets[1] + i, out_offsets[2] + j, out_offsets[3] + k, out_offsets[4]];
+                    let buf_indices = [i, j, k, 0, c];
+                    let out_idx = get_c_index_5d_s2kl(&out_indices, out_shape);
+                    let buf_idx = get_f_index_5d(&buf_indices, buf_shape);
+                    let l_max = if is_diag_kl { k + 1 } else { buf_shape[3] };
+                    for l in 0..l_max {
+                        out[out_idx + l] = buf[buf_idx + l * buf_stride];
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[inline]
+pub(crate) fn copy_c_5d_s4<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 3], buf: &[T], buf_shape: &[usize; 5])
+where
+    T: Copy,
+{
+    let buf_stride = buf_shape[0] * buf_shape[1] * buf_shape[2];
+    let is_diag_ij = out_offsets[1] == out_offsets[2];
+    let is_diag_kl = out_offsets[3] == out_offsets[4];
+    for c in 0..buf_shape[4] {
+        for i in 0..buf_shape[0] {
+            let j_max = if is_diag_ij { i + 1 } else { buf_shape[1] };
+            for j in 0..j_max {
+                for k in 0..buf_shape[2] {
+                    let out_indices = [out_offsets[0] + c, out_offsets[1] + i, out_offsets[2] + j, out_offsets[3] + k, out_offsets[4]];
+                    let buf_indices = [i, j, k, 0, c];
+                    let out_idx = get_c_index_5d_s4(&out_indices, out_shape);
+                    let buf_idx = get_f_index_5d(&buf_indices, buf_shape);
+                    let l_max = if is_diag_kl { k + 1 } else { buf_shape[3] };
+                    for l in 0..l_max {
                         out[out_idx + l] = buf[buf_idx + l * buf_stride];
                     }
                 }
