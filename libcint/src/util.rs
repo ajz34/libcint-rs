@@ -117,7 +117,7 @@ pub(crate) unsafe fn cast_mut_slice<T>(slc: &[T]) -> &mut [T] {
 
 /* #endregion */
 
-/* #region indices computation */
+/* #region indices computation (col-major) */
 
 #[inline(always)]
 pub(crate) fn unravel_s2_indices(x: usize) -> [usize; 2] {
@@ -184,10 +184,10 @@ pub(crate) fn get_f_index_5d_s8(indices: &[usize; 5], shape: &[usize; 2]) -> usi
 
 /* #endregion */
 
-/* #region integral block copy */
+/* #region integral block copy (col-major) */
 
 #[inline]
-pub(crate) fn copy_3d_s1<T>(out: &mut [T], out_offsets: &[usize; 3], out_shape: &[usize; 3], buf: &[T], buf_shape: &[usize; 3])
+pub(crate) fn copy_f_3d_s1<T>(out: &mut [T], out_offsets: &[usize; 3], out_shape: &[usize; 3], buf: &[T], buf_shape: &[usize; 3])
 where
     T: Copy,
 {
@@ -205,7 +205,7 @@ where
 }
 
 #[inline]
-pub(crate) fn copy_4d_s1<T>(out: &mut [T], out_offsets: &[usize; 4], out_shape: &[usize; 4], buf: &[T], buf_shape: &[usize; 4])
+pub(crate) fn copy_f_4d_s1<T>(out: &mut [T], out_offsets: &[usize; 4], out_shape: &[usize; 4], buf: &[T], buf_shape: &[usize; 4])
 where
     T: Copy,
 {
@@ -225,7 +225,7 @@ where
 }
 
 #[inline]
-pub(crate) fn copy_5d_s1<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 5], buf: &[T], buf_shape: &[usize; 5])
+pub(crate) fn copy_f_5d_s1<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 5], buf: &[T], buf_shape: &[usize; 5])
 where
     T: Copy,
 {
@@ -247,7 +247,7 @@ where
 }
 
 #[inline]
-pub(crate) fn copy_3d_s2ij<T>(out: &mut [T], out_offsets: &[usize; 3], out_shape: &[usize; 2], buf: &[T], buf_shape: &[usize; 3])
+pub(crate) fn copy_f_3d_s2ij<T>(out: &mut [T], out_offsets: &[usize; 3], out_shape: &[usize; 2], buf: &[T], buf_shape: &[usize; 3])
 where
     T: Copy,
 {
@@ -281,7 +281,7 @@ where
 }
 
 #[inline]
-pub(crate) fn copy_4d_s2ij<T>(out: &mut [T], out_offsets: &[usize; 4], out_shape: &[usize; 3], buf: &[T], buf_shape: &[usize; 4])
+pub(crate) fn copy_f_4d_s2ij<T>(out: &mut [T], out_offsets: &[usize; 4], out_shape: &[usize; 3], buf: &[T], buf_shape: &[usize; 4])
 where
     T: Copy,
 {
@@ -319,7 +319,7 @@ where
 }
 
 #[inline]
-pub(crate) fn copy_5d_s2ij<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 4], buf: &[T], buf_shape: &[usize; 5])
+pub(crate) fn copy_f_5d_s2ij<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 4], buf: &[T], buf_shape: &[usize; 5])
 where
     T: Copy,
 {
@@ -361,7 +361,7 @@ where
 }
 
 #[inline]
-pub(crate) fn copy_5d_s2kl<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 4], buf: &[T], buf_shape: &[usize; 5])
+pub(crate) fn copy_f_5d_s2kl<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 4], buf: &[T], buf_shape: &[usize; 5])
 where
     T: Copy,
 {
@@ -385,7 +385,7 @@ where
 }
 
 #[inline]
-pub(crate) fn copy_5d_s4<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 3], buf: &[T], buf_shape: &[usize; 5])
+pub(crate) fn copy_f_5d_s4<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 3], buf: &[T], buf_shape: &[usize; 5])
 where
     T: Copy,
 {
@@ -411,7 +411,7 @@ where
 }
 
 #[inline]
-pub(crate) fn copy_5d_s8<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 2], buf: &[T], buf_shape: &[usize; 5])
+pub(crate) fn copy_f_5d_s8<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 2], buf: &[T], buf_shape: &[usize; 5])
 where
     T: Copy,
 {
@@ -439,6 +439,116 @@ where
                     let out_stop = out_start + i_max;
                     let buf_stop = buf_start + i_max;
                     out[out_start..out_stop].copy_from_slice(&buf[buf_start..buf_stop]);
+                }
+            }
+        }
+    }
+}
+
+/* #endregion */
+
+/* #region indices computation (row-major) */
+
+#[inline(always)]
+pub(crate) fn get_c_index_3d(indices: &[usize; 3], shape: &[usize; 3]) -> usize {
+    let [i0, i1, i2] = indices;
+    let [_, s1, s2] = shape;
+    i2 + s2 * (i1 + s1 * i0)
+}
+
+#[inline(always)]
+pub(crate) fn get_c_index_4d(indices: &[usize; 4], shape: &[usize; 4]) -> usize {
+    let [i0, i1, i2, i3] = indices;
+    let [_, s1, s2, s3] = shape;
+    i3 + s3 * (i2 + s2 * (i1 + s1 * i0))
+}
+
+#[inline(always)]
+pub(crate) fn get_c_index_5d(indices: &[usize; 5], shape: &[usize; 5]) -> usize {
+    let [i0, i1, i2, i3, i4] = indices;
+    let [_, s1, s2, s3, s4] = shape;
+    i4 + s4 * (i3 + s3 * (i2 + s2 * (i1 + s1 * i0)))
+}
+
+#[inline(always)]
+pub(crate) fn get_c_index_3d_s2ij(indices: &[usize; 3], shape: &[usize; 2]) -> usize {
+    let [i0, i1, i2] = indices;
+    let [_, s1] = shape;
+    i2 + s1 * (i1 * (i1 + 1) / 2 + i0)
+}
+
+#[inline(always)]
+pub(crate) fn get_c_index_4d_s2ij(indices: &[usize; 4], shape: &[usize; 3]) -> usize {
+    let [i0, i1, i2, i3] = indices;
+    let [_, s1, s2] = shape;
+    i3 + s2 * (i2 + s1 * (i1 * (i1 + 1) / 2 + i0))
+}
+
+#[inline(always)]
+pub(crate) fn get_c_index_5d_s2ij(indices: &[usize; 5], shape: &[usize; 4]) -> usize {
+    let [i0, i1, i2, i3, i4] = indices;
+    let [_, s1, s2, s3] = shape;
+    i4 + s3 * (i3 + s2 * (i2 + s1 * (i1 * (i1 + 1) / 2 + i0)))
+}
+
+/* #endregion */
+
+/* #region integral block copy (row out from col buffer) */
+
+pub(crate) fn copy_c_3d_s1<T>(out: &mut [T], out_offsets: &[usize; 3], out_shape: &[usize; 3], buf: &[T], buf_shape: &[usize; 3])
+where
+    T: Copy,
+{
+    let buf_stride = buf_shape[0];
+    for c in 0..buf_shape[2] {
+        for i in 0..buf_shape[0] {
+            let out_indices = [out_offsets[0] + c, out_offsets[1] + i, out_offsets[2]];
+            let buf_indices = [i, 0, c];
+            let out_idx = get_c_index_3d(&out_indices, out_shape);
+            let buf_idx = get_f_index_3d(&buf_indices, buf_shape);
+            for j in 0..buf_shape[1] {
+                out[out_idx + j] = buf[buf_idx + j * buf_stride];
+            }
+        }
+    }
+}
+
+pub(crate) fn copy_c_4d_s1<T>(out: &mut [T], out_offsets: &[usize; 4], out_shape: &[usize; 4], buf: &[T], buf_shape: &[usize; 4])
+where
+    T: Copy,
+{
+    let buf_stride = buf_shape[0] * buf_shape[1];
+    for c in 0..buf_shape[3] {
+        for i in 0..buf_shape[0] {
+            for j in 0..buf_shape[1] {
+                let out_indices = [out_offsets[0] + c, out_offsets[1] + i, out_offsets[2] + j, out_offsets[3]];
+                let buf_indices = [i, j, 0, c];
+                let out_idx = get_c_index_4d(&out_indices, out_shape);
+                let buf_idx = get_f_index_4d(&buf_indices, buf_shape);
+                for k in 0..buf_shape[2] {
+                    out[out_idx + k] = buf[buf_idx + k * buf_stride];
+                }
+            }
+        }
+    }
+}
+
+pub(crate) fn copy_c_5d_s1<T>(out: &mut [T], out_offsets: &[usize; 5], out_shape: &[usize; 5], buf: &[T], buf_shape: &[usize; 5])
+where
+    T: Copy,
+{
+    let buf_stride = buf_shape[0] * buf_shape[1] * buf_shape[2];
+    for c in 0..buf_shape[4] {
+        for i in 0..buf_shape[0] {
+            for j in 0..buf_shape[1] {
+                for k in 0..buf_shape[2] {
+                    let out_indices = [out_offsets[0] + c, out_offsets[1] + i, out_offsets[2] + j, out_offsets[3] + k, out_offsets[4]];
+                    let buf_indices = [i, j, k, 0, c];
+                    let out_idx = get_c_index_5d(&out_indices, out_shape);
+                    let buf_idx = get_f_index_5d(&buf_indices, buf_shape);
+                    for l in 0..buf_shape[3] {
+                        out[out_idx + l] = buf[buf_idx + l * buf_stride];
+                    }
                 }
             }
         }

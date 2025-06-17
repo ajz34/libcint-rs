@@ -214,6 +214,15 @@ pub struct IntegrateArgs<'l, F> {
     /// output.
     #[builder(default, setter(strip_option))]
     pub out: Option<&'l mut [F]>,
+
+    /// Col-major or row-major output buffer (col-major default).
+    ///
+    /// - Col-major: the same **data layout** to PySCF's 2/3-center integrals;
+    ///   shape presented in col-major.
+    /// - Row-major: the same **shape** to PySCF's integrals; shape presented in
+    ///   row-major.
+    #[builder(default = false)]
+    pub row_major: bool,
 }
 
 /// Integrate arguments for function [`CInt::integrate_cross_with_args`] and
@@ -382,7 +391,7 @@ impl<F> From<CIntOutput<F>> for (Vec<F>, Vec<usize>) {
 
 /// Implementation of integral at higher API level (for basic user usage).
 impl CInt {
-    /// Main electronic integral driver (for non-spinor type).
+    /// Main electronic integral driver (for non-spinor type) in column-major.
     ///
     /// # PySCF equivalent
     ///
@@ -592,7 +601,7 @@ impl CInt {
         self.integrate_f(intor, aosym, shls_slice.into()).unwrap()
     }
 
-    /// Main electronic integral driver (for spinor type).
+    /// Main electronic integral driver (for spinor type) in column-major.
     ///
     /// We refer most documentation to [`integrate`](Self::integrate).
     ///
@@ -652,7 +661,7 @@ impl CInt {
         self.integrate_spinor_f(intor, aosym, shls_slice.into()).unwrap()
     }
 
-    /// Main electronic integral driver (for non-spinor type).
+    /// Main electronic integral driver (for non-spinor type) in column-major.
     ///
     /// This function is fallible.
     ///
@@ -670,7 +679,7 @@ impl CInt {
         self.integrate_with_args_inner(integrate_args)
     }
 
-    /// Main electronic integral driver (for spinor type).
+    /// Main electronic integral driver (for spinor type) in column-major.
     ///
     /// This function is fallible.
     ///
@@ -737,6 +746,28 @@ impl CInt {
             .aosym(aosym.into())
             .build()?;
         CInt::integrate_cross_with_args_inner(args)
+    }
+}
+
+impl CInt {
+    /// Main electronic integral driver (for non-spinor type) in row-major.
+    pub fn integrate_row_major(&self, intor: &str, aosym: impl Into<CIntSymm>, shls_slice: impl Into<ShlsSlice>) -> CIntOutput<f64> {
+        self.integrate_row_major_f(intor, aosym, shls_slice.into()).unwrap()
+    }
+
+    /// Main electronic integral driver (for non-spinor type) in row-major.
+    ///
+    /// This function is fallible.
+    pub fn integrate_row_major_f(
+        &self,
+        intor: &str,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> Result<CIntOutput<f64>, CIntError> {
+        let shls_slice = shls_slice.into();
+        let integrate_args =
+            self.integrate_args_builder().intor(intor).aosym(aosym).shls_slice(shls_slice.as_ref()).row_major(true).build()?;
+        self.integrate_with_args_inner(integrate_args)
     }
 }
 
