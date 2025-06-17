@@ -18,7 +18,7 @@ This crate is not official bindgen project, nither [libcint](https://github.com/
 
 ## Minimal Example
 
-The most important function is be `CInt::integrate`. It is somehow similar to PySCF's `mol.intor(intor, aosym, shls_slice)`. For more information on usage of crate `libcint`, we refer to [API Documentation](https://docs.rs/libcint).
+The most important function is `CInt::integrate`. It is somehow similar to PySCF's `mol.intor(intor, aosym, shls_slice)`. For more information on usage of crate `libcint`, we refer to [API Documentation](https://docs.rs/libcint).
 
 ```rust
 use libcint::prelude::*;
@@ -51,6 +51,8 @@ If you have not compiled `libcint.so` or `libcint.a`, then you are suggested to 
 [dependencies]
 libcint = { version = "0.0.1", features = ["build_from_source", "static"] }
 ```
+
+The source code will be automatically downloaded from github, and cargo will handle the building process.
 
 If access to github is not available, you can use environment variable `CINT_SRC` to specify source mirror of [sunqm/libcint](https://github.com/sunqm/libcint) or [sunqm/qcint](https://github.com/sunqm/qcint).
 

@@ -30,7 +30,7 @@
 //!
 //! # Minimal Example
 //!
-//! The most important function is be [`CInt::integrate`]. It is somehow similar
+//! The most important function is [`CInt::integrate`]. It is somehow similar
 //! to PySCF's `mol.intor(intor, aosym, shls_slice)`.
 //!
 //! ```rust
@@ -108,6 +108,9 @@
 //! [dependencies]
 //! libcint = { version = "0.0.1", features = ["build_from_source", "static"] }
 //! ```
+//!
+//! The source code will be automatically downloaded from github, and cargo will
+//! handle the building process.
 //!
 //! If access to github is not available, you can use environment variable
 //! `CINT_SRC` to specify source mirror of

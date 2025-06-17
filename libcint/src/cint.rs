@@ -321,7 +321,7 @@ impl From<&str> for CIntSymm {
     fn from(aosym: &str) -> Self {
         match aosym {
             "S1" | "s1" => CIntSymm::S1,
-            "S2ij" | "s2ij" => CIntSymm::S2ij,
+            "S2ij" | "s2ij" | "S2uv" | "s2uv" => CIntSymm::S2ij,
             "S2kl" | "s2kl" => CIntSymm::S2kl,
             "S4" | "s4" => CIntSymm::S4,
             "S8" | "s8" => CIntSymm::S8,
@@ -392,13 +392,34 @@ impl CInt {
     ///
     /// - `intor`: name of the integral to be evaluated, such as `"int1e_ovlp"`,
     ///   `"int2e"`, `"ECPscalar_iprinvip"`, `"int2e_giao_sa10sp1spsp2"`, etc.
-    /// - `aosym`: symmetry of the integral, such as `"s1"`, `"s2ij"`, etc.
-    ///   **Currently only `"s1"` and `"s2ij"` are supported**; other symmetries
-    ///   will be supported later.
+    /// - `aosym`: symmetry of the integral, you can specify `"s1"`, `"s2ij"`,
+    ///   `"s2kl"`, `"s4"`, `"s8"`.
     /// - `shls_slice`: shell slices for evaluating sub-tensor of the total
     ///   integral. Please note that this is either be `None`, or a slice of
     ///   type `&[[usize; 2]]` or something similar (vectors, arrays) **with
     ///   length the same to the number of components in integral**.
+    ///
+    /// <div class="warning">
+    ///
+    /// **Does not check whether AO symmetry is correct to the correspoding
+    /// integrator**
+    ///
+    /// For example,
+    /// - `int2e_ip2` $(\mu \nu | \kappa \nabla \lambda)$ is meaningful for
+    ///   `"s1"` and `"s2ij"` symmetry, not meaningful for other kinds of
+    ///   symmetry.
+    /// - `int2e_ip1` $(\nabla \mu \nu | \kappa \lambda)$ is meaningful for
+    ///   `"s1"` and `"s2kl"` symmetry, not meaningful for other kinds of
+    ///   symmetry.
+    /// - `int2e` is meaningful for all symmetries.
+    /// - `int1e_ovlp` is meaningful for `"s1"` and `"s2ij"` symmetry.
+    ///
+    /// However, this wrapper will generally not panic, nor raise error, if you
+    /// use an incorrect symmetry for the integral. An exception is that if
+    /// you specify `"s2kl"`, `"s4"`, `"s8"` on non-4-center integrals, it will
+    /// raise error.
+    ///
+    /// </div>
     ///
     /// # Outputs
     ///
@@ -508,6 +529,10 @@ impl CInt {
     /// | 4       | ✔    | `s1`   | $[t, \mu, \nu, \kappa, \lambda]$               | $[4, 3, 2, 1, 0]$ | $[\mu, \nu, \kappa, \lambda, t]$              | $[0, 1, 2, 3, 4]$ | ✘ |
     /// | 4       | ✘    | `s2ij` | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$      | $[2, 1, 0]$       | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$     | $[0, 1, 2]$       | ✘ |
     /// | 4       | ✔    | `s2ij` | $[t, \mathrm{tp}(\mu \nu), \kappa, \lambda]$   | $[3, 2, 1, 0]$    | $[\mathrm{tp}(\mu \nu), \kappa, \lambda, t]$  | $[0, 1, 2, 3]$    | ✘ |
+    /// | 4       | ✘    | `s2kl` | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$      | $[2, 1, 0]$       | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$     | $[0, 1, 2]$       | ✘ |
+    /// | 4       | ✔    | `s2kl` | $[t, \mu, \nu, \mathrm{tp}(\kappa \lambda)]$   | $[3, 2, 1, 0]$    | $[\mu, \nu, \mathrm{tp}(\kappa \lambda), t]$  | $[0, 1, 2, 3]$    | ✘ |
+    /// | 4       | ✘    | `s4`   | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$ | $[1, 0]$ | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$ | $[0, 1]$ | ✘ |
+    /// | 4       | ✘    | `s8`   | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$ | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$ | ✔ |
     ///
     /// # Spheric or Cartesian
     ///
