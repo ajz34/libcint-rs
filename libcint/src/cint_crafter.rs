@@ -1248,6 +1248,7 @@ impl CInt {
         }
     }
 
+    #[doc(hidden)]
     pub fn integral_inplace<F>(
         &self,
         integrator: &dyn Integrator,
@@ -1268,7 +1269,7 @@ impl CInt {
         }
     }
 
-    #[allow(non_snake_case)]
+    #[doc(hidden)]
     pub fn integral_s1_inplace<F>(
         &self,
         integrator: &dyn Integrator,
@@ -1433,6 +1434,7 @@ impl CInt {
         Ok(())
     }
 
+    #[doc(hidden)]
     #[allow(non_snake_case)]
     pub fn integral_s2ij_inplace<F>(
         &self,
@@ -1597,6 +1599,7 @@ impl CInt {
         Ok(())
     }
 
+    #[doc(hidden)]
     pub fn integral_s2kl_inplace<F>(
         &self,
         integrator: &dyn Integrator,
@@ -1686,6 +1689,7 @@ impl CInt {
         Ok(())
     }
 
+    #[doc(hidden)]
     pub fn integral_s4_inplace<F>(
         &self,
         integrator: &dyn Integrator,
@@ -1776,6 +1780,7 @@ impl CInt {
         Ok(())
     }
 
+    #[doc(hidden)]
     pub fn integral_s8_inplace<F>(
         &self,
         integrator: &dyn Integrator,
@@ -1877,6 +1882,7 @@ impl CInt {
 
 /// Implementation of integral at lower API level (crafting, row-major).
 impl CInt {
+    #[doc(hidden)]
     pub fn integral_row_major_inplace<F>(
         &self,
         integrator: &dyn Integrator,
@@ -1897,6 +1903,7 @@ impl CInt {
         }
     }
 
+    #[doc(hidden)]
     pub fn integral_s1_row_major_inplace<F>(
         &self,
         integrator: &dyn Integrator,
@@ -2056,6 +2063,7 @@ impl CInt {
         Ok(())
     }
 
+    #[doc(hidden)]
     pub fn integral_s2ij_row_major_inplace<F>(
         &self,
         integrator: &dyn Integrator,
@@ -2219,6 +2227,7 @@ impl CInt {
         Ok(())
     }
 
+    #[doc(hidden)]
     pub fn integral_s2kl_row_major_inplace<F>(
         &self,
         integrator: &dyn Integrator,
@@ -2309,6 +2318,7 @@ impl CInt {
         Ok(())
     }
 
+    #[doc(hidden)]
     pub fn integral_s4_row_major_inplace<F>(
         &self,
         integrator: &dyn Integrator,
@@ -2400,6 +2410,7 @@ impl CInt {
         Ok(())
     }
 
+    #[doc(hidden)]
     pub fn integral_s8_row_major_inplace<F>(
         &self,
         integrator: &dyn Integrator,

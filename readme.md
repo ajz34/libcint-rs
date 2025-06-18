@@ -18,7 +18,7 @@ This crate is not official bindgen project, nither [libcint](https://github.com/
 
 ## Minimal Example
 
-The most important function is [`CInt::integrate`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.integrate). It is somehow similar to PySCF's `mol.intor(intor, aosym, shls_slice)`. For more information on usage of crate `libcint`, we refer to [API Documentation](https://docs.rs/libcint).
+The most important function is [`CInt::integrate`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.integrate) and [`CInt::integrate_row_major`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.integrate_row_major). It is somehow similar to PySCF's `mol.intor(intor, aosym, shls_slice)`, but the user shall check output shape and strides. For more information on usage of crate `libcint`, we refer to [API Documentation](https://docs.rs/libcint).
 
 ```rust
 use libcint::prelude::*;
@@ -27,9 +27,15 @@ use libcint::prelude::*;
 // For actual usage, you should initialize `CInt` with your own molecule data.
 let cint_data: CInt = init_h2o_def2_tzvp();
 
-// Obtain the integral of kinetic energy operator with derivative on the first orbital:
+// int1e_ipkin: the integral of kinetic energy operator with derivative on the first orbital
+
+// [mu, nu, comp], column-major, same data memory layout to PySCF's 2/3-center intor
 let (out, shape): (Vec<f64>, Vec<usize>) = cint_data.integrate("int1e_ipkin", None, None).into();
 assert_eq!(shape, [43, 43, 3]);
+
+// [comp, mu, nu], row-major, same shape to PySCF intor
+let (out, shape): (Vec<f64>, Vec<usize>) = cint_data.integrate_row_major("int1e_ipkin", None, None).into();
+assert_eq!(shape, [3, 43, 43]);
 ```
 
 ## Installation and Cargo Features
