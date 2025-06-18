@@ -371,6 +371,11 @@ impl CInt {
         get_integrator(intor)
     }
 
+    /// Obtain integrator by name, failable version.
+    ///
+    /// # See also
+    ///
+    /// - [`CInt::get_integrator`]
     pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
         get_integrator_f(intor)
     }

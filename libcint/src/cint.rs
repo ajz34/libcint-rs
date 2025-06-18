@@ -123,6 +123,8 @@ pub enum CIntError {
 
 /// Distinguish between general integral or ECP (effective core potential)
 /// integral.
+///
+/// This enum is mostly used internally, not for user usage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CIntKind {
     /// General integral type, which is used for most of the integrals.
@@ -132,6 +134,11 @@ pub enum CIntKind {
 }
 
 /// Integral types.
+///
+/// You can also use `&str` type to convert to this type:
+/// - `"sph"` or `"spheric"` for spherical integrals (default);
+/// - `"cart"` or `"cartesian"` for cartesian integrals;
+/// - `"spinor"` for spinor integrals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CIntType {
     #[default]
@@ -145,20 +152,32 @@ pub enum CIntType {
 }
 
 /// Symmetry of the integral.
+///
+/// Nameing convention is
+/// - 2-center integrals $(\mu | \nu)$ or `uv` or `ij`;
+/// - 3-center integrals $(\mu \nu | \kappa)$ or `uvk` or `ijk`;
+/// - 4-center integrals $(\mu \nu | \kappa \lambda)$ or `uvkl` or `ijkl`.
+///
+/// You can also use `&str` type to convert to this type: `"s1"`, `"s2ij"` or
+/// `"s2uv"`, `"s2kl"`, `"s4"`, `"s8"`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CIntSymm {
     #[default]
-    /// No symmetry.
+    /// No symmetry (default).
     S1,
-    /// Symmetric for the first two indices (in F-contiguous).
+    /// Symmetry of the first two indices; for example of 3-center integrals,
+    /// $$(\mu \nu | \kappa) = (\nu \mu | \kappa)$$
     S2ij,
-    /// Symmetric for the last two indices in 4-center integrals (in
-    /// F-contiguous).
+    /// Symmetry of the last two indices in 4-center integrals, i.e.
+    /// $$(\mu \nu | \kappa \lambda) = (\mu \nu | \lambda \kappa)$$
     S2kl,
-    /// Symmetric for the first and last indices in 4-center integrals (in
-    /// F-contiguous).
+    /// Symmetry of the first and last indices in 4-center integrals, i.e.
+    /// $$(\mu \nu | \kappa \lambda) = (\mu \nu | \lambda \kappa) = (\nu \mu |
+    /// \kappa \lambda) = (\nu \mu | \lambda \kappa)$$
     S4,
-    /// Symmetric for all indices in 4-center integrals (in F-contiguous).
+    /// symmetry of all indices in 4-center integrals, i.e., additional symmetry
+    /// beyond `"s4"`, there is
+    /// $$(\mu \nu | \kappa \lambda) = (\kappa \lambda | \mu \nu)$$
     S8,
 }
 
@@ -278,10 +297,19 @@ pub struct IntorCrossArgs<'l, F> {
 /// # Panics
 ///
 /// - integrator not found
+///
+/// # See also
+///
+/// [`get_integrator_f`], [`CInt::get_integrator`]
 pub fn get_integrator(intor: &str) -> Box<dyn Integrator> {
     get_integrator_f(intor).unwrap()
 }
 
+/// Obtain integrator by name, failable version.
+///
+/// # See also
+///
+/// [`get_integrator`], [`CInt::get_integrator`]
 pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
     // explicitly check cint and ecp differently
     let intor = if let Some(intor) = get_cint_integrator(&intor.to_lowercase()) {

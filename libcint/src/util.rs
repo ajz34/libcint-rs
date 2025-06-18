@@ -5,6 +5,9 @@ use crate::prelude::*;
 /* #region shls_slice parsing */
 
 /// Convenient structure for parsing shells slice.
+///
+/// You can pass vectors, slices, or arrays of shape `[usize; 2]` to this
+/// structure by `.into()`.
 pub struct ShlsSlice {
     pub shls_slice: Vec<[usize; 2]>,
 }
