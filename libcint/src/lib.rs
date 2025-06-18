@@ -10,12 +10,13 @@
 //! - [`CInt::integrate`]: integrate function (partly PySCF's `mol.intor`
 //!   counterpart, column-major which is the same to convention of libcint C
 //!   library, and the same memory layout to PySCF's 2/3-center integrals).
+//! - [`CInt::integrate_row_major`]: integrate function with row-major output
+//!   (the same shape convention to PySCF, and same memory layout to PySCF
+//!   4-center integrals).
 //! - [`CInt::integrate_cross`]: integrate function with multiple [`CInt`]s,
 //!   useful for integral with auxiliary basis sets.
 //! - [`CInt::integrate_with_args`], [`CInt::integrate_args_builder`]: integrate
 //!   function with arguments builder (advanced options).
-//! - [`CInt::integrate_row_major`]: integrate function with row-major output
-//!   (the same convention to PySCF 4-center integrals).
 //! - [cint_wrapper](ffi::cint_wrapper) and [cecp_wrapper](ffi::cecp_wrapper):
 //!   supported integrators.
 //!
@@ -25,10 +26,6 @@
 //! (gaussian-type orbital) electronic integral, can be applied in
 //! computational chemistry, and has already been applied extensively in
 //! [PySCF](https://github.com/pyscf/pyscf).
-//!
-//! **This is an alpha version and will soon be promoted to v0.1.** After some
-//! documentation update and probably symmetry enhancements, a version v0.1 will
-//! be released.
 //!
 //! | Resources | Badges |
 //! |--|--|
@@ -96,7 +93,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! libcint = { version = "0.0.1" }
+//! libcint = { version = "0.1" }
 //! ```
 //!
 //! ## Install and also build-from-source
@@ -106,7 +103,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! libcint = { version = "0.0.1", features = ["build_from_source", "static"] }
+//! libcint = { version = "0.1", features = ["build_from_source", "static"] }
 //! ```
 //!
 //! The source code will be automatically downloaded from github, and cargo will

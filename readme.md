@@ -4,8 +4,6 @@ This project contains libcint (C language) FFI bindings, wrapper and build-from-
 
 [libcint](https://github.com/sunqm/libcint) is a C library for GTO (gaussian-type orbital) electronic integral, can be applied in computational chemistry, and has already been applied extensively in [PySCF](https://github.com/pyscf/pyscf).
 
-**This is an alpha version and will soon be promoted to v0.1.** After some documentation update and probably symmetry enhancements, a version v0.1 will be released.
-
 | Resources | Badges |
 |--|--|
 | Crate | [![Crate](https://img.shields.io/crates/v/libcint.svg)](https://crates.io/crates/libcint) |
@@ -46,7 +44,7 @@ If you have already compiled `libcint.so`, then put path of this shared library 
 
 ```toml
 [dependencies]
-libcint = { version = "0.0.1" }
+libcint = { version = "0.1" }
 ```
 
 ### Install and also build-from-source
@@ -55,7 +53,7 @@ If you have not compiled `libcint.so` or `libcint.a`, then you are suggested to 
 
 ```toml
 [dependencies]
-libcint = { version = "0.0.1", features = ["build_from_source", "static"] }
+libcint = { version = "0.1", features = ["build_from_source", "static"] }
 ```
 
 The source code will be automatically downloaded from github, and cargo will handle the building process.
