@@ -14,19 +14,26 @@ use rstsr_common::prelude::*;
 impl CInt {
     /// Obtain integrator optimizer.
     ///
+    /// # PySCF equivalent
+    ///
+    /// `gto.moleintor.make_cintopt`
+    ///
     /// # Panics
     ///
     /// - integrator not found
     /// - `env` field not properly initialized for ECP integrator (should call
     ///   `merge_ecpbas` before this function)
-    ///
-    /// # See also
-    ///
-    /// PySCF `make_cintopt`
     pub fn optimizer(&self, intor: &str) -> CIntOptimizer {
         self.optimizer_f(intor).unwrap()
     }
 
+    /// Obtain integrator optimizer.
+    ///
+    /// This function is failable.
+    ///
+    /// # See also
+    ///
+    /// [`CInt::optimizer`]
     pub fn optimizer_f(&self, intor: &str) -> Result<CIntOptimizer, CIntError> {
         let integrator = crate::cint::get_integrator_f(intor)?;
         // make dummy shell slices and symms, only for checking
@@ -37,18 +44,105 @@ impl CInt {
         Ok(self.get_optimizer(&*integrator))
     }
 
+    /// Perform integral by arguments from builder.
+    ///
+    /// This is advanced integral function. Additionally to
+    /// [`integrate`](CInt::integrate), this function also allows you to specify
+    /// - `out`: output buffer for integral result, if not specified, a new
+    ///   buffer will be allocated.
+    /// - `row_major`: whether the output is in row-major order (default is
+    ///   false, which means column-major order).
+    ///
+    /// This function is not very convenient to use, since rust does not allow
+    /// named arguments.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let data = init_h2o_def2_tzvp();
+    /// let mut out_buffer = vec![0.0; 100000];
+    /// let shls_slice = [[0, data.nbas()], [0, data.nbas()], [5, 10]];
+    ///
+    /// // col-major, the same memory layout to PySCF's 2/3-center integrals
+    /// let args = data.integrate_args_builder()
+    ///     .intor("int3c2e_ip2")
+    ///     .aosym("s2ij")
+    ///     .shls_slice(&shls_slice)
+    ///     .out(&mut out_buffer)
+    ///     .row_major(false)
+    ///     .build()
+    ///     .unwrap();
+    /// let output = data.integrate_with_args(args);
+    /// assert!(output.out.is_none());
+    /// assert_eq!(output.shape, [946, 19, 3]);
+    /// assert!((cint_fp(&out_buffer) - -15.467133235509742).abs() < 1e-10);
+    ///
+    /// // row-major, the same shape to PySCF's integrals
+    /// let args = data.integrate_args_builder()
+    ///     .intor("int3c2e_ip2")
+    ///     .aosym("s2ij")
+    ///     .shls_slice(&shls_slice)
+    ///     .out(&mut out_buffer)
+    ///     .row_major(true)
+    ///     .build()
+    ///     .unwrap();
+    /// let output = data.integrate_with_args(args);
+    /// assert!(output.out.is_none());
+    /// assert_eq!(output.shape, [3, 946, 19]);
+    /// assert!((cint_fp(&out_buffer) - 16.69819847729145).abs() < 1e-10);
+    /// ```
+    ///
+    /// PySCF equivalent (`out_buffer` column-major, `out` row-major for
+    /// 3-center integrals in PySCF):
+    ///
+    /// ```python
+    /// mol = gto.Mole(atom="O; H 1 0.94; H 1 0.94 2 104.5", basis="def2-TZVP").build()
+    /// out_buffer = np.zeros(100000)
+    /// shls_slice = [0, mol.nbas, 0, mol.nbas, 5, 10]
+    /// out = mol.intor("int3c2e_ip2", aosym="s2ij", shls_slice=shls_slice, out=out_buffer)
+    /// assert abs(lib.fp(out_buffer) - -15.467133235509742) < 1e-10
+    /// assert abs(lib.fp(out) - 16.69819847729145) < 1e-10
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`CInt::integrate`], [`CInt::integrate_row_major`]: for basic integral
+    ///   evaluation.
+    /// - [`CInt::integrate_with_args_spinor`]: for spinor integrals.
+    /// - [`CInt::integrate_cross_with_args`]: for cross integrals with multiple
+    ///   `CInt` instances.
+    /// - [`CInt::integrate_with_args_f`]: for failable version of this
+    ///   function.
     pub fn integrate_with_args(&self, args: IntegrateArgs<f64>) -> CIntOutput<f64> {
         self.integrate_with_args_inner(args).unwrap()
     }
 
+    /// Perform integral by arguments from builder, failable version.
+    ///
+    /// # See also
+    ///
+    /// [`CInt::integrate_with_args`]
     pub fn integrate_with_args_f(&self, args: IntegrateArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
         self.integrate_with_args_inner(args)
     }
 
+    /// Perform integral by arguments from builder for spinor integrals.
+    ///
+    /// # See also
+    ///
+    /// [`CInt::integrate_with_args`]
+    /// [`CInt::integrate_with_args_spinor_f`]
     pub fn integrate_with_args_spinor(&self, args: IntegrateArgs<Complex<f64>>) -> CIntOutput<Complex<f64>> {
         self.integrate_with_args_inner(args).unwrap()
     }
 
+    /// Perform integral by arguments from builder for spinor integrals,
+    /// failable version.
+    ///
+    /// # See also
+    ///
+    /// [`CInt::integrate_with_args_spinor`]
     pub fn integrate_with_args_spinor_f(&self, args: IntegrateArgs<Complex<f64>>) -> Result<CIntOutput<Complex<f64>>, CIntError> {
         self.integrate_with_args_inner(args)
     }
@@ -127,18 +221,50 @@ impl CInt {
         Ok(CIntOutput { out: out_vec, shape: out_shape })
     }
 
+    /// Perform cross integral with multiple `CInt` instances.
+    ///
+    /// This function is similar to [`CInt::integrate_with_args`], but it
+    /// allows you to specify multiple `CInt` instances, which is useful for
+    /// integrals with auxiliary basis sets.
+    ///
+    /// Corresponding builder is [`CInt::integrate_cross_args_builder`].
+    ///
+    /// # See also
+    ///
+    /// - [`CInt::integrate_cross`] and [`CInt::integrate_cross_row_major`]: for
+    ///   basic integral evaluation.
+    /// - [`CInt::integrate_cross_with_args_f`]: for failable version of this
+    ///   function.
+    /// - [`CInt::integrate_cross_with_args_spinor`]: for spinor integrals.
     pub fn integrate_cross_with_args(args: IntorCrossArgs<f64>) -> CIntOutput<f64> {
         CInt::integrate_cross_with_args_inner(args).unwrap()
     }
 
+    /// Perform cross integral with multiple `CInt` instances, failable version.
+    ///
+    /// # See also
+    ///
+    /// [`CInt::integrate_cross_with_args`]
     pub fn integrate_cross_with_args_f<F>(args: IntorCrossArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
         CInt::integrate_cross_with_args_inner(args)
     }
 
+    /// Perform cross integral with multiple `CInt` instances for spinor
+    /// integrals.
+    ///
+    /// # See also
+    ///
+    /// [`CInt::integrate_cross_with_args`]
     pub fn integrate_cross_with_args_spinor(args: IntorCrossArgs<Complex<f64>>) -> CIntOutput<Complex<f64>> {
         CInt::integrate_cross_with_args_inner(args).unwrap()
     }
 
+    /// Perform cross integral with multiple `CInt` instances for spinor
+    /// integrals, failable version.
+    ///
+    /// # See also
+    ///
+    /// [`CInt::integrate_cross_with_args_spinor`]
     pub fn integrate_cross_with_args_spinor_f<F>(args: IntorCrossArgs<Complex<f64>>) -> Result<CIntOutput<Complex<f64>>, CIntError> {
         CInt::integrate_cross_with_args_inner(args)
     }
@@ -249,18 +375,39 @@ impl CInt {
         get_integrator_f(intor)
     }
 
+    /// Obtain the builder of arguments for advanced integral evaluation.
+    ///
+    /// # See also
+    ///
+    /// - [`CInt::integrate_with_args`]
     pub fn integrate_args_builder(&self) -> IntegrateArgsBuilder<'static, f64> {
         IntegrateArgsBuilder::default()
     }
 
+    /// Obtain the builder of arguments for advanced integral evaluation
+    /// for spinor integrals.
+    ///
+    /// # See also
+    ///
+    /// - [`CInt::integrate_with_args_spinor`]
     pub fn integrate_args_builder_spinor(&self) -> IntegrateArgsBuilder<'static, Complex<f64>> {
         IntegrateArgsBuilder::default()
     }
 
+    /// Obtain the builder of arguments for cross integral evaluation.
+    ///
+    /// # See also
+    ///
+    /// - [`CInt::integrate_cross_with_args`]
     pub fn integrate_cross_args_builder(&self) -> IntorCrossArgsBuilder<'static, f64> {
         IntorCrossArgsBuilder::default()
     }
 
+    /// Obtain the builder of arguments for cross integral evaluation
+    ///
+    /// # See also
+    ///
+    /// - [`CInt::integrate_cross_with_args_spinor`]
     pub fn integrate_cross_args_builder_spinor(&self) -> IntorCrossArgsBuilder<'static, Complex<f64>> {
         IntorCrossArgsBuilder::default()
     }
@@ -268,40 +415,69 @@ impl CInt {
 
 /// Implementation of integral at higher API level (legacy support).
 impl CInt {
-    pub fn integral_s1<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> Vec<f64>
+    /// Legacy support for integral evaluation for rest_libcint.
+    ///
+    /// This function can be replaced by [`CInt::integrate`].
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// use libcint::ffi::cint_wrapper::int1e_ipkin;
+    /// let cint_data = init_h2o_def2_tzvp();
+    ///
+    /// let (out, shape) = cint_data.integral_s1::<int1e_ipkin>(None);
+    /// assert_eq!(shape, [43, 43, 3]);
+    /// ```
+    pub fn integral_s1<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> (Vec<f64>, Vec<usize>)
     where
-        T: Integrator + Default + ComplexFloat + Send + Sync,
+        T: Integrator + Default,
     {
-        if self.cint_type == Spinor {
-            panic!("Spinor should be called by `integral_s1_spinor<Integrator>`");
-        }
-
-        let (out, _shape) = self.integral_inner::<T, f64>(shls_slice, CIntSymm::S1);
-        out
+        self.integral_inner::<T, f64>(shls_slice, CIntSymm::S1)
     }
 
-    pub fn integral_s1_spinor<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> Vec<Complex<f64>>
+    /// Legacy support for integral evaluation for rest_libcint with spinor
+    /// integrals.
+    ///
+    /// This function can be replaced by [`CInt::integrate_spinor`].
+    pub fn integral_s1_spinor<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> (Vec<Complex<f64>>, Vec<usize>)
     where
-        T: Integrator + Default + ComplexFloat + Send + Sync,
+        T: Integrator + Default,
     {
-        if self.cint_type != Spinor {
-            panic!("Non-spinor should be called by `integral_s1<Integrator>`");
-        }
-
-        let (out, _shape) = self.integral_inner::<T, Complex<f64>>(shls_slice, CIntSymm::S1);
-        out
+        self.integral_inner::<T, Complex<f64>>(shls_slice, CIntSymm::S1)
     }
 
-    pub fn integral_s2ij<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> Vec<f64>
+    /// Legacy support for integral evaluation for rest_libcint with s2ij
+    /// symmetry.
+    ///
+    /// This function can be replaced by [`CInt::integrate`].
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// use libcint::ffi::cint_wrapper::int3c2e_ip2;
+    /// let cint_data = init_h2o_def2_tzvp();
+    ///
+    /// let (out, shape) = cint_data.integral_s2ij::<int3c2e_ip2>(None);
+    /// assert_eq!(shape, [946, 43, 3]);
+    /// ```
+    pub fn integral_s2ij<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> (Vec<f64>, Vec<usize>)
     where
-        T: Integrator + Default + ComplexFloat + Send + Sync,
+        T: Integrator + Default,
     {
-        if self.cint_type == Spinor {
-            panic!("Spinor should be called by `integral_s2ij_spinor<Integrator>`");
-        }
+        self.integral_inner::<T, f64>(shls_slice, CIntSymm::S2ij)
+    }
 
-        let (out, _shape) = self.integral_inner::<T, f64>(shls_slice, CIntSymm::S2ij);
-        out
+    /// Legacy support for integral evaluation for rest_libcint with s2ij
+    /// symmetry and spinor integrals.
+    ///
+    /// This function can be replaced by [`CInt::integrate_spinor`].
+    pub fn integral_s2ij_spinor<T>(&self, shls_slice: Option<&[[c_int; 2]]>) -> (Vec<Complex<f64>>, Vec<usize>)
+    where
+        T: Integrator + Default,
+    {
+        self.integral_inner::<T, Complex<f64>>(shls_slice, CIntSymm::S2ij)
     }
 
     pub fn integral_inner<T, F>(&self, shls_slice: Option<&[[c_int; 2]]>, aosym: CIntSymm) -> (Vec<F>, Vec<usize>)
@@ -318,6 +494,7 @@ impl CInt {
         };
 
         // additional check
+        data.check_float_type::<F>().unwrap();
         data.check_shls_slice(&integrator, shls_slice, aosym).unwrap();
 
         // integral preparation and execution
