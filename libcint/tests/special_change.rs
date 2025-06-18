@@ -1,3 +1,5 @@
+// Reference source: libcint/scripts/pyscf_special_change.ipynb
+
 use approx::assert_relative_eq;
 use libcint::prelude::*;
 

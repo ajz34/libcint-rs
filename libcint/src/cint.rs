@@ -258,6 +258,15 @@ pub struct IntorCrossArgs<'l, F> {
     /// output.
     #[builder(default, setter(strip_option))]
     pub out: Option<&'l mut [F]>,
+
+    /// Col-major or row-major output buffer (col-major default).
+    ///
+    /// - Col-major: the same **data layout** to PySCF's 2/3-center integrals;
+    ///   shape presented in col-major.
+    /// - Row-major: the same **shape** to PySCF's integrals; shape presented in
+    ///   row-major.
+    #[builder(default = false)]
+    pub row_major: bool,
 }
 
 /* #endregion */
@@ -406,7 +415,7 @@ impl CInt {
     /// - `shls_slice`: shell slices for evaluating sub-tensor of the total
     ///   integral. Please note that this is either be `None`, or a slice of
     ///   type `&[[usize; 2]]` or something similar (vectors, arrays) **with
-    ///   length the same to the number of components in integral**.
+    ///   length the same to the number of centers in integral**.
     ///
     /// <div class="warning">
     ///
@@ -493,12 +502,13 @@ impl CInt {
     ///
     /// <div class="warning">
     ///
-    /// [`CInt`] always returns column-major shape with its output buffer.
+    /// [`integrate`](CInt::integrate) always returns column-major shape with
+    /// its output buffer.
     ///
-    /// **Please note that [`CInt`] is somehow different to PySCF's
-    /// convention.** The user should be very clear about the convention
-    /// before using this function, especially when you are evaluating
-    /// integrals with derivatives or using `shls_slice` option.
+    /// **Please note that [`integrate`](CInt::integrate) is somehow different
+    /// to PySCF's convention.** The user should be very clear about the
+    /// convention before using this function, especially when you are
+    /// evaluating integrals with derivatives or using `shls_slice` option.
     ///
     /// </div>
     ///
@@ -519,29 +529,29 @@ impl CInt {
     ///   \nu)$ indices pair. This is always packed by upper-triangular indices
     ///   for col-major, or equilvalently lower-triangular indices for
     ///   row-major.
-    /// - "same data layout" means the underlying data is the same, regardless
-    ///   of how shape and strides are defined. If same data layout, it means
-    ///   [`CInt`] data is the transposed PySCF's data, without any additional
-    ///   copy or memory allocation.
+    /// - "same layout" means the underlying data is the same, regardless of how
+    ///   shape and strides are defined. If same data layout, it means [`CInt`]
+    ///   data is the transposed PySCF's data, without any additional copy or
+    ///   memory allocation.
     ///
-    /// | centers | comp | symm   | PySCF shape | PySCF strides | [`CInt`] shape | [`CInt`] strides | same data layout |
-    /// |---------|------|--------|-------------|---------------|----------------|------------------|------------------|
-    /// | 2       | ✘    | `s1`   | $[\mu, \nu]$                                   | $[0, 1]$          | $[\mu, \nu]$                                  | $[0, 1]$          | ✔ |
-    /// | 2       | ✔    | `s1`   | $[t, \mu, \nu]$                                | $[2, 0, 1]$       | $[\mu, \nu, t]$                               | $[0, 1, 2]$       | ✔ |
-    /// | 2       | ✘    | `s2ij` | Not supported                                  | -                 | $[\mathrm{tp}(\mu \nu)]$                      | $\[0\]$           | - |
-    /// | 2       | ✔    | `s2ij` | Not supported                                  | -                 | $[\mathrm{tp}(\mu \nu), t]$                   | $[0, 1]$          | - |
-    /// | 3       | ✘    | `s1`   | $[\mu, \nu, \kappa]$                           | $[0, 1, 2]$       | $[\mu, \nu, \kappa]$                          | $[0, 1, 2]$       | ✔ |
-    /// | 3       | ✔    | `s1`   | $[t, \mu, \nu, \kappa]$                        | $[3, 0, 1, 2]$    | $[\mu, \nu, \kappa, t]$                       | $[0, 1, 2, 3]$    | ✔ |
-    /// | 3       | ✘    | `s2ij` | $[\mathrm{tp}(\mu \nu), \kappa]$               | $[0, 1]$          | $[\mathrm{tp}(\mu \nu), \kappa]$              | $[0, 1]$          | ✔ |
-    /// | 3       | ✔    | `s2ij` | $[t, \mathrm{tp}(\mu \nu), \kappa]$            | $[2, 0, 1]$       | $[\mathrm{tp}(\mu \nu), \kappa, t]$           | $[0, 1, 2]$       | ✔ |
-    /// | 4       | ✘    | `s1`   | $[\mu, \nu, \kappa, \lambda]$                  | $[3, 2, 1, 0]$    | $[\mu, \nu, \kappa, \lambda]$                 | $[0, 1, 2, 3]$    | ✘ |
-    /// | 4       | ✔    | `s1`   | $[t, \mu, \nu, \kappa, \lambda]$               | $[4, 3, 2, 1, 0]$ | $[\mu, \nu, \kappa, \lambda, t]$              | $[0, 1, 2, 3, 4]$ | ✘ |
-    /// | 4       | ✘    | `s2ij` | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$      | $[2, 1, 0]$       | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$     | $[0, 1, 2]$       | ✘ |
-    /// | 4       | ✔    | `s2ij` | $[t, \mathrm{tp}(\mu \nu), \kappa, \lambda]$   | $[3, 2, 1, 0]$    | $[\mathrm{tp}(\mu \nu), \kappa, \lambda, t]$  | $[0, 1, 2, 3]$    | ✘ |
-    /// | 4       | ✘    | `s2kl` | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$      | $[2, 1, 0]$       | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$     | $[0, 1, 2]$       | ✘ |
-    /// | 4       | ✔    | `s2kl` | $[t, \mu, \nu, \mathrm{tp}(\kappa \lambda)]$   | $[3, 2, 1, 0]$    | $[\mu, \nu, \mathrm{tp}(\kappa \lambda), t]$  | $[0, 1, 2, 3]$    | ✘ |
-    /// | 4       | ✘    | `s4`   | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$ | $[1, 0]$ | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$ | $[0, 1]$ | ✘ |
-    /// | 4       | ✘    | `s8`   | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$ | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$ | ✔ |
+    /// | center | comp | symm | example | PySCF shape | PySCF strides | [`CInt`] shape | [`CInt`] strides | same layout |
+    /// |--------|------|------|---------|-------------|---------------|----------------|------------------|-------------|
+    /// | 2 | ✘ | `s1`   | `int1e_ovlp`  | $[\mu, \nu]$                                   | $[0, 1]$          | $[\mu, \nu]$                                  | $[0, 1]$          | ✔ |
+    /// | 2 | ✔ | `s1`   | `int1e_ipkin` | $[t, \mu, \nu]$                                | $[2, 0, 1]$       | $[\mu, \nu, t]$                               | $[0, 1, 2]$       | ✔ |
+    /// | 2 | ✘ | `s2ij` | `int1e_ovlp`  | Not supported                                  | -                 | $[\mathrm{tp}(\mu \nu)]$                      | $\[0\]$           | - |
+    /// | 2 | ✔ | `s2ij` | `int1e_ovlp`  | Not supported                                  | -                 | $[\mathrm{tp}(\mu \nu), t]$                   | $[0, 1]$          | - |
+    /// | 3 | ✘ | `s1`   | `int3c2e`     | $[\mu, \nu, \kappa]$                           | $[0, 1, 2]$       | $[\mu, \nu, \kappa]$                          | $[0, 1, 2]$       | ✔ |
+    /// | 3 | ✔ | `s1`   | `int3c2e_ip1` | $[t, \mu, \nu, \kappa]$                        | $[3, 0, 1, 2]$    | $[\mu, \nu, \kappa, t]$                       | $[0, 1, 2, 3]$    | ✔ |
+    /// | 3 | ✘ | `s2ij` | `int3c2e`     | $[\mathrm{tp}(\mu \nu), \kappa]$               | $[0, 1]$          | $[\mathrm{tp}(\mu \nu), \kappa]$              | $[0, 1]$          | ✔ |
+    /// | 3 | ✔ | `s2ij` | `int3c2e_ip2` | $[t, \mathrm{tp}(\mu \nu), \kappa]$            | $[2, 0, 1]$       | $[\mathrm{tp}(\mu \nu), \kappa, t]$           | $[0, 1, 2]$       | ✔ |
+    /// | 4 | ✘ | `s1`   | `int2e`       | $[\mu, \nu, \kappa, \lambda]$                  | $[3, 2, 1, 0]$    | $[\mu, \nu, \kappa, \lambda]$                 | $[0, 1, 2, 3]$    | ✘ |
+    /// | 4 | ✔ | `s1`   | `int2e_ip1`   | $[t, \mu, \nu, \kappa, \lambda]$               | $[4, 3, 2, 1, 0]$ | $[\mu, \nu, \kappa, \lambda, t]$              | $[0, 1, 2, 3, 4]$ | ✘ |
+    /// | 4 | ✘ | `s2ij` | `int2e`       | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$      | $[2, 1, 0]$       | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$     | $[0, 1, 2]$       | ✘ |
+    /// | 4 | ✔ | `s2ij` | `int2e_ip2`   | $[t, \mathrm{tp}(\mu \nu), \kappa, \lambda]$   | $[3, 2, 1, 0]$    | $[\mathrm{tp}(\mu \nu), \kappa, \lambda, t]$  | $[0, 1, 2, 3]$    | ✘ |
+    /// | 4 | ✘ | `s2kl` | `int2e`       | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$      | $[2, 1, 0]$       | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$     | $[0, 1, 2]$       | ✘ |
+    /// | 4 | ✔ | `s2kl` | `int2e_ip1`   | $[t, \mu, \nu, \mathrm{tp}(\kappa \lambda)]$   | $[3, 2, 1, 0]$    | $[\mu, \nu, \mathrm{tp}(\kappa \lambda), t]$  | $[0, 1, 2, 3]$    | ✘ |
+    /// | 4 | ✘ | `s4`   | `int2e`       | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$ | $[1, 0]$ | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$ | $[0, 1]$ | ✘ |
+    /// | 4 | ✘ | `s8`   | `int2e`       | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$ | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$ | ✔ |
     ///
     /// # Spheric or Cartesian
     ///
@@ -594,6 +604,8 @@ impl CInt {
     ///   integrals.
     /// - [`integrate_cross`](Self::integrate_cross) for cross integrals between
     ///   multiple molecules.
+    /// - [`integrate_row_major`](Self::integrate_row_major) for row-major
+    ///   output.
     /// - [`integrate_with_args`](Self::integrate_with_args) and
     ///   [`integrate_cross_with_args`](Self::integrate_cross_with_args) for
     ///   more advanced usage (full arguments that this crate supports).
@@ -601,7 +613,7 @@ impl CInt {
         self.integrate_f(intor, aosym, shls_slice.into()).unwrap()
     }
 
-    /// Main electronic integral driver (for spinor type) in column-major.
+    /// Main electronic integral driver (for spinor type) **in column-major**.
     ///
     /// We refer most documentation to [`integrate`](Self::integrate).
     ///
@@ -698,6 +710,60 @@ impl CInt {
         self.integrate_with_args_inner(integrate_args)
     }
 
+    /// Integrate with multiple molecules **in column-major**.
+    ///
+    /// # PySCF equivalent
+    ///
+    /// - 2-center: `gto.intor_cross(intor, mol1, mol2)`
+    /// - 3-center: `df.incore.aux_e2(mol1, mol2, intor, aosym, shls_slice)`,
+    ///   `df.incore.aux_e1(mol1, mol2, intor, aosym, shls_slice)`
+    ///
+    /// # Arguments
+    ///
+    /// - `intor`: name of the integral to be evaluated, such as `"int1e_ovlp"`,
+    ///   `"int2e"`, `"ECPscalar_iprinvip"`, `"int2e_giao_sa10sp1spsp2"`, etc.
+    /// - `mols`: references to a list of [`CInt`] molecules; the number of
+    ///   molecules must be the same value to number of centers in the integral.
+    /// - `aosym`: symmetry of the integral, you can specify `"s1"`, `"s2ij"`,
+    ///   `"s2kl"`, `"s4"`, `"s8"`.
+    /// - `shls_slice`: shell slices for evaluating sub-tensor of the total
+    ///   integral. Please note that this is either be `None`, or a slice of
+    ///   type `&[[usize; 2]]` or something similar (vectors, arrays) **with
+    ///   length the same to the number of components in integral**. Also, the
+    ///   slices corresponds to molecules in `mols` argument accordingly.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let data_tzvp = init_h2o_def2_tzvp();
+    /// let data_jk = init_h2o_def2_jk();
+    ///
+    /// // pyscf equilvant
+    /// //     out = gto.intor_cross("int1e_ovlp", mol_tzvp, mol_jk)
+    /// //     lib.fp(out.T), out.shape
+    /// let (out, shape) = CInt::integrate_cross("int1e_ovlp", [&data_tzvp, &data_jk], None, None).into();
+    /// assert_eq!(shape, vec![43, 113]);
+    /// assert!((cint_fp(&out) - 11.25500947854174).abs() < 1e-10);
+    ///
+    /// // pyscf equilvant
+    /// //     out = df.incore.aux_e2(mol_tzvp, mol_jk, "int3c2e_ip2", "s2ij")
+    /// //     out_c = out.transpose(0, 2, 1)
+    /// //     lib.fp(out_c), out_c.shape[::-1]
+    /// let (out, shape) = CInt::integrate_cross("int3c2e_ip2", [&data_tzvp, &data_tzvp, &data_jk], "s2ij", None).into();
+    /// assert_eq!(shape, vec![946, 113, 3]);
+    /// assert!((cint_fp(&out) - 10.435234769997802).abs() < 1e-10);
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`integrate`](Self::integrate) for general integrals.
+    /// - [`integrate_cross_f`](Self::integrate_cross_f) for fallible
+    ///   counterpart.
+    /// - [`integrate_cross_spinor`](Self::integrate_cross_spinor) for spinor
+    ///   type integrals.
+    /// - [`integrate_cross_with_args`](Self::integrate_cross_with_args) for
+    ///   more advanced usage (full arguments that this crate supports).
     pub fn integrate_cross<'l>(
         intor: &str,
         mols: impl AsRef<[&'l CInt]>,
@@ -707,6 +773,14 @@ impl CInt {
         CInt::integrate_cross_f(intor, mols, aosym, shls_slice).unwrap()
     }
 
+    /// Integrate with multiple molecules **in column-major**.
+    ///
+    /// This function is fallible.
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_cross`](Self::integrate_cross) for non-fallible
+    ///   counterpart.
     pub fn integrate_cross_f<'l>(
         intor: &str,
         mols: impl AsRef<[&'l CInt]>,
@@ -723,6 +797,13 @@ impl CInt {
         CInt::integrate_cross_with_args_inner(args)
     }
 
+    /// Integrate with multiple molecules (for spinor type.) **in
+    /// column-major**.
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_cross`](Self::integrate_cross) for non-spinor type
+    ///   integrals.
     pub fn integrate_cross_spinor<'l>(
         intor: &str,
         mols: impl AsRef<[&'l CInt]>,
@@ -732,6 +813,15 @@ impl CInt {
         CInt::integrate_cross_spinor_f(intor, mols, aosym, shls_slice).unwrap()
     }
 
+    /// Integrate with multiple molecules (for spinor type.) **in
+    /// column-major**.
+    ///
+    /// This function is fallible.
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_cross_spinor`](Self::integrate_cross_spinor) for
+    ///   non-fallible counterpart.
     pub fn integrate_cross_spinor_f<'l>(
         intor: &str,
         mols: impl AsRef<[&'l CInt]>,
@@ -747,10 +837,99 @@ impl CInt {
             .build()?;
         CInt::integrate_cross_with_args_inner(args)
     }
-}
 
-impl CInt {
-    /// Main electronic integral driver (for non-spinor type) in row-major.
+    /// Main electronic integral driver (for non-spinor type) **in row-major**.
+    ///
+    /// We refer most documentation to [`integrate`](Self::integrate). Those two
+    /// functions share the same arguments, but the output buffer is in
+    /// row-major shape; the shape of [`integrate`](Self::integrate) and
+    /// [`integrate_row_major`](Self::integrate_row_major) are also different.
+    /// Follow the rest documentation of this function for more information.
+    ///
+    /// # Examples
+    ///
+    /// The following example uses a pre-defined water molecule with def2-TZVP
+    /// basis set.
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    ///
+    /// // aosym default: "s1"
+    /// // shls_slice default: None (evaluating all shells)
+    /// let (out, shape) = cint_data.integrate_row_major("int1e_ovlp", None, None).into();
+    /// assert_eq!(shape, vec![43, 43]);
+    ///
+    /// // utilize "s2ij" symmetry
+    /// let (out, shape) = cint_data.integrate_row_major("int3c2e_ip2", "s2ij", None).into();
+    /// assert_eq!(shape, vec![3, 946, 43]);
+    ///
+    /// // calculate sub-tensor of the integral
+    /// let nbas = cint_data.nbas();
+    /// let shl_slices = [[0, nbas], [0, nbas], [3, 12]]; // 3-centers for int3c2e_ip2
+    /// let (out, shape) = cint_data.integrate_row_major("int3c2e_ip2", "s2ij", shl_slices).into();
+    /// assert_eq!(shape, vec![3, 946, 29]);
+    ///
+    /// let shls_slice = [[0, nbas], [0, nbas], [3, 12], [4, 15]]; // 4-centers for int2e_ip2
+    /// let (out, shape) = cint_data.integrate_row_major("int2e_ip2", "s2ij", shls_slice).into();
+    /// assert_eq!(shape, vec![3, 946, 29, 33]);
+    /// ```
+    ///
+    /// # Row-major convention
+    ///
+    /// <div class="warning">
+    ///
+    /// [`integrate_row_major`](CInt::integrate_row_major) always returns
+    /// column-major shape with its output buffer.
+    ///
+    /// Though shape of this function is the same to PySCF's convention,
+    /// **please note that [`integrate_row_major`](CInt::integrate_row_major)
+    /// does not share the same memory layout to PySCF's 2/3-center integrals**.
+    /// The user should use these integrals with caution, especially when you
+    /// are concerned for efficiency, or performing triangular matrices unpack.
+    /// Same algorithms in PySCF when performing density fitting may not show
+    /// the same efficiency using this function.
+    ///
+    /// Also, component of integrals in function
+    /// [`integrate_row_major`](CInt::integrate_row_major) are presented in the
+    /// first axis (the most non-contiguous memory layout for row-major).
+    /// Compared to function, [`integrate`](CInt::integrate), where components
+    /// are presented in the last axis (the most non-contiguous memory layout
+    /// for column-major).
+    ///
+    /// </div>
+    ///
+    /// | center | comp | symm | example | shape | PySCF strides | [`CInt`] strides | same layout |
+    /// |--------|------|------|---------|-------|---------------|------------------|-------------|
+    /// | 2 | ✘ | `s1`   | `int1e_ovlp`  | $[\mu, \nu]$                                                      | $[0, 1]$          | $[1, 0]$          | ✘ |
+    /// | 2 | ✔ | `s1`   | `int1e_ipkin` | $[t, \mu, \nu]$                                                   | $[2, 0, 1]$       | $[2, 1, 0]$       | ✘ |
+    /// | 2 | ✘ | `s2ij` | `int1e_ovlp`  | Not supported                                                     | -                 | $\[0\]$           | - |
+    /// | 2 | ✔ | `s2ij` | `int1e_ovlp`  | Not supported                                                     | -                 | $[1, 0]$          | - |
+    /// | 3 | ✘ | `s1`   | `int3c2e`     | $[\mu, \nu, \kappa]$                                              | $[0, 1, 2]$       | $[2, 1, 0]$       | ✘ |
+    /// | 3 | ✔ | `s1`   | `int3c2e_ip1` | $[t, \mu, \nu, \kappa]$                                           | $[3, 0, 1, 2]$    | $[3, 2, 1, 0]$    | ✘ |
+    /// | 3 | ✘ | `s2ij` | `int3c2e`     | $[\mathrm{tp}(\mu \nu), \kappa]$                                  | $[0, 1]$          | $[1, 0]$          | ✘ |
+    /// | 3 | ✔ | `s2ij` | `int3c2e_ip2` | $[t, \mathrm{tp}(\mu \nu), \kappa]$                               | $[2, 0, 1]$       | $[2, 1, 0]$       | ✘ |
+    /// | 4 | ✘ | `s1`   | `int2e`       | $[\mu, \nu, \kappa, \lambda]$                                     | $[3, 2, 1, 0]$    | $[3, 2, 1, 0]$    | ✔ |
+    /// | 4 | ✔ | `s1`   | `int2e_ip1`   | $[t, \mu, \nu, \kappa, \lambda]$                                  | $[4, 3, 2, 1, 0]$ | $[4, 3, 2, 1, 0]$ | ✔ |
+    /// | 4 | ✘ | `s2ij` | `int2e`       | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$                         | $[2, 1, 0]$       | $[2, 1, 0]$       | ✔ |
+    /// | 4 | ✔ | `s2ij` | `int2e_ip2`   | $[t, \mathrm{tp}(\mu \nu), \kappa, \lambda]$                      | $[3, 2, 1, 0]$    | $[3, 2, 1, 0]$    | ✔ |
+    /// | 4 | ✘ | `s2kl` | `int2e`       | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$                         | $[2, 1, 0]$       | $[2, 1, 0]$       | ✔ |
+    /// | 4 | ✔ | `s2kl` | `int2e_ip1`   | $[t, \mu, \nu, \mathrm{tp}(\kappa \lambda)]$                      | $[3, 2, 1, 0]$    | $[3, 2, 1, 0]$    | ✔ |
+    /// | 4 | ✘ | `s4`   | `int2e`       | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$             | $[1, 0]$          | $[1, 0]$          | ✔ |
+    /// | 4 | ✘ | `s8`   | `int2e`       | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$           | $\[0\]$           | ✔ |
+    ///
+    /// # See also
+    ///
+    /// - [`integrate`](Self::integrate) for general integrals.
+    /// - [`integrate_row_major_f`](Self::integrate_row_major_f) for fallible
+    ///   counterpart.
+    /// - [`integrate_row_major_spinor`](Self::integrate_row_major_spinor) for
+    ///   spinor type integrals.
+    /// - [`integrate_cross_row_major`](Self::integrate_cross_row_major) for
+    ///   cross integrals between multiple molecules.
+    /// - [`integrate_with_args`](Self::integrate_with_args) and
+    ///   [`integrate_cross_with_args`](Self::integrate_cross_with_args) for
+    ///   more advanced usage (full arguments that this crate supports).
     pub fn integrate_row_major(&self, intor: &str, aosym: impl Into<CIntSymm>, shls_slice: impl Into<ShlsSlice>) -> CIntOutput<f64> {
         self.integrate_row_major_f(intor, aosym, shls_slice.into()).unwrap()
     }
@@ -758,6 +937,11 @@ impl CInt {
     /// Main electronic integral driver (for non-spinor type) in row-major.
     ///
     /// This function is fallible.
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_row_major`](Self::integrate_row_major) for non-fallible
+    ///   counterpart.
     pub fn integrate_row_major_f(
         &self,
         intor: &str,
@@ -768,6 +952,177 @@ impl CInt {
         let integrate_args =
             self.integrate_args_builder().intor(intor).aosym(aosym).shls_slice(shls_slice.as_ref()).row_major(true).build()?;
         self.integrate_with_args_inner(integrate_args)
+    }
+
+    /// Main electronic integral driver (for spinor type) **in row-major**.
+    ///
+    /// We refer most documentation to
+    /// [`integrate_spinor`](Self::integrate_spinor) and
+    /// [`integrate_row_major`](Self::integrate_row_major) for more information.
+    ///
+    /// # Examples
+    ///
+    /// The following example uses a pre-defined water molecule with def2-TZVP
+    /// basis set.
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    ///
+    /// let (out, shape) = cint_data.integrate_row_major_spinor("int1e_ipovlp_spinor", None, None).into();
+    /// assert_eq!(shape, vec![3, 86, 86]);
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_spinor`](Self::integrate_spinor) for column-major
+    ///   counterpart.
+    /// - [`integrate_row_major`](Self::integrate_row_major) for non-spinor type
+    ///   integrals in row-major.
+    /// - [`integrate_row_major_spinor_f`](Self::integrate_row_major_spinor_f)
+    ///   for fallible counterpart.
+    pub fn integrate_row_major_spinor(
+        &self,
+        intor: &str,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> CIntOutput<Complex<f64>> {
+        self.integrate_row_major_spinor_f(intor, aosym, shls_slice.into()).unwrap()
+    }
+
+    /// Main electronic integral driver (for spinor type) in row-major.
+    ///
+    /// This function is fallible.
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_row_major_spinor`](Self::integrate_row_major_spinor) for
+    ///   non-fallible counterpart.
+    pub fn integrate_row_major_spinor_f(
+        &self,
+        intor: &str,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
+        let shls_slice = shls_slice.into();
+        let integrate_args =
+            self.integrate_args_builder_spinor().intor(intor).aosym(aosym).shls_slice(shls_slice.as_ref()).row_major(true).build()?;
+        self.integrate_with_args_inner(integrate_args)
+    }
+
+    /// Integrate with multiple molecules **in row-major**.
+    ///
+    /// We refer most documentation to
+    /// [`integrate_cross`](Self::integrate_cross), and also notice the
+    /// row-major convention that described in
+    /// [`integrate_row_major`](Self::integrate_row_major).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let data_tzvp = init_h2o_def2_tzvp();
+    /// let data_jk = init_h2o_def2_jk();
+    ///
+    /// // pyscf equilvant
+    /// //     out = gto.intor_cross("int1e_ovlp", mol_tzvp, mol_jk)
+    /// //     lib.fp(out), out.shape
+    /// let (out, shape) = CInt::integrate_cross_row_major("int1e_ovlp", [&data_tzvp, &data_jk], None, None).into();
+    /// assert_eq!(shape, vec![43, 113]);
+    /// assert!((cint_fp(&out) - 7.422726471473346).abs() < 1e-10);
+    ///
+    /// // pyscf equilvant
+    /// //     out = df.incore.aux_e2(mol_tzvp, mol_jk, "int3c2e_ip2", "s2ij")
+    /// //     lib.fp(out), out.shape
+    /// let (out, shape) = CInt::integrate_cross_row_major("int3c2e_ip2", [&data_tzvp, &data_tzvp, &data_jk], "s2ij", None).into();
+    /// assert_eq!(shape, vec![3, 946, 113]);
+    /// assert!((cint_fp(&out) - 15.423815120360992).abs() < 1e-10);
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_cross`](Self::integrate_cross) for column-major
+    ///   counterpart.
+    /// - [`integrate_cross_row_major_f`](Self::integrate_cross_row_major_f) for
+    ///   fallible counterpart.
+    /// - [`integrate_cross_row_major_spinor`](Self::integrate_cross_row_major_spinor)
+    ///   for spinor type integrals.
+    /// - [`integrate_cross_with_args`](Self::integrate_cross_with_args) for
+    ///   more advanced usage (full arguments that this crate supports).
+    pub fn integrate_cross_row_major<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> CIntOutput<f64> {
+        CInt::integrate_cross_row_major_f(intor, mols, aosym, shls_slice).unwrap()
+    }
+
+    /// Integrate with multiple molecules **in row-major**.
+    ///
+    /// This function is fallible.
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_cross_row_major`](Self::integrate_cross_row_major) for
+    ///   non-fallible counterpart.
+    pub fn integrate_cross_row_major_f<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> Result<CIntOutput<f64>, CIntError> {
+        let shls_slice = shls_slice.into();
+        let args = IntorCrossArgsBuilder::default()
+            .intor(intor)
+            .mols(mols.as_ref())
+            .shls_slice(shls_slice.as_ref())
+            .aosym(aosym.into())
+            .row_major(true)
+            .build()?;
+        CInt::integrate_cross_with_args_inner(args)
+    }
+
+    /// Integrate with multiple molecules (for spinor type) **in row-major**.
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_cross_row_major`](Self::integrate_cross_row_major) for
+    ///   non-spinor type integrals.
+    /// - [`integrate_cross_row_major_f`](Self::integrate_cross_row_major_f) for
+    ///   fallible counterpart.
+    pub fn integrate_cross_row_major_spinor<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> CIntOutput<Complex<f64>> {
+        CInt::integrate_cross_row_major_spinor_f(intor, mols, aosym, shls_slice).unwrap()
+    }
+
+    /// Integrate with multiple molecules (for spinor type) **in row-major**.
+    ///
+    /// This function is fallible.
+    ///
+    /// # See also
+    ///
+    /// - [`integrate_cross_row_major_spinor`](Self::integrate_cross_row_major_spinor) for
+    ///   non-fallible counterpart.
+    pub fn integrate_cross_row_major_spinor_f<'l>(
+        intor: &str,
+        mols: impl AsRef<[&'l CInt]>,
+        aosym: impl Into<CIntSymm>,
+        shls_slice: impl Into<ShlsSlice>,
+    ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
+        let shls_slice = shls_slice.into();
+        let args = IntorCrossArgsBuilder::default()
+            .intor(intor)
+            .mols(mols.as_ref())
+            .shls_slice(shls_slice.as_ref())
+            .aosym(aosym.into())
+            .row_major(true)
+            .build()?;
+        CInt::integrate_cross_with_args_inner(args)
     }
 }
 

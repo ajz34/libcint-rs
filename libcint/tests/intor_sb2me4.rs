@@ -1,3 +1,5 @@
+// Reference source: libcint/scripts/pyscf_sb2me4_pvtz.ipynb
+
 use approx::assert_relative_eq;
 use libcint::prelude::*;
 use rstest::rstest;

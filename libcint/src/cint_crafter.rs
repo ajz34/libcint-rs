@@ -1,8 +1,6 @@
 //! Integral crafter for [`CInt`] instance (the main integral functions).
 //!
-//! Code naming conventions:
-//! - `cgto_`: shell slices related variables, indicating shell -> basis
-//!   mapping.
+//! Implementation in this module is mostly not intended for basic users.
 
 #![allow(dead_code)]
 
@@ -149,7 +147,7 @@ impl CInt {
     where
         F: ComplexFloat + Send + Sync,
     {
-        let IntorCrossArgs { intor, mols, shls_slice, aosym, out } = args;
+        let IntorCrossArgs { intor, mols, shls_slice, aosym, out, row_major } = args;
 
         let integrator = CInt::get_integrator_f(intor)?;
         let n_center = integrator.n_center();
@@ -214,9 +212,15 @@ impl CInt {
         }
 
         let args = if out.is_some() {
-            IntegrateArgsBuilder::default().intor(intor).aosym(aosym).shls_slice(&shls_slice).out(out.unwrap()).build()?
+            IntegrateArgsBuilder::default()
+                .intor(intor)
+                .aosym(aosym)
+                .shls_slice(&shls_slice)
+                .row_major(row_major)
+                .out(out.unwrap())
+                .build()?
         } else {
-            IntegrateArgsBuilder::default().intor(intor).aosym(aosym).shls_slice(&shls_slice).build()?
+            IntegrateArgsBuilder::default().intor(intor).aosym(aosym).shls_slice(&shls_slice).row_major(row_major).build()?
         };
 
         mol_concate.integrate_with_args_inner(args)

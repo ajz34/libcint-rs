@@ -18,7 +18,7 @@ This crate is not official bindgen project, nither [libcint](https://github.com/
 
 ## Minimal Example
 
-The most important function is `CInt::integrate`. It is somehow similar to PySCF's `mol.intor(intor, aosym, shls_slice)`. For more information on usage of crate `libcint`, we refer to [API Documentation](https://docs.rs/libcint).
+The most important function is [`CInt::integrate`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.integrate). It is somehow similar to PySCF's `mol.intor(intor, aosym, shls_slice)`. For more information on usage of crate `libcint`, we refer to [API Documentation](https://docs.rs/libcint).
 
 ```rust
 use libcint::prelude::*;

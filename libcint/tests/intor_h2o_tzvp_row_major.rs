@@ -1,3 +1,5 @@
+// Reference source: libcint/scripts/pyscf_h2o_tzvp_row_major.ipynb
+
 use approx::assert_relative_eq;
 use libcint::prelude::*;
 use rstest::rstest;

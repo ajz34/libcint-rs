@@ -4,6 +4,22 @@
 //! This project contains libcint (C language) FFI bindings, wrapper and
 //! build-from-source.
 //!
+//! # Quick Links to Important Parts
+//!
+//! - [`CInt`] basic struct for defining molecule for electron integral.
+//! - [`CInt::integrate`]: integrate function (partly PySCF's `mol.intor`
+//!   counterpart, column-major which is the same to convention of libcint C
+//!   library, and the same memory layout to PySCF's 2/3-center integrals).
+//! - [`CInt::integrate_cross`]: integrate function with multiple [`CInt`]s,
+//!   useful for integral with auxiliary basis sets.
+//! - [`CInt::integrate_with_args`], [`CInt::integrate_args_builder`]: integrate
+//!   function with arguments builder (advanced options).
+//! - [`CInt::integrate_row_major`]: integrate function with row-major output
+//!   (the same convention to PySCF 4-center integrals).
+//! - [ffi::cint_wrapper] and [ffi::cecp_wrapper]: supported integrators.
+//!
+//! # Introduction
+//!
 //! [libcint](https://github.com/sunqm/libcint) is a C library for GTO
 //! (gaussian-type orbital) electronic integral, can be applied in
 //! computational chemistry, and has already been applied extensively in
@@ -44,29 +60,6 @@
 //! let (out, shape) = cint_data.integrate("int1e_ipkin", None, None).into();
 //! assert_eq!(shape, [43, 43, 3]);
 //! ```
-//!
-//! # For most users
-//!
-//! You are probably most interested in the following parts:
-//! - [`CInt::integrate`] and [`CInt::integrate_spinor`] for obtaining integrals
-//!   (PySCF's `mol.intor` counterpart);
-//! - [`CInt`] for virtually all methods for integrals and molecule data
-//!   handling.
-//!
-//! For some advanced users, you may also want to use
-//! - [`CInt::integrate_cross`] for integral with multiple `CInt` molecule data;
-//! - `CInt::with_xxx` for temporarily changing molecule data (PySCF's
-//!   `mol.with_xxx` with-clause);
-//!
-//! For even more advanced users, you may want to use
-//! - [`CInt::integrate_args_builder`], [`CInt::integrate_args_builder_spinor`]
-//!   for full arguments (currently you can also specify `out` as argument,
-//!   meaning that you can use your own memory buffer to store the result);
-//!   see also
-//!   [derive_builder](https://docs.rs/derive_builder/latest/derive_builder/)
-//!   for how to use the builder pattern.
-//! - And then use [`CInt::integrate_with_args`] and
-//!   [`CInt::integrate_with_args_spinor`] to integrate with the arguments.
 //!
 //! # For users from PySCF
 //!
