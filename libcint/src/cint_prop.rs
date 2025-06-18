@@ -169,11 +169,12 @@ impl CInt {
         (0..self.atm.len()).map(|i| self.atom_charge(i)).collect()
     }
 
-    /// The number of spinor associated with given angular momentum and kappa.
+    /// The number of spinor associated with given angular momentum $l$ and
+    /// kappa $\kappa$.
     ///
-    /// - If `kappa == 0`, it returns `l * 4 + 2`.
-    /// - If `kappa > 0`, it returns `l * 2 + 2`.
-    /// - If `kappa < 0`, it returns `l * 2`.
+    /// - If $\kappa = 0$, it returns $4 l + 2$.
+    /// - If $\kappa > 0$, it returns $2 l + 2$.
+    /// - If $\kappa < 0$, it returns $2 l$.
     ///
     /// # PySCF Equivalent
     ///
@@ -189,9 +190,10 @@ impl CInt {
         }
     }
 
-    /// The number of Cartesian function associated with given angular momentum.
+    /// The number of Cartesian function associated with given angular momentum
+    /// $l$.
     ///
-    /// This will gives `(l + 1) * (l + 2) / 2`.
+    /// This will gives $\frac{(l + 1) (l + 2)}{2}$
     ///
     /// # PySCF Equivalent
     ///
@@ -201,9 +203,10 @@ impl CInt {
         ((l + 1) * (l + 2) / 2) as usize
     }
 
-    /// The number of spherical function associated with given angular momentum.
+    /// The number of spherical function associated with given angular momentum
+    /// $l$.
     ///
-    /// This will gives `(l * 2 + 1)`.
+    /// This will gives $2 l + 1$.
     ///
     /// # PySCF Equivalent
     ///

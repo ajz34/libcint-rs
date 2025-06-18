@@ -69,16 +69,20 @@ impl Add for &CInt {
 
 /* #region fakemol */
 
+/// Create a fake molecule for gaussian distributed charges.
+///
+/// # See also
+///
+/// [`CInt::fakemol_for_charges`]
 pub trait FakeMolForChargeArg {
-    /// Create a fake molecule for gaussian distributed charges.
-    ///
-    /// You may also fake point charges by setting an extremely large exponent.
     fn fakemol_for_charges(coords: &[[f64; 3]], arg: Self) -> CInt;
 }
 
 /// Create a fake molecule for gaussian distributed charges.
 ///
-/// You may also fake point charges by setting an extremely large exponent.
+/// # See also
+///
+/// [`CInt::fakemol_for_charges`]
 pub fn fakemol_for_charges<T>(coords: &[[f64; 3]], arg: T) -> CInt
 where
     T: FakeMolForChargeArg,
@@ -192,56 +196,220 @@ impl FakeMolForChargeArg for Option<f64> {
     }
 }
 
-impl FakeMolForChargeArg for (&[f64], &[f64]) {
-    fn fakemol_for_charges(coords: &[[f64; 3]], arg: Self) -> CInt {
-        const ATM_SLOTS: usize = cint_ffi::ATM_SLOTS as usize;
-        const BAS_SLOTS: usize = cint_ffi::BAS_SLOTS as usize;
-        const PTR_ENV_START: usize = cint_ffi::PTR_ENV_START as usize;
-        const PTR_COORD: usize = cint_ffi::PTR_COORD as usize;
-        const ATOM_OF: usize = cint_ffi::ATOM_OF as usize;
-        const NPRIM_OF: usize = cint_ffi::NPRIM_OF as usize;
-        const NCTR_OF: usize = cint_ffi::NCTR_OF as usize;
-        const PTR_EXP: usize = cint_ffi::PTR_EXP as usize;
-        const PTR_COEFF: usize = cint_ffi::PTR_COEFF as usize;
-        const PI: f64 = std::f64::consts::PI;
+/// Create a fake molecule for contracted GTO-type charge.
+///
+/// # See also
+///
+/// [`CInt::fakemol_for_cgtf_charge`]
+pub fn fakemol_for_cgtf_charge(coord: [f64; 3], exponents: &[f64], coeffs: &[f64]) -> CInt {
+    const ATM_SLOTS: usize = cint_ffi::ATM_SLOTS as usize;
+    const BAS_SLOTS: usize = cint_ffi::BAS_SLOTS as usize;
+    const PTR_ENV_START: usize = cint_ffi::PTR_ENV_START as usize;
+    const PTR_COORD: usize = cint_ffi::PTR_COORD as usize;
+    const ATOM_OF: usize = cint_ffi::ATOM_OF as usize;
+    const NPRIM_OF: usize = cint_ffi::NPRIM_OF as usize;
+    const NCTR_OF: usize = cint_ffi::NCTR_OF as usize;
+    const PTR_EXP: usize = cint_ffi::PTR_EXP as usize;
+    const PTR_COEFF: usize = cint_ffi::PTR_COEFF as usize;
+    const PI: f64 = core::f64::consts::PI;
 
-        let (exponents, contr_coeffs) = arg;
-
-        let nbas = coords.len();
-        if nbas != exponents.len() {
-            panic!("Number of coordinates must match number of exponents");
-        }
-
-        let mut fake_atm = vec![];
-        let mut fake_bas = vec![];
-        let mut fake_env = vec![0.0; PTR_ENV_START];
-        let mut ptr = PTR_ENV_START;
-
-        // atm
-        coords.iter().for_each(|&coord| {
-            let mut atm = [0; ATM_SLOTS];
-            atm[PTR_COORD] = ptr as c_int;
-            fake_atm.push(atm);
-            fake_env.extend_from_slice(&coord);
-            ptr += 3;
-        });
-
-        // bas, env
-        exponents.iter().zip(contr_coeffs.iter()).enumerate().for_each(|(i, (&exponent, &contr_coeff))| {
-            let mut bas = [0; BAS_SLOTS];
-            bas[ATOM_OF] = i as c_int;
-            bas[NPRIM_OF] = 1;
-            bas[NCTR_OF] = 1;
-            bas[PTR_EXP] = ptr as c_int;
-            bas[PTR_COEFF] = (ptr + 1) as c_int;
-            let coef = contr_coeff / (2.0 * PI.sqrt() * gaussian_int(2.0, exponent));
-            fake_bas.push(bas);
-            fake_env.extend_from_slice(&[exponent, coef]);
-            ptr += 2;
-        });
-
-        CInt { atm: fake_atm, bas: fake_bas, ecpbas: vec![], env: fake_env, cint_type: CIntType::default() }
+    let nprim = exponents.len();
+    if coeffs.len() != nprim {
+        panic!("Number of exponents and coefficients must match for CGTF charge");
     }
+
+    let mut fake_atm = vec![];
+    let mut fake_bas = vec![];
+    let mut fake_env = vec![0.0; PTR_ENV_START];
+    let mut ptr = PTR_ENV_START;
+
+    // atm
+    let mut atm = [0; ATM_SLOTS];
+    atm[PTR_COORD] = ptr as c_int;
+    fake_atm.push(atm);
+    fake_env.extend_from_slice(&coord);
+    ptr += 3;
+
+    // bas, env
+    let mut bas = [0; BAS_SLOTS];
+    bas[ATOM_OF] = 0; // single atom
+    bas[NPRIM_OF] = nprim as c_int;
+    bas[NCTR_OF] = 1; // single charge
+    bas[PTR_EXP] = ptr as c_int;
+    bas[PTR_COEFF] = (ptr + nprim) as c_int;
+
+    let coeffs_converted = coeffs.iter().zip(exponents).map(|(&c, &e)| c / (2.0 * PI.sqrt() * gaussian_int(2.0, e))).collect_vec();
+
+    fake_bas.push(bas);
+
+    fake_env.extend_from_slice(exponents);
+    fake_env.extend_from_slice(&coeffs_converted);
+
+    CInt { atm: fake_atm, bas: fake_bas, ecpbas: vec![], env: fake_env, cint_type: CIntType::default() }
+}
+
+impl CInt {
+    /// Create a fake molecule for gaussian distributed charges.
+    ///
+    /// You may also fake point charges by setting an extremely large exponent.
+    ///
+    /// # PySCF equivalent
+    ///
+    /// `gto.fakemol_for_charges(coords, arg)`
+    ///
+    /// # Argument overloads
+    ///
+    /// This function passes coordinates in Bohr (a.u.) unit, with `&[[f64; 3]]`
+    /// type.
+    ///
+    /// For the second argument,
+    /// - `None`: use a large exponent (1e+16) to mimic point-charge.
+    /// - `f64`: use a single exponent for all coordinates.
+    /// - `&[f64]`: use a list of exponents, one for each coordinate.
+    /// - `(&[f64], &[f64])`: use a list of exponents and contraction
+    ///   coefficients, one for each coordinate.
+    ///
+    /// # Examples
+    ///
+    /// All examples are initialized with by
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let data_tzvp = init_h2o_def2_tzvp();
+    /// let coords_chg = [[0., 1., 2.], [2., 0., 1.], [0., 2., 1.]];
+    /// ```
+    ///
+    /// ## Mimic point-charge by large exponent
+    ///
+    /// This crate implementation:
+    ///
+    /// ```rust
+    /// # use libcint::prelude::*;
+    /// # let data_tzvp = init_h2o_def2_tzvp();
+    /// # let coords_chg = [[0., 1., 2.], [2., 0., 1.], [0., 2., 1.]];
+    /// let data_chg = CInt::fakemol_for_charges(&coords_chg, None);
+    /// let (out, shape) = CInt::integrate_cross_row_major(
+    ///     "int1e_ovlp", [&data_tzvp, &data_chg], None, None).into();
+    /// assert_eq!(shape, [43, 3]);
+    /// assert!((cint_fp(&out) - -0.12650556883004238).abs() < 1e-10);
+    /// ```
+    ///
+    /// PySCF equivalent:
+    ///
+    /// ```python
+    /// coords_chg = np.asarray([[0, 1, 2], [2, 0, 1], [0, 2, 1]])
+    /// mol_chg = gto.fakemol_for_charges(coords_chg)
+    /// out = gto.intor_cross("int1e_ovlp", mol_tzvp, mol_chg)
+    /// lib.fp(out), out.shape
+    /// ```
+    ///
+    /// ## Universal exponent for all coordinates
+    ///
+    /// ```rust
+    /// # use libcint::prelude::*;
+    /// # let data_tzvp = init_h2o_def2_tzvp();
+    /// # let coords_chg = [[0., 1., 2.], [2., 0., 1.], [0., 2., 1.]];
+    /// let exp_chg = 1.0;
+    /// let data_chg = CInt::fakemol_for_charges(&coords_chg, exp_chg);
+    /// let (out, shape) = CInt::integrate_cross_row_major(
+    ///     "int1e_ovlp", [&data_tzvp, &data_chg], None, None).into();
+    /// assert_eq!(shape, [43, 3]);
+    /// assert!((cint_fp(&out) - 0.0707265752256318).abs() < 1e-10);
+    /// ```
+    ///
+    /// PySCF equivalent:
+    ///
+    /// ```python
+    /// exp_chg = 1.0
+    /// mol_chg = gto.fakemol_for_charges(coords_chg, exp_chg)
+    /// out = gto.intor_cross("int1e_ovlp", mol_tzvp, mol_chg)
+    /// lib.fp(out), out.shape
+    /// ```
+    ///
+    /// ## Exponents for each coordinate
+    ///
+    /// This crate implementation:
+    ///
+    /// ```rust
+    /// # use libcint::prelude::*;
+    /// # let data_tzvp = init_h2o_def2_tzvp();
+    /// # let coords_chg = [[0., 1., 2.], [2., 0., 1.], [0., 2., 1.]];
+    /// let exp_chg = [1.0, 2.5, 4.9];
+    /// let data_chg = CInt::fakemol_for_charges(&coords_chg, exp_chg.as_slice());
+    /// let (out, shape) = CInt::integrate_cross_row_major(
+    ///     "int1e_ovlp", [&data_tzvp, &data_chg], None, None).into();
+    /// assert_eq!(shape, [43, 3]);
+    /// assert!((cint_fp(&out) - 0.0424629237780389).abs() < 1e-10);
+    /// ```
+    ///
+    /// PySCF equivalent:
+    ///
+    /// ```python
+    /// exp_chg = [1.0, 2.5, 4.9]
+    /// mol_chg = gto.fakemol_for_charges(coords_chg, exp_chg)
+    /// out = gto.intor_cross("int1e_ovlp", mol_tzvp, mol_chg)
+    /// lib.fp(out), out.shape
+    /// ```
+    pub fn fakemol_for_charges<T>(coords: &[[f64; 3]], arg: T) -> CInt
+    where
+        T: FakeMolForChargeArg,
+    {
+        T::fakemol_for_charges(coords, arg)
+    }
+
+    /// Create a fake molecule for contracted GTO-type charge.
+    ///
+    /// # PySCF equivalent
+    ///
+    /// `gto.fakemol_for_cgtf_charge(coord, exponents, coeffs)`
+    ///
+    /// # Examples
+    ///
+    /// This crate implementation:
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let data_tzvp = init_h2o_def2_tzvp();
+    ///
+    /// let coord = [0., 1., 2.];
+    /// let exp_chg = [1.0, 2.5, 4.9];
+    /// let coef_chg = [2.8, 3.3, 0.7];
+    /// let data_chg = CInt::fakemol_for_cgtf_charge(coord, &exp_chg, &coef_chg);
+    /// let (out, shape) = CInt::integrate_cross_row_major(
+    ///     "int1e_ovlp", [&data_tzvp, &data_chg], None, None).into();
+    /// assert_eq!(shape, [43, 1]);
+    /// assert!((cint_fp(&out) - -0.054460537334674264).abs() < 1e-10);
+    /// ```
+    ///
+    /// PySCF equivalent:
+    ///
+    /// ```python
+    /// mol_tzvp = gto.Mole(atom="O; H 1 0.94; H 1 0.94 2 104.5", basis="def2-TZVP").build()
+    /// coord = np.asarray([[0., 1., 2.]])
+    /// exp_chg = [1.0, 2.5, 4.9]
+    /// coef_chg = [2.8, 3.3, 0.7]
+    /// mol_chg = gto.fakemol_for_cgtf_charge(coord, exp_chg, coef_chg)
+    /// out = gto.intor_cross("int1e_ovlp", mol_tzvp, mol_chg)
+    /// lib.fp(out), out.shape
+    /// ```
+    pub fn fakemol_for_cgtf_charge(coord: [f64; 3], exponents: &[f64], coeffs: &[f64]) -> CInt {
+        fakemol_for_cgtf_charge(coord, exponents, coeffs)
+    }
+}
+
+#[test]
+fn playground() {
+    use crate::prelude::*;
+    let data_tzvp = init_h2o_def2_tzvp();
+
+    let coord = [0., 1., 2.];
+    let exp_chg = [1.0, 2.5, 4.9];
+    let coef_chg = [2.8, 3.3, 0.7];
+    let data_chg = CInt::fakemol_for_cgtf_charge(coord, &exp_chg, &coef_chg);
+    let (out, shape) = CInt::integrate_cross_row_major("int1e_ovlp", [&data_tzvp, &data_chg], None, None).into();
+    assert_eq!(shape, [43, 1]);
+    // println!("out: {out:?}");
+    println!("env {:?}", data_chg.env);
+    assert!((cint_fp(&out) - -0.054460537334674264).abs() < 1e-10);
 }
 
 /* #endregion */
