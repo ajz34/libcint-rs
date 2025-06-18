@@ -419,11 +419,47 @@ fn playground() {
 impl CInt {
     /* #region cint_type */
 
+    /// Setter of default integral type.
+    ///
+    /// # See also
+    ///
+    /// - [`with_cint_type`](CInt::with_cint_type)
     pub fn set_cint_type(&mut self, cint_type: impl Into<CIntType>) -> &mut Self {
         self.cint_type = cint_type.into();
         self
     }
 
+    /// With-clause of default integral type.
+    ///
+    /// This will change the type of integrals computed by default:
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    ///
+    /// // this test mol is Spheric
+    /// let mut cint_data = init_h2o_def2_tzvp();
+    /// let (_, shape) = cint_data.integrate("int1e_ovlp", None, None).into();
+    /// assert_eq!(cint_data.nao(), 43);
+    /// assert_eq!(shape, [43, 43]);
+    ///
+    /// // change to Cartesian type
+    /// cint_data.with_cint_type("cart", |data| {
+    ///     let (_, shape) = data.integrate("int1e_ovlp", None, None).into();
+    ///     assert_eq!(data.nao(), 48);
+    ///     assert_eq!(shape, [48, 48]);
+    /// });
+    ///
+    /// // change to spinor type
+    /// cint_data.with_cint_type("spinor", |data| {
+    ///     let (_, shape) = data.integrate_spinor("int1e_ovlp", None, None).into();
+    ///     assert_eq!(data.nao(), 86);
+    ///     assert_eq!(shape, [86, 86]);
+    /// });
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`set_cint_type`](CInt::set_cint_type)
     pub fn with_cint_type<R>(&mut self, cint_type: impl Into<CIntType>, func: impl FnOnce(&mut Self) -> R) -> R {
         let old_type = self.cint_type;
         self.set_cint_type(cint_type);
@@ -436,17 +472,60 @@ impl CInt {
 
     /* #region common_origin */
 
+    /// Getter of common origin for integrals (in unit Bohr).
+    ///
+    /// # See also
+    ///
+    /// - [`with_common_origin`](CInt::with_common_origin)
+    /// - [`set_common_origin`](CInt::set_common_origin)
     pub fn get_common_origin(&self) -> [f64; 3] {
         const PTR_COMMON_ORIG: usize = cint_ffi::PTR_COMMON_ORIG as usize;
         self.env[PTR_COMMON_ORIG..PTR_COMMON_ORIG + 3].try_into().unwrap()
     }
 
+    /// Set the common origin for integrals (in unit Bohr).
+    ///
+    /// # See also
+    ///
+    /// - [`with_common_origin`](CInt::with_common_origin)
+    /// - [`get_common_origin`](CInt::get_common_origin)
     pub fn set_common_origin(&mut self, origin: [f64; 3]) -> &mut Self {
         const PTR_COMMON_ORIG: usize = cint_ffi::PTR_COMMON_ORIG as usize;
         self.env[PTR_COMMON_ORIG..PTR_COMMON_ORIG + 3].copy_from_slice(&origin);
         self
     }
 
+    /// Temporarily set the common origin for integrals (in unit Bohr).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let mut cint_data = init_h2o_def2_tzvp();
+    ///
+    /// let (out, _) = cint_data.integrate_row_major("int1e_r", None, None).into();
+    /// assert!((cint_fp(&out) - -0.7587292491644675).abs() < 1e-10);
+    ///
+    /// // set common origin to [0.0, 1.0, 2.0]
+    /// cint_data.with_common_origin([0.0, 1.0, 2.0], |data| {
+    ///     let (out, _) = data.integrate_row_major("int1e_r", None, None).into();
+    ///     assert!((cint_fp(&out) - 71.88577867872883).abs() < 1e-10);
+    /// });
+    /// ```
+    ///
+    /// PySCF equivalent:
+    ///
+    /// ```python
+    /// mol = gto.Mole(atom="O; H 1 0.94; H 1 0.94 2 104.5", basis="def2-TZVP").build()
+    /// assert abs(lib.fp(mol.intor("int1e_r")) - -0.7587292491644675) < 1e-10
+    /// with mol.with_common_orig([0, 1, 2]):
+    ///     assert abs(lib.fp(mol.intor("int1e_r")) - 71.88577867872883) < 1e-10
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`set_common_origin`](CInt::set_common_origin)
+    /// - [`get_common_origin`](CInt::get_common_origin)
     pub fn with_common_origin<R>(&mut self, origin: [f64; 3], func: impl FnOnce(&mut Self) -> R) -> R {
         let old_origin = self.get_common_origin();
         self.set_common_origin(origin);
@@ -459,17 +538,61 @@ impl CInt {
 
     /* #region rinv_origin */
 
+    /// Getter of origin in evaluating $1/r$ for integrals (in unit Bohr).
+    ///
+    /// # See also
+    ///
+    /// - [`with_rinv_origin`](CInt::with_rinv_origin)
+    /// - [`set_rinv_origin`](CInt::set_rinv_origin)
     pub fn get_rinv_origin(&self) -> [f64; 3] {
         const PTR_RINV_ORIG: usize = cint_ffi::PTR_RINV_ORIG as usize;
         self.env[PTR_RINV_ORIG..PTR_RINV_ORIG + 3].try_into().unwrap()
     }
 
+    /// Set the origin in evaluating $1/r$ for integrals (in unit Bohr).
+    ///
+    /// # See also
+    ///
+    /// - [`with_rinv_origin`](CInt::with_rinv_origin)
+    /// - [`get_rinv_origin`](CInt::get_rinv_origin)
     pub fn set_rinv_origin(&mut self, origin: [f64; 3]) -> &mut Self {
         const PTR_RINV_ORIG: usize = cint_ffi::PTR_RINV_ORIG as usize;
         self.env[PTR_RINV_ORIG..PTR_RINV_ORIG + 3].copy_from_slice(&origin);
         self
     }
 
+    /// Temporarily set the origin in evaluating $1/r$ for integrals (in unit
+    /// Bohr).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let mut cint_data = init_h2o_def2_tzvp();
+    ///
+    /// let (out, _) = cint_data.integrate_row_major("int1e_rinv", None, None).into();
+    /// assert!((cint_fp(&out) - 51.806443495904794).abs() < 1e-10);
+    ///
+    /// // set rinv origin to [0.0, 1.0, 2.0]
+    /// cint_data.with_rinv_origin([0.0, 1.0, 2.0], |data| {
+    ///     let (out, _) = data.integrate_row_major("int1e_rinv", None, None).into();
+    ///     assert!((cint_fp(&out) - 15.72929399764994).abs() < 1e-10);
+    /// });
+    /// ```
+    ///
+    /// PySCF equivalent:
+    ///
+    /// ```python
+    /// mol = gto.Mole(atom="O; H 1 0.94; H 1 0.94 2 104.5", basis="def2-TZVP").build()
+    /// assert abs(lib.fp(mol.intor("int1e_rinv")) - 51.806443495904794) < 1e-10
+    /// with mol.with_rinv_orig([0, 1, 2]):
+    ///     assert abs(lib.fp(mol.intor("int1e_rinv")) - 15.72929399764994) < 1e-10
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`set_rinv_origin`](CInt::set_rinv_origin)
+    /// - [`get_rinv_origin`](CInt::get_rinv_origin)
     pub fn with_rinv_origin<R>(&mut self, origin: [f64; 3], func: impl FnOnce(&mut Self) -> R) -> R {
         let old_origin = self.get_rinv_origin();
         self.set_rinv_origin(origin);
@@ -482,17 +605,39 @@ impl CInt {
 
     /* #region rinv_orig_atom */
 
+    /// Getter of the origin atom in evaluating $1/r$ for ECP integrals.
+    ///
+    /// # See also
+    ///
+    /// - [`with_rinv_origin_atom`](CInt::with_rinv_origin_atom)
+    /// - [`set_rinv_origin_atom`](CInt::set_rinv_origin_atom)
     pub fn get_rinv_origin_atom(&self) -> usize {
         const AS_RINV_ORIG_ATOM: usize = cecp_ffi::AS_RINV_ORIG_ATOM as usize;
         self.env[AS_RINV_ORIG_ATOM] as usize
     }
 
+    /// Setter of the origin atom in evaluating $1/r$ for ECP integrals.
+    ///
+    /// # See also
+    ///
+    /// - [`with_rinv_origin_atom`](CInt::with_rinv_origin_atom)
+    /// - [`get_rinv_origin_atom`](CInt::get_rinv_origin_atom)
     pub fn set_rinv_origin_atom(&mut self, atm_id: usize) -> &mut Self {
         const AS_RINV_ORIG_ATOM: usize = cecp_ffi::AS_RINV_ORIG_ATOM as usize;
         self.env[AS_RINV_ORIG_ATOM] = atm_id as f64;
         self
     }
 
+    /// Temporarily set the origin atom in evaluating $1/r$ for ECP integrals.
+    ///
+    /// This option alone is not useful. See
+    /// [`with_rinv_at_nucleus`](Self::with_rinv_at_nucleus) for more
+    /// information.
+    ///
+    /// # See also
+    ///
+    /// - [`get_rinv_origin_atom`](CInt::get_rinv_origin_atom)
+    /// - [`set_rinv_origin_atom`](CInt::set_rinv_origin_atom)
     pub fn with_rinv_origin_atom<R>(&mut self, atm_id: usize, func: impl FnOnce(&mut Self) -> R) -> R {
         let old_atm_id = self.get_rinv_origin_atom();
         self.set_rinv_origin_atom(atm_id);
@@ -505,17 +650,91 @@ impl CInt {
 
     /* #region range_coulomb */
 
+    /// Getter of the range separation parameter $\omega$ for Coulomb integrals.
+    ///
+    /// # See also
+    ///
+    /// - [`with_range_coulomb`](CInt::with_range_coulomb)
+    /// - [`set_range_coulomb`](CInt::set_range_coulomb)
+    ///
+    /// # Alias
+    ///
+    /// - [`omega`](CInt::omega)
     pub fn get_range_coulomb(&self) -> f64 {
         const PTR_RANGE_OMEGA: usize = cint_ffi::PTR_RANGE_OMEGA as usize;
         self.env[PTR_RANGE_OMEGA]
     }
 
+    /// Setter the range separation parameter $\omega$ for Coulomb integrals.
+    ///
+    /// # See also
+    ///
+    /// - [`with_range_coulomb`](CInt::with_range_coulomb)
+    /// - [`get_range_coulomb`](CInt::get_range_coulomb)
+    ///
+    /// # Alias
+    ///
+    /// - [`set_omega`](CInt::set_omega)
     pub fn set_range_coulomb(&mut self, range: f64) -> &mut Self {
         const PTR_RANGE_OMEGA: usize = cint_ffi::PTR_RANGE_OMEGA as usize;
         self.env[PTR_RANGE_OMEGA] = range;
         self
     }
 
+    /// Temporarily set the range separation parameter $\omega$ for Coulomb
+    /// integrals.
+    ///
+    /// Common operator of ERI (for example, `int2e`) is $1 / r$; however, in
+    /// range separation scheme, the long-range operator is $\mathrm{erf}
+    /// (\omega r) / r$, and the short-range operator is $\mathrm{erfc} (\omega
+    /// r) / r$.
+    ///
+    /// For libcint convention,
+    ///
+    /// - Positive omega indicates long-range Coulomb operator.
+    /// - Negative omega indicates short-range Coulomb operator.
+    /// - Exactly zero omega indicates the original Coulomb operator $1/r$.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let mut cint_data = init_h2o_def2_tzvp();
+    ///
+    /// let (out, _) = cint_data.integrate_row_major("int2e", None, None).into();
+    /// assert!((cint_fp(&out) - 70.00106603114841).abs() < 1e-10);
+    ///
+    /// // set range separation parameter to 0.5 (long-range)
+    /// cint_data.with_range_coulomb(0.5, |data| {
+    ///    let (out, _) = data.integrate_row_major("int2e", None, None).into();
+    ///    assert!((cint_fp(&out) - 23.8282413132626).abs() < 1e-10);
+    /// });
+    ///
+    /// // set range separation parameter to -0.5 (short-range)
+    /// cint_data.with_range_coulomb(-0.5, |data| {
+    ///     let (out, _) = data.integrate_row_major("int2e", None, None).into();
+    ///     assert!((cint_fp(&out) - 46.17282471793578).abs() < 1e-10);
+    /// });
+    /// ```
+    ///
+    /// PySCF equivalent:
+    /// ```python
+    /// mol = gto.Mole(atom="O; H 1 0.94; H 1 0.94 2 104.5", basis="def2-TZVP").build()
+    /// assert abs(lib.fp(mol.intor("int2e")) - 70.00106603114841) < 1e-10
+    /// with mol.with_range_coulomb(0.5):
+    ///     assert abs(lib.fp(mol.intor("int2e")) - 23.8282413132626) < 1e-10
+    /// with mol.with_range_coulomb(-0.5):
+    ///     assert abs(lib.fp(mol.intor("int2e")) - 46.17282471793578) < 1e-10
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`set_range_coulomb`](CInt::set_range_coulomb)
+    /// - [`get_range_coulomb`](CInt::get_range_coulomb)
+    ///
+    /// # Alias
+    ///
+    /// - [`with_omega`](CInt::with_omega)
     pub fn with_range_coulomb<R>(&mut self, range: f64, func: impl FnOnce(&mut Self) -> R) -> R {
         let old_range = self.get_range_coulomb();
         self.set_range_coulomb(range);
@@ -524,19 +743,62 @@ impl CInt {
         result
     }
 
+    /// Getter of the range separation parameter $\omega$ for Coulomb integrals.
+    ///
+    /// # Alias
+    ///
+    /// - [`get_range_coulomb`](CInt::get_range_coulomb)
     pub fn omega(&self) -> f64 {
         self.get_range_coulomb()
     }
 
+    /// Setter of the range separation parameter $\omega$ for Coulomb integrals.
+    ///
+    /// # Alias
+    ///
+    /// - [`set_range_coulomb`](CInt::set_range_coulomb)
     pub fn set_omega(&mut self, omega: f64) -> &mut Self {
         self.set_range_coulomb(omega)
     }
 
-    pub fn with_long_range_coulomb<R>(&mut self, omega: f64, func: impl FnOnce(&mut Self) -> R) -> R {
+    /// Temporarily set the range separation parameter $\omega$ for Coulomb
+    /// integrals.
+    ///
+    /// # Alias
+    ///
+    /// - [`with_range_coulomb`](CInt::with_range_coulomb)
+    pub fn with_omega<R>(&mut self, omega: f64, func: impl FnOnce(&mut Self) -> R) -> R {
         self.with_range_coulomb(omega, func)
     }
 
+    /// Temporarily set the range separation parameter $\omega$ for Coulomb
+    /// integrals (long range).
+    ///
+    /// This function only accepts positive omega values.
+    ///
+    /// # Alias
+    ///
+    /// - [`with_range_coulomb`](CInt::with_range_coulomb)
+    pub fn with_long_range_coulomb<R>(&mut self, omega: f64, func: impl FnOnce(&mut Self) -> R) -> R {
+        if omega <= 0.0 {
+            panic!("This function does not allow negative or zero omega values.");
+        }
+        self.with_range_coulomb(omega, func)
+    }
+
+    /// Temporarily set the range separation parameter $\omega$ for Coulomb
+    /// integrals (short range).
+    ///
+    /// This function only accepts negative omega values, and is actually the
+    /// alias to `self.with_range_coulomb(-omega, func)`.
+    ///
+    /// # Alias
+    ///
+    /// - [`with_range_coulomb`](CInt::with_range_coulomb)
     pub fn with_short_range_coulomb<R>(&mut self, omega: f64, func: impl FnOnce(&mut Self) -> R) -> R {
+        if omega <= 0.0 {
+            panic!("This function does not allow negative or zero omega values.");
+        }
         self.with_range_coulomb(-omega, func)
     }
 
@@ -570,6 +832,7 @@ impl CInt {
 
     /* #region set_nuc_mod */
 
+    /// Set the nuclear model for a given atom.
     pub fn set_nuc_mod(&mut self, atm_id: usize, zeta: f64) -> &mut Self {
         const PTR_ZETA: usize = cint_ffi::PTR_ZETA as usize;
         const NUC_MOD_OF: usize = cint_ffi::NUC_MOD_OF as usize;
@@ -586,17 +849,35 @@ impl CInt {
 
     /* #region rinv_zeta */
 
+    /// Getter of the $\zeta$ parameter for nucleus model.
+    ///
+    /// # See also
+    ///
+    /// - [`with_rinv_zeta`](CInt::with_rinv_zeta)
+    /// - [`set_rinv_zeta`](CInt::set_rinv_zeta)
     pub fn get_rinv_zeta(&self) -> f64 {
         const PTR_RINV_ZETA: usize = cint_ffi::PTR_RINV_ZETA as usize;
         self.env[PTR_RINV_ZETA]
     }
 
+    /// Setter of the $\zeta$ parameter for nucleus model.
+    ///
+    /// # See also
+    ///
+    /// - [`with_rinv_zeta`](CInt::with_rinv_zeta)
+    /// - [`get_rinv_zeta`](CInt::get_rinv_zeta)
     pub fn set_rinv_zeta(&mut self, zeta: f64) -> &mut Self {
         const PTR_RINV_ZETA: usize = cint_ffi::PTR_RINV_ZETA as usize;
         self.env[PTR_RINV_ZETA] = zeta;
         self
     }
 
+    /// Temporarily set the $\zeta$ parameter for nucleus model.
+    ///
+    /// # See also
+    ///
+    /// - [`get_rinv_zeta`](CInt::get_rinv_zeta)
+    /// - [`set_rinv_zeta`](CInt::set_rinv_zeta)
     pub fn with_rinv_zeta<R>(&mut self, zeta: f64, func: impl FnOnce(&mut Self) -> R) -> R {
         let old_zeta = self.get_rinv_zeta();
         self.set_rinv_zeta(zeta);
@@ -609,6 +890,11 @@ impl CInt {
 
     /* #region rinv_at_nucleus */
 
+    /// Set the origin to atom coordinate in evaluating $1/r$ for integrals.
+    ///
+    /// # See also
+    ///
+    /// - [`with_rinv_at_nucleus`](CInt::with_rinv_at_nucleus)
     pub fn set_rinv_at_nucleus(&mut self, atm_id: usize) -> &mut Self {
         const PTR_ZETA: usize = cint_ffi::PTR_ZETA as usize;
         let zeta = self.env[self.atm[atm_id][PTR_ZETA] as usize];
@@ -621,6 +907,62 @@ impl CInt {
         self
     }
 
+    /// Temporarily set the origin to atom coordinate in evaluating $1/r$ for
+    /// integrals.
+    ///
+    /// # Example (usual integral)
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let mut cint_data = init_h2o_def2_tzvp();
+    ///
+    /// let (out, _) = cint_data.integrate_row_major("int1e_rinv", None, None).into();
+    /// assert!((cint_fp(&out) - 51.806443495904794).abs() < 1e-10);
+    ///
+    /// // set rinv origin to the second atom (first Hydrogen)
+    /// cint_data.with_rinv_at_nucleus(1, |data| {
+    ///     let (out, _) = data.integrate_row_major("int1e_rinv", None, None).into();
+    ///     assert!((cint_fp(&out) - 20.940503856155193).abs() < 1e-10);
+    /// });
+    /// ```
+    ///
+    /// PySCF equivalent:
+    ///
+    /// ```python
+    /// mol = gto.Mole(atom="O; H 1 0.94; H 1 0.94 2 104.5", basis="def2-TZVP").build()
+    /// assert abs(lib.fp(mol.intor("int1e_rinv")) - 51.806443495904794) < 1e-10
+    /// with mol.with_rinv_at_nucleus(1):
+    ///     assert abs(lib.fp(mol.intor("int1e_rinv")) - 20.940503856155193) < 1e-10
+    /// ```
+    ///
+    /// # Example (ECP integral)
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let mut cint_data = init_sb2me4_cc_pvtz();
+    ///
+    /// let (out, _) = cint_data.integrate_row_major("ECPscalar_iprinvip", None, None).into();
+    /// assert!((cint_fp(&out) - 324.13737563392084).abs() < 1e-10);
+    ///
+    /// // set rinv origin to the second atom (second Sb Antimony)
+    /// cint_data.with_rinv_at_nucleus(1, |data| {
+    ///     let (out, _) = data.integrate_row_major("ECPscalar_iprinvip", None, None).into();
+    ///     assert!((cint_fp(&out) - 302.6772698217352).abs() < 1e-10);
+    /// });
+    /// ```
+    ///
+    /// PySCF equivalent:
+    ///
+    /// ```python
+    /// // definition of mol, see function `init_sb2me4_cc_pvtz` in this crate
+    /// assert abs(lib.fp(mol.intor("ECPscalar_iprinvip")) - 324.13737563392084) < 1e-10
+    /// with mol.with_rinv_at_nucleus(1):
+    ///     assert abs(lib.fp(mol.intor("ECPscalar_iprinvip")) - 302.6772698217352) < 1e-10
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`set_rinv_at_nucleus`](CInt::set_rinv_at_nucleus)
     pub fn with_rinv_at_nucleus<R>(&mut self, atm_id: usize, func: impl FnOnce(&mut Self) -> R) -> R {
         let old_rinv = self.get_rinv_origin();
         let old_zeta = self.get_rinv_zeta();
@@ -660,6 +1002,16 @@ impl CInt {
 
     /* #region set_geom */
 
+    /// Getter of the geometry of the molecule (in unit Bohr).
+    ///
+    /// # See also
+    ///
+    /// - [`with_geom`](CInt::with_geom)
+    /// - [`set_geom`](CInt::set_geom)
+    ///
+    /// # Alias
+    ///
+    /// - [`atom_coords`](CInt::atom_coords)
     pub fn get_geom(&self) -> Vec<[f64; 3]> {
         const PTR_COORD: usize = cint_ffi::PTR_COORD as usize;
         self.atm
@@ -671,6 +1023,12 @@ impl CInt {
             .collect()
     }
 
+    /// Setter of the geometry of the molecule (in unit Bohr).
+    ///
+    /// # See also
+    ///
+    /// - [`with_geom`](CInt::with_geom)
+    /// - [`get_geom`](CInt::get_geom)
     pub fn set_geom(&mut self, coords: &[[f64; 3]]) -> &mut Self {
         const PTR_COORD: usize = cint_ffi::PTR_COORD as usize;
 
@@ -685,6 +1043,12 @@ impl CInt {
         self
     }
 
+    /// Temporarily set the geometry of the molecule (in unit Bohr).
+    ///
+    /// # See also
+    ///
+    /// - [`get_geom`](CInt::get_geom)
+    /// - [`set_geom`](CInt::set_geom)
     pub fn with_geom<R>(&mut self, coords: &[[f64; 3]], func: impl FnOnce(&mut Self) -> R) -> R {
         let old_geom = self.get_geom();
         self.set_geom(coords);

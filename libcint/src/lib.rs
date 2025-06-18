@@ -16,7 +16,8 @@
 //!   function with arguments builder (advanced options).
 //! - [`CInt::integrate_row_major`]: integrate function with row-major output
 //!   (the same convention to PySCF 4-center integrals).
-//! - [ffi::cint_wrapper] and [ffi::cecp_wrapper]: supported integrators.
+//! - [cint_wrapper](ffi::cint_wrapper) and [cecp_wrapper](ffi::cecp_wrapper):
+//!   supported integrators.
 //!
 //! # Introduction
 //!
@@ -154,12 +155,18 @@
 #![doc = include_str!("../assets/h2o_rhf.rs")]
 //! ```
 
-pub mod cint;
-pub mod cint_change;
-pub mod cint_crafter;
-pub mod cint_prop;
-pub mod ffi;
 pub mod prelude;
+
+pub mod cint;
+
+pub mod cint_prop;
+
+pub mod cint_change;
+
+pub mod cint_crafter;
+
+pub mod ffi;
+
 pub mod test_mol;
 pub mod util;
 
