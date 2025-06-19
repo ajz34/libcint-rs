@@ -117,8 +117,9 @@ pub enum CIntError {
     IntegratorNotAvailable(String),
     RuntimeError(String),
     InvalidValue(String),
-    Miscellaneous(String),
     UninitializedFieldError(UninitializedFieldError),
+    ParseError(String),
+    Miscellaneous(String),
 }
 
 /// Distinguish between general integral or ECP (effective core potential)

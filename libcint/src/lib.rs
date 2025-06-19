@@ -162,6 +162,8 @@ pub mod prelude;
 
 pub mod cint;
 
+pub mod cint_initialize;
+
 pub mod cint_prop;
 
 pub mod cint_change;
