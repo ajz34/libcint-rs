@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 repository = "https://github.com/ajz34/libcint-rs"
 keywords = ["chemistry", "integral", "scientific"]
@@ -14,8 +14,8 @@ categories = ["science"]
 license = "Apache-2.0"
 
 [workspace.dependencies]
-libcint = { path = "./libcint", version = "0.1.0" }
-libcint-src = { path = "./libcint-src", version = "0.1.0" }
+libcint = { path = "./libcint", version = "0.1.1" }
+libcint-src = { path = "./libcint-src", version = "0.1.1" }
 
 [profile.dev]
 opt-level = 2
