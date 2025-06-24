@@ -88,12 +88,8 @@ fn path_candidates(env_candidates: &[&str]) -> impl Iterator<Item = PathBuf> {
 
 fn link_cint() {
     let env_candidates = ["CINT_DIR", "REST_EXT_DIR", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "PATH"];
-    for env_var in env_candidates.iter() {
-        if let Ok(path) = std::env::var(env_var) {
-            println!("cargo:rerun-if-env-changed={env_var}");
-            println!("cargo:rerun-if-changed={path}");
-        }
-    }
+    // minimal rerun-if-env-changed to avoid unnecessary rebuilds
+    println!("cargo:rerun-if-env-changed=CINT_DIR");
     for path in path_candidates(&env_candidates) {
         println!("cargo:rustc-link-search=native={}", path.display());
     }
