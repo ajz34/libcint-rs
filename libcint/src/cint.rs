@@ -243,6 +243,10 @@ pub struct IntegrateArgs<'l, F> {
     ///   row-major.
     #[builder(default = false)]
     pub row_major: bool,
+
+    /// Grids setting for `int1e_grids` and related integrators.
+    #[builder(default, setter(strip_option))]
+    pub grids: Option<&'l [[f64; 3]]>,
 }
 
 /// Integrate arguments for function [`CInt::integrate_cross_with_args`] and

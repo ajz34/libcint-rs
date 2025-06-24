@@ -1058,4 +1058,79 @@ impl CInt {
     }
 
     /* #endregion */
+
+    /* #region set_grids */
+
+    pub fn get_grids(&self) -> Vec<[f64; 3]> {
+        const NGRIDS: usize = cint_ffi::NGRIDS as usize;
+        const PTR_GRIDS: usize = cint_ffi::PTR_GRIDS as usize;
+
+        let ngrids = self.env[NGRIDS] as usize;
+        if ngrids == 0 {
+            return vec![];
+        }
+
+        let ptr_start = self.env[PTR_GRIDS] as usize;
+        let env_grids = &self.env[ptr_start..];
+        (0..ngrids)
+            .map(|i| {
+                let ptr = ptr_start + i * 3;
+                env_grids[ptr..ptr + 3].try_into().unwrap()
+            })
+            .collect()
+    }
+
+    pub fn set_grids(&mut self, grids: &[[f64; 3]]) -> &mut Self {
+        const NGRIDS: usize = cint_ffi::NGRIDS as usize;
+        const PTR_GRIDS: usize = cint_ffi::PTR_GRIDS as usize;
+
+        let ngrids = grids.len();
+        if ngrids == 0 {
+            self.env[NGRIDS] = 0.0;
+            self.env[PTR_GRIDS] = 0.0;
+            return self;
+        }
+
+        self.env[NGRIDS] = ngrids as f64;
+        let prev_env_size = self.env.len();
+        self.env[PTR_GRIDS] = prev_env_size as f64;
+
+        // cast grids to &[f64]
+        let grids_slice = unsafe { core::slice::from_raw_parts(grids.as_ptr() as *const f64, ngrids * 3) };
+        self.env.extend_from_slice(grids_slice);
+
+        self
+    }
+
+    pub fn try_clear_grids(&mut self) -> &mut Self {
+        const NGRIDS: usize = cint_ffi::NGRIDS as usize;
+        const PTR_GRIDS: usize = cint_ffi::PTR_GRIDS as usize;
+
+        let ngrids = self.env[NGRIDS] as usize;
+        if ngrids != 0 {
+            let ptr_start = self.env[PTR_GRIDS] as usize;
+            let ptr_end = ptr_start + ngrids * 3;
+            if ptr_end == self.env.len() {
+                // If grids are at the end of env, we can safely clear them
+                self.env.truncate(ptr_start);
+                // otherwise, the grids become dangling data
+            }
+            self.env[NGRIDS] = 0.0;
+            self.env[PTR_GRIDS] = 0.0;
+        }
+
+        self
+    }
+
+    pub fn with_grids<R>(&mut self, grids: &[[f64; 3]], func: impl FnOnce(&mut Self) -> R) -> R {
+        let old_grids = self.get_grids();
+        self.try_clear_grids();
+        self.set_grids(grids);
+        let result = func(self);
+        self.try_clear_grids();
+        self.set_grids(&old_grids);
+        result
+    }
+
+    /* #endregion */
 }

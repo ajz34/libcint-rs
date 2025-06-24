@@ -150,6 +150,9 @@ impl CInt {
         F: ComplexFloat + Send + Sync,
     {
         let mut data = if self.is_ecp_merged() { self.clone() } else { self.merge_ecpbas() };
+        if let Some(grids) = args.grids {
+            data.set_grids(grids);
+        }
 
         // parse intor sph/cart/spinor
         let mut intor = args.intor;
@@ -162,6 +165,14 @@ impl CInt {
         } else if intor.ends_with("_spinor") {
             intor = &intor[..intor.len() - 7];
             data.cint_type = Spinor;
+        }
+
+        // parse grids
+        let has_grids = intor.starts_with("int1e_grids");
+        if has_grids != (data.ngrids() != 0) {
+            return Err(CIntError::IntegratorNotAvailable(
+                "Argument grids only available for `int1e_grids` and related integrators.".into(),
+            ));
         }
 
         // unwrap and prepare (without output checking)
@@ -180,6 +191,10 @@ impl CInt {
 
         // prepare output and check size of output
         let mut out_shape = data.cgto_shape(&shls_slice, aosym);
+        if has_grids {
+            let ngrids = data.ngrids();
+            out_shape.insert(0, ngrids);
+        }
         let n_comp = match data.cint_type {
             Spheric | Cartesian => integrator.n_comp(),
             Spinor => integrator.n_spinor_comp(),
@@ -205,14 +220,22 @@ impl CInt {
         }
 
         // actual integral execution
-        match args.row_major {
-            false => {
-                // row-major, output is [shl0, shl1, ..., comp]
+        match (has_grids, args.row_major) {
+            (false, false) => {
+                // col-major, output is [shl0, shl1, ..., comp]
                 data.integral_inplace(&*integrator, out, &shls_slice, Some(&cint_opt), aosym)?;
             },
-            true => {
-                // column-major, output is [comp, shl0, shl1, ...]
+            (false, true) => {
+                // row-major, output is [comp, shl0, shl1, ...]
                 data.integral_row_major_inplace(&*integrator, out, &shls_slice, Some(&cint_opt), aosym)?;
+            },
+            (true, false) => {
+                // col-major with grids, output is [grids, shl0, shl1, comp]
+                data.integral_grids_inplace(&*integrator, out, &shls_slice, Some(&cint_opt))?;
+            },
+            (true, true) => {
+                // row-major with grids, output is [comp, grids, shl0, shl1]
+                data.integral_grids_row_major_inplace(&*integrator, out, &shls_slice, Some(&cint_opt))?;
             },
         };
 
@@ -734,6 +757,14 @@ impl CInt {
             CIntSymm::S1 => {
                 // S1 symmetry is always available
             },
+        }
+
+        // grids only available for S1 symmetry
+        if integrator.name().starts_with("int1e_grids") && cint_symm != CIntSymm::S1 {
+            return Err(CIntError::InvalidValue(format!(
+                "Integrator {} does not support grids with symmetry other than s1",
+                integrator.name()
+            )));
         }
 
         Ok(())
