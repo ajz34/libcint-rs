@@ -1061,6 +1061,13 @@ impl CInt {
 
     /* #region set_grids */
 
+    /// Getter of the grids for `int1e_grids` related integrals (in unit Bohr).
+    ///
+    /// # See also
+    ///
+    /// - [`with_grids`](CInt::with_grids)
+    /// - [`set_grids`](CInt::set_grids)
+    /// - [`try_clear_grids`](CInt::try_clear_grids)
     pub fn get_grids(&self) -> Vec<[f64; 3]> {
         const NGRIDS: usize = cint_ffi::NGRIDS as usize;
         const PTR_GRIDS: usize = cint_ffi::PTR_GRIDS as usize;
@@ -1080,6 +1087,13 @@ impl CInt {
             .collect()
     }
 
+    /// Setter of the grids for `int1e_grids` related integrals (in unit Bohr).
+    ///
+    /// # See also
+    ///
+    /// - [`with_grids`](CInt::with_grids)
+    /// - [`get_grids`](CInt::get_grids)
+    /// - [`try_clear_grids`](CInt::try_clear_grids)
     pub fn set_grids(&mut self, grids: &[[f64; 3]]) -> &mut Self {
         const NGRIDS: usize = cint_ffi::NGRIDS as usize;
         const PTR_GRIDS: usize = cint_ffi::PTR_GRIDS as usize;
@@ -1102,6 +1116,16 @@ impl CInt {
         self
     }
 
+    /// Try to clear the grids for `int1e_grids` related integrals.
+    ///
+    /// If grids are at the end of `env`, they will be cleared.
+    /// Otherwise, the grids will become dangling data.
+    ///
+    /// # See also
+    ///
+    /// - [`with_grids`](CInt::with_grids)
+    /// - [`set_grids`](CInt::set_grids)
+    /// - [`get_grids`](CInt::get_grids)
     pub fn try_clear_grids(&mut self) -> &mut Self {
         const NGRIDS: usize = cint_ffi::NGRIDS as usize;
         const PTR_GRIDS: usize = cint_ffi::PTR_GRIDS as usize;
@@ -1122,6 +1146,18 @@ impl CInt {
         self
     }
 
+    /// Temporarily set the grids for `int1e_grids` related integrals (in unit
+    /// Bohr).
+    ///
+    /// With this function and [`integrate`](CInt::integrate) or
+    /// [`integrate_row_major`](CInt::integrate_row_major), you can perform
+    /// `int1e_grids` related integrals with custom grids.
+    ///
+    /// # See also
+    ///
+    /// - [`get_grids`](CInt::get_grids)
+    /// - [`set_grids`](CInt::set_grids)
+    /// - [`try_clear_grids`](CInt::try_clear_grids)
     pub fn with_grids<R>(&mut self, grids: &[[f64; 3]], func: impl FnOnce(&mut Self) -> R) -> R {
         let old_grids = self.get_grids();
         self.try_clear_grids();

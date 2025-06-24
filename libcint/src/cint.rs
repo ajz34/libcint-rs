@@ -454,6 +454,11 @@ impl<F> From<CIntOutput<F>> for (Vec<F>, Vec<usize>) {
 impl CInt {
     /// Main electronic integral driver (for non-spinor type) in column-major.
     ///
+    /// Following kinds of integrals are supported:
+    /// - general integrals,
+    /// - ECP integrals,
+    /// - 2c-1e integrals with grids.
+    ///
     /// # PySCF equivalent
     ///
     /// `mol.intor(intor, aosym, shls_slice)`
@@ -516,6 +521,8 @@ impl CInt {
     /// but should be provided by user. We refer to function
     /// [`init_h2o_def2_tzvp`] for how to define a [`CInt`] instance.
     ///
+    /// ## General Example
+    ///
     /// ```rust
     /// use libcint::prelude::*;
     /// let cint_data = init_h2o_def2_tzvp();
@@ -540,6 +547,8 @@ impl CInt {
     /// assert_eq!(shape, vec![946, 29, 33, 3]);
     /// ```
     ///
+    /// ## ECP
+    ///
     /// ECP (effective core potential) integrals are also supported.
     ///
     /// ```rust
@@ -548,6 +557,24 @@ impl CInt {
     ///
     /// let (out, shape) = cint_data.integrate("ECPscalar_iprinvip", "s1", None).into();
     /// assert_eq!(shape, vec![366, 366, 9]);
+    /// ```
+    ///
+    /// ## Integral with Grids
+    ///
+    /// For integrals with grids, such as `int1e_grids`, `int1e_grids_ip`, you
+    /// may perform integrate with function `with_grids` or directly set by
+    /// `set_grids`:
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let mut cint_data = init_h2o_def2_tzvp();
+    /// let grids = vec![[0., 1., 2.], [3., 4., 5.]]; // ngrids = 2
+    ///
+    /// let (out, shape) = cint_data.with_grids(&grids, |data| {
+    ///     data.integrate("int1e_grids_ip", "s1", None).into()
+    /// });
+    /// // [grids, bas_i, bas_j, components]
+    /// assert_eq!(shape, vec![2, 43, 43, 3]);
     /// ```
     ///
     /// # Column-major convention
@@ -581,6 +608,8 @@ impl CInt {
     ///   \nu)$ indices pair. This is always packed by upper-triangular indices
     ///   for col-major, or equilvalently lower-triangular indices for
     ///   row-major.
+    /// - $g$ indicates grids, which is used in integrals like `int1e_grids`,
+    ///   `int1e_grids_ip`.
     /// - "same layout" means the underlying data is the same, regardless of how
     ///   shape and strides are defined. If same data layout, it means [`CInt`]
     ///   data is the transposed PySCF's data, without any additional copy or
@@ -588,22 +617,24 @@ impl CInt {
     ///
     /// | center | comp | symm | example | PySCF shape | PySCF strides | [`CInt`] shape | [`CInt`] strides | same layout |
     /// |--------|------|------|---------|-------------|---------------|----------------|------------------|-------------|
-    /// | 2 | ✘ | `s1`   | `int1e_ovlp`  | $[\mu, \nu]$                                   | $[0, 1]$          | $[\mu, \nu]$                                  | $[0, 1]$          | ✔ |
-    /// | 2 | ✔ | `s1`   | `int1e_ipkin` | $[t, \mu, \nu]$                                | $[2, 0, 1]$       | $[\mu, \nu, t]$                               | $[0, 1, 2]$       | ✔ |
-    /// | 2 | ✘ | `s2ij` | `int1e_ovlp`  | Not supported                                  | -                 | $[\mathrm{tp}(\mu \nu)]$                      | $\[0\]$           | - |
-    /// | 2 | ✔ | `s2ij` | `int1e_ovlp`  | Not supported                                  | -                 | $[\mathrm{tp}(\mu \nu), t]$                   | $[0, 1]$          | - |
-    /// | 3 | ✘ | `s1`   | `int3c2e`     | $[\mu, \nu, \kappa]$                           | $[0, 1, 2]$       | $[\mu, \nu, \kappa]$                          | $[0, 1, 2]$       | ✔ |
-    /// | 3 | ✔ | `s1`   | `int3c2e_ip1` | $[t, \mu, \nu, \kappa]$                        | $[3, 0, 1, 2]$    | $[\mu, \nu, \kappa, t]$                       | $[0, 1, 2, 3]$    | ✔ |
-    /// | 3 | ✘ | `s2ij` | `int3c2e`     | $[\mathrm{tp}(\mu \nu), \kappa]$               | $[0, 1]$          | $[\mathrm{tp}(\mu \nu), \kappa]$              | $[0, 1]$          | ✔ |
-    /// | 3 | ✔ | `s2ij` | `int3c2e_ip2` | $[t, \mathrm{tp}(\mu \nu), \kappa]$            | $[2, 0, 1]$       | $[\mathrm{tp}(\mu \nu), \kappa, t]$           | $[0, 1, 2]$       | ✔ |
-    /// | 4 | ✘ | `s1`   | `int2e`       | $[\mu, \nu, \kappa, \lambda]$                  | $[3, 2, 1, 0]$    | $[\mu, \nu, \kappa, \lambda]$                 | $[0, 1, 2, 3]$    | ✘ |
-    /// | 4 | ✔ | `s1`   | `int2e_ip1`   | $[t, \mu, \nu, \kappa, \lambda]$               | $[4, 3, 2, 1, 0]$ | $[\mu, \nu, \kappa, \lambda, t]$              | $[0, 1, 2, 3, 4]$ | ✘ |
-    /// | 4 | ✘ | `s2ij` | `int2e`       | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$      | $[2, 1, 0]$       | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$     | $[0, 1, 2]$       | ✘ |
-    /// | 4 | ✔ | `s2ij` | `int2e_ip2`   | $[t, \mathrm{tp}(\mu \nu), \kappa, \lambda]$   | $[3, 2, 1, 0]$    | $[\mathrm{tp}(\mu \nu), \kappa, \lambda, t]$  | $[0, 1, 2, 3]$    | ✘ |
-    /// | 4 | ✘ | `s2kl` | `int2e`       | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$      | $[2, 1, 0]$       | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$     | $[0, 1, 2]$       | ✘ |
-    /// | 4 | ✔ | `s2kl` | `int2e_ip1`   | $[t, \mu, \nu, \mathrm{tp}(\kappa \lambda)]$   | $[3, 2, 1, 0]$    | $[\mu, \nu, \mathrm{tp}(\kappa \lambda), t]$  | $[0, 1, 2, 3]$    | ✘ |
-    /// | 4 | ✘ | `s4`   | `int2e`       | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$ | $[1, 0]$ | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$ | $[0, 1]$ | ✘ |
-    /// | 4 | ✘ | `s8`   | `int2e`       | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$ | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$ | ✔ |
+    /// | 2 | ✘ | `s1`   | `int1e_ovlp`     | $[\mu, \nu]$                                   | $[0, 1]$          | $[\mu, \nu]$                                  | $[0, 1]$          | ✔ |
+    /// | 2 | ✔ | `s1`   | `int1e_ipkin`    | $[t, \mu, \nu]$                                | $[2, 0, 1]$       | $[\mu, \nu, t]$                               | $[0, 1, 2]$       | ✔ |
+    /// | 2 | ✘ | `s2ij` | `int1e_ovlp`     | Not supported                                  | -                 | $[\mathrm{tp}(\mu \nu)]$                      | $\[0\]$           | - |
+    /// | 2 | ✔ | `s2ij` | `int1e_ovlp`     | Not supported                                  | -                 | $[\mathrm{tp}(\mu \nu), t]$                   | $[0, 1]$          | - |
+    /// | 2 | ✘ | `s1`   | `int1e_grids`    | $[g, \mu, \nu]$                                | $[0, 1, 2]$       | $[g, \mu, \nu]$                               | $[0, 1, 2]$       | ✔ |
+    /// | 2 | ✔ | `s1`   | `int1e_grids_ip` | $[t, g, \mu, \nu]$                             | $[3, 0, 1, 2]$    | $[g, \mu, \nu, t]$                            | $[0, 1, 2, 3]$    | ✔ |
+    /// | 3 | ✘ | `s1`   | `int3c2e`        | $[\mu, \nu, \kappa]$                           | $[0, 1, 2]$       | $[\mu, \nu, \kappa]$                          | $[0, 1, 2]$       | ✔ |
+    /// | 3 | ✔ | `s1`   | `int3c2e_ip1`    | $[t, \mu, \nu, \kappa]$                        | $[3, 0, 1, 2]$    | $[\mu, \nu, \kappa, t]$                       | $[0, 1, 2, 3]$    | ✔ |
+    /// | 3 | ✘ | `s2ij` | `int3c2e`        | $[\mathrm{tp}(\mu \nu), \kappa]$               | $[0, 1]$          | $[\mathrm{tp}(\mu \nu), \kappa]$              | $[0, 1]$          | ✔ |
+    /// | 3 | ✔ | `s2ij` | `int3c2e_ip2`    | $[t, \mathrm{tp}(\mu \nu), \kappa]$            | $[2, 0, 1]$       | $[\mathrm{tp}(\mu \nu), \kappa, t]$           | $[0, 1, 2]$       | ✔ |
+    /// | 4 | ✘ | `s1`   | `int2e`          | $[\mu, \nu, \kappa, \lambda]$                  | $[3, 2, 1, 0]$    | $[\mu, \nu, \kappa, \lambda]$                 | $[0, 1, 2, 3]$    | ✘ |
+    /// | 4 | ✔ | `s1`   | `int2e_ip1`      | $[t, \mu, \nu, \kappa, \lambda]$               | $[4, 3, 2, 1, 0]$ | $[\mu, \nu, \kappa, \lambda, t]$              | $[0, 1, 2, 3, 4]$ | ✘ |
+    /// | 4 | ✘ | `s2ij` | `int2e`          | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$      | $[2, 1, 0]$       | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$     | $[0, 1, 2]$       | ✘ |
+    /// | 4 | ✔ | `s2ij` | `int2e_ip2`      | $[t, \mathrm{tp}(\mu \nu), \kappa, \lambda]$   | $[3, 2, 1, 0]$    | $[\mathrm{tp}(\mu \nu), \kappa, \lambda, t]$  | $[0, 1, 2, 3]$    | ✘ |
+    /// | 4 | ✘ | `s2kl` | `int2e`          | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$      | $[2, 1, 0]$       | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$     | $[0, 1, 2]$       | ✘ |
+    /// | 4 | ✔ | `s2kl` | `int2e_ip1`      | $[t, \mu, \nu, \mathrm{tp}(\kappa \lambda)]$   | $[3, 2, 1, 0]$    | $[\mu, \nu, \mathrm{tp}(\kappa \lambda), t]$  | $[0, 1, 2, 3]$    | ✘ |
+    /// | 4 | ✘ | `s4`   | `int2e`          | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$ | $[1, 0]$ | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$ | $[0, 1]$ | ✘ |
+    /// | 4 | ✘ | `s8`   | `int2e`          | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$ | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$ | ✔ |
     ///
     /// # Spheric or Cartesian
     ///
@@ -892,6 +923,11 @@ impl CInt {
 
     /// Main electronic integral driver (for non-spinor type) **in row-major**.
     ///
+    /// Following kinds of integrals are supported:
+    /// - general integrals,
+    /// - ECP integrals,
+    /// - 2c-1e integrals with grids.
+    ///
     /// We refer most documentation to [`integrate`](Self::integrate). Those two
     /// functions share the same arguments, but the output buffer is in
     /// row-major shape; the shape of [`integrate`](Self::integrate) and
@@ -953,22 +989,24 @@ impl CInt {
     ///
     /// | center | comp | symm | example | shape | PySCF strides | [`CInt`] strides | same layout |
     /// |--------|------|------|---------|-------|---------------|------------------|-------------|
-    /// | 2 | ✘ | `s1`   | `int1e_ovlp`  | $[\mu, \nu]$                                                      | $[0, 1]$          | $[1, 0]$          | ✘ |
-    /// | 2 | ✔ | `s1`   | `int1e_ipkin` | $[t, \mu, \nu]$                                                   | $[2, 0, 1]$       | $[2, 1, 0]$       | ✘ |
-    /// | 2 | ✘ | `s2ij` | `int1e_ovlp`  | Not supported                                                     | -                 | $\[0\]$           | - |
-    /// | 2 | ✔ | `s2ij` | `int1e_ovlp`  | Not supported                                                     | -                 | $[1, 0]$          | - |
-    /// | 3 | ✘ | `s1`   | `int3c2e`     | $[\mu, \nu, \kappa]$                                              | $[0, 1, 2]$       | $[2, 1, 0]$       | ✘ |
-    /// | 3 | ✔ | `s1`   | `int3c2e_ip1` | $[t, \mu, \nu, \kappa]$                                           | $[3, 0, 1, 2]$    | $[3, 2, 1, 0]$    | ✘ |
-    /// | 3 | ✘ | `s2ij` | `int3c2e`     | $[\mathrm{tp}(\mu \nu), \kappa]$                                  | $[0, 1]$          | $[1, 0]$          | ✘ |
-    /// | 3 | ✔ | `s2ij` | `int3c2e_ip2` | $[t, \mathrm{tp}(\mu \nu), \kappa]$                               | $[2, 0, 1]$       | $[2, 1, 0]$       | ✘ |
-    /// | 4 | ✘ | `s1`   | `int2e`       | $[\mu, \nu, \kappa, \lambda]$                                     | $[3, 2, 1, 0]$    | $[3, 2, 1, 0]$    | ✔ |
-    /// | 4 | ✔ | `s1`   | `int2e_ip1`   | $[t, \mu, \nu, \kappa, \lambda]$                                  | $[4, 3, 2, 1, 0]$ | $[4, 3, 2, 1, 0]$ | ✔ |
-    /// | 4 | ✘ | `s2ij` | `int2e`       | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$                         | $[2, 1, 0]$       | $[2, 1, 0]$       | ✔ |
-    /// | 4 | ✔ | `s2ij` | `int2e_ip2`   | $[t, \mathrm{tp}(\mu \nu), \kappa, \lambda]$                      | $[3, 2, 1, 0]$    | $[3, 2, 1, 0]$    | ✔ |
-    /// | 4 | ✘ | `s2kl` | `int2e`       | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$                         | $[2, 1, 0]$       | $[2, 1, 0]$       | ✔ |
-    /// | 4 | ✔ | `s2kl` | `int2e_ip1`   | $[t, \mu, \nu, \mathrm{tp}(\kappa \lambda)]$                      | $[3, 2, 1, 0]$    | $[3, 2, 1, 0]$    | ✔ |
-    /// | 4 | ✘ | `s4`   | `int2e`       | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$             | $[1, 0]$          | $[1, 0]$          | ✔ |
-    /// | 4 | ✘ | `s8`   | `int2e`       | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$           | $\[0\]$           | ✔ |
+    /// | 2 | ✘ | `s1`   | `int1e_ovlp`     | $[\mu, \nu]$                                                      | $[0, 1]$          | $[1, 0]$          | ✘ |
+    /// | 2 | ✔ | `s1`   | `int1e_ipkin`    | $[t, \mu, \nu]$                                                   | $[2, 0, 1]$       | $[2, 1, 0]$       | ✘ |
+    /// | 2 | ✘ | `s2ij` | `int1e_ovlp`     | Not supported                                                     | -                 | $\[0\]$           | - |
+    /// | 2 | ✔ | `s2ij` | `int1e_ovlp`     | Not supported                                                     | -                 | $[1, 0]$          | - |
+    /// | 2 | ✘ | `s1`   | `int1e_grids`    | $[g, \mu, \nu]$                                                   | $[0, 1, 2]$       | $[2, 1, 0]$       | ✘ |
+    /// | 2 | ✔ | `s1`   | `int1e_grids_ip` | $[t, g, \mu, \nu]$                                                | $[3, 0, 1, 2]$    | $[3, 2, 1, 0]$    | ✘ |
+    /// | 3 | ✘ | `s1`   | `int3c2e`        | $[\mu, \nu, \kappa]$                                              | $[0, 1, 2]$       | $[2, 1, 0]$       | ✘ |
+    /// | 3 | ✔ | `s1`   | `int3c2e_ip1`    | $[t, \mu, \nu, \kappa]$                                           | $[3, 0, 1, 2]$    | $[3, 2, 1, 0]$    | ✘ |
+    /// | 3 | ✘ | `s2ij` | `int3c2e`        | $[\mathrm{tp}(\mu \nu), \kappa]$                                  | $[0, 1]$          | $[1, 0]$          | ✘ |
+    /// | 3 | ✔ | `s2ij` | `int3c2e_ip2`    | $[t, \mathrm{tp}(\mu \nu), \kappa]$                               | $[2, 0, 1]$       | $[2, 1, 0]$       | ✘ |
+    /// | 4 | ✘ | `s1`   | `int2e`          | $[\mu, \nu, \kappa, \lambda]$                                     | $[3, 2, 1, 0]$    | $[3, 2, 1, 0]$    | ✔ |
+    /// | 4 | ✔ | `s1`   | `int2e_ip1`      | $[t, \mu, \nu, \kappa, \lambda]$                                  | $[4, 3, 2, 1, 0]$ | $[4, 3, 2, 1, 0]$ | ✔ |
+    /// | 4 | ✘ | `s2ij` | `int2e`          | $[\mathrm{tp}(\mu \nu), \kappa, \lambda]$                         | $[2, 1, 0]$       | $[2, 1, 0]$       | ✔ |
+    /// | 4 | ✔ | `s2ij` | `int2e_ip2`      | $[t, \mathrm{tp}(\mu \nu), \kappa, \lambda]$                      | $[3, 2, 1, 0]$    | $[3, 2, 1, 0]$    | ✔ |
+    /// | 4 | ✘ | `s2kl` | `int2e`          | $[\mu, \nu, \mathrm{tp}(\kappa \lambda)]$                         | $[2, 1, 0]$       | $[2, 1, 0]$       | ✔ |
+    /// | 4 | ✔ | `s2kl` | `int2e_ip1`      | $[t, \mu, \nu, \mathrm{tp}(\kappa \lambda)]$                      | $[3, 2, 1, 0]$    | $[3, 2, 1, 0]$    | ✔ |
+    /// | 4 | ✘ | `s4`   | `int2e`          | $[\mathrm{tp}(\mu \nu), \mathrm{tp}(\kappa \lambda)]$             | $[1, 0]$          | $[1, 0]$          | ✔ |
+    /// | 4 | ✘ | `s8`   | `int2e`          | $[\mathrm{tp}(\mathrm{tp}(\mu \nu) \mathrm{tp}(\kappa \lambda))]$ | $\[0\]$           | $\[0\]$           | ✔ |
     ///
     /// # See also
     ///
