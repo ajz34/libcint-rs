@@ -695,6 +695,15 @@ impl CInt {
         assert_eq!(result.last().unwrap()[3], self.nao_with_type(cint_type));
         result
     }
+
+    /// Number of grids that is used in `int1e_grids`.
+    ///
+    /// Note that this function is mostly for internal usage. User should
+    /// generally not call this function.
+    pub fn ngrids(&self) -> usize {
+        const NGRIDS: usize = crate::ffi::cint_ffi::NGRIDS as usize;
+        self.env[NGRIDS] as usize
+    }
 }
 
 #[cfg(test)]
