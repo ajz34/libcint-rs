@@ -30,4 +30,11 @@ mod test {
         assert_relative_eq!(cint_fp(&out), ref_fp, epsilon = 1e-12);
         assert_eq!(shape, ref_shape.as_ref());
     }
+
+    #[test]
+    #[should_panic]
+    fn test_panic() {
+        let cint_data = init_h2o_def2_tzvp();
+        let (_out, _shape) = cint_data.integrate("int1e_grids", None, None).into();
+    }
 }

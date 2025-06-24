@@ -322,7 +322,7 @@ pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
     } else if let Some(intor) = get_ecp_integrator(&intor.to_lowercase()) {
         Ok(intor)
     } else {
-        Err(CIntError::IntegratorNotFound(intor.to_string()))
+        cint_raise!(IntegratorNotFound, "{intor}")
     }?;
 
     // should have checked anything, gracefully returns
@@ -345,6 +345,25 @@ impl From<UninitializedFieldError> for CIntError {
     fn from(err: UninitializedFieldError) -> Self {
         CIntError::UninitializedFieldError(err)
     }
+}
+
+#[macro_export]
+macro_rules! cint_trace {
+    () => {
+        concat!(file!(), ":", line!(), ":", column!(), ": ")
+    };
+}
+
+#[macro_export]
+macro_rules! cint_raise {
+    ($errtype: ident, $($arg:tt)*) => {{
+        use $crate::prelude::*;
+        let mut s = String::new();
+        write!(s, cint_trace!()).unwrap();
+        write!(s, concat!("CIntError ", stringify!($errtype), ": ")).unwrap();
+        write!(s, $($arg)*).unwrap();
+        Err(CIntError::$errtype(s))
+    }};
 }
 
 /* #endregion */

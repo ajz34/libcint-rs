@@ -169,10 +169,8 @@ impl CInt {
 
         // parse grids
         let has_grids = intor.starts_with("int1e_grids");
-        if has_grids != (data.ngrids() != 0) {
-            return Err(CIntError::IntegratorNotAvailable(
-                "Argument grids only available for `int1e_grids` and related integrators.".into(),
-            ));
+        if has_grids && (data.ngrids() == 0) {
+            cint_raise!(IntegratorNotAvailable, "`int1e_grids` requires grids to integrate.")?
         }
 
         // unwrap and prepare (without output checking)
@@ -216,7 +214,7 @@ impl CInt {
             None => out_vec.as_mut().unwrap(),
         };
         if out.len() < out_size {
-            return Err(CIntError::InvalidValue(format!("Output vector size {} is smaller than required size {}", out.len(), out_size)));
+            cint_raise!(InvalidValue, "Output vector size {} is smaller than required size {}", out.len(), out_size)?;
         }
 
         // actual integral execution
@@ -299,21 +297,13 @@ impl CInt {
         let integrator = CInt::get_integrator_f(intor)?;
         let n_center = integrator.n_center();
         if mols.len() != n_center {
-            return Err(CIntError::InvalidValue(format!(
-                "Number of molecules ({}) does not match number of centers ({})",
-                mols.len(),
-                n_center
-            )));
+            cint_raise!(InvalidValue, "Number of molecules ({}) does not match number of centers ({n_center})", mols.len())?;
         }
         let mut shls_slice = if shls_slice.is_empty() {
             mols.iter().map(|mol| [0, mol.nbas()]).collect_vec()
         } else {
             if shls_slice.len() != n_center {
-                return Err(CIntError::InvalidValue(format!(
-                    "Number of shell slices ({}) does not match number of centers ({})",
-                    shls_slice.len(),
-                    n_center
-                )));
+                cint_raise!(InvalidValue, "Number of shell slices ({}) does not match number of centers ({n_center})", shls_slice.len())?;
             }
             // check each slice
             for i in 0..n_center {
@@ -321,12 +311,7 @@ impl CInt {
                 let slc = shls_slice[i];
 
                 if !(slc[0] <= slc[1] && slc[1] <= mol.nbas()) {
-                    return Err(CIntError::InvalidValue(format!(
-                        "Shell slice {:?} at index {} is not proper within [0, {}]",
-                        slc,
-                        i,
-                        mol.nbas()
-                    )));
+                    cint_raise!(InvalidValue, "Shell slice {slc:?} at index {i} is not proper within [0, {}]", mol.nbas())?;
                 }
             }
             shls_slice.to_vec()
@@ -646,38 +631,30 @@ impl CInt {
         // length of shls_slice must be the same value to number of centers of
         // integrator.
         if shls_slice.len() != n_center {
-            return Err(CIntError::IntegratorNotAvailable(format!(
+            cint_raise!(
+                IntegratorNotAvailable,
                 "Integrator {} requires {} centers, but got {}",
                 integrator.name(),
                 integrator.n_center(),
                 shls_slice.len()
-            )));
+            )?;
         }
 
         // Some integrators may not support certain shell types.
         match self.cint_type {
             Spheric => {
                 if !integrator.is_sph_available() {
-                    return Err(CIntError::IntegratorNotAvailable(format!(
-                        "Integrator {} does not support spherical integrals",
-                        integrator.name()
-                    )));
+                    cint_raise!(IntegratorNotAvailable, "Integrator {} does not support spherical integrals", integrator.name())?;
                 }
             },
             Cartesian => {
                 if !integrator.is_cart_available() {
-                    return Err(CIntError::IntegratorNotAvailable(format!(
-                        "Integrator {} does not support Cartesian integrals",
-                        integrator.name()
-                    )));
+                    cint_raise!(IntegratorNotAvailable, "Integrator {} does not support Cartesian integrals", integrator.name())?;
                 }
             },
             Spinor => {
                 if !integrator.is_spinor_available() {
-                    return Err(CIntError::IntegratorNotAvailable(format!(
-                        "Integrator {} does not support spinor integrals",
-                        integrator.name()
-                    )));
+                    cint_raise!(IntegratorNotAvailable, "Integrator {} does not support spinor integrals", integrator.name())?;
                 }
             },
         }
@@ -686,10 +663,7 @@ impl CInt {
         let nbas = self.nbas() as c_int;
         for (i, shl) in shls_slice.iter().enumerate() {
             if !(0 <= shl[0] && shl[0] <= shl[1] && shl[1] <= nbas) {
-                return Err(CIntError::InvalidValue(format!(
-                    "Shell slice {:?} at index {} is not proper within [{}, {}]",
-                    shl, i, 0, nbas
-                )));
+                cint_raise!(InvalidValue, "Shell slice {shl:?} at index {i} is not proper within [0, {nbas}]")?;
             }
         }
 
@@ -697,61 +671,51 @@ impl CInt {
         match cint_symm {
             CIntSymm::S2ij => {
                 if shls_slice[0] != shls_slice[1] {
-                    return Err(CIntError::InvalidValue(format!(
+                    cint_raise!(
+                        InvalidValue,
                         "Integrator {} does not support S2ij symmetry with different shell slices ({:?}, {:?})",
                         integrator.name(),
                         shls_slice[0],
                         shls_slice[1]
-                    )));
+                    )?;
                 }
             },
             CIntSymm::S2kl => {
                 if n_center != 4 {
-                    return Err(CIntError::InvalidValue(format!(
-                        "Integrator {} requires 4 centers for S2kl symmetry, but got {}",
-                        integrator.name(),
-                        n_center
-                    )));
+                    cint_raise!(InvalidValue, "Integrator {} requires 4 centers for S2kl symmetry, but got {n_center}", integrator.name())?;
                 }
                 if shls_slice[2] != shls_slice[3] {
-                    return Err(CIntError::InvalidValue(format!(
+                    cint_raise!(
+                        InvalidValue,
                         "Integrator {} does not support S2kl symmetry with different shell slices ({:?}, {:?})",
                         integrator.name(),
                         shls_slice[2],
                         shls_slice[3]
-                    )));
+                    )?;
                 }
             },
             CIntSymm::S4 => {
                 if n_center != 4 {
-                    return Err(CIntError::InvalidValue(format!(
-                        "Integrator {} requires 4 centers for S4 symmetry, but got {}",
-                        integrator.name(),
-                        n_center
-                    )));
+                    cint_raise!(InvalidValue, "Integrator {} requires 4 centers for S4 symmetry, but got {n_center}", integrator.name())?;
                 }
                 if shls_slice[0] != shls_slice[1] || shls_slice[2] != shls_slice[3] {
-                    return Err(CIntError::InvalidValue(format!(
-                        "Integrator {} does not support S4 symmetry with different shell slices {:?}",
-                        integrator.name(),
-                        shls_slice
-                    )));
+                    cint_raise!(
+                        InvalidValue,
+                        "Integrator {} does not support S4 symmetry with different shell slices {shls_slice:?})",
+                        integrator.name()
+                    )?;
                 }
             },
             CIntSymm::S8 => {
                 if n_center != 4 {
-                    return Err(CIntError::InvalidValue(format!(
-                        "Integrator {} requires 4 centers for S8 symmetry, but got {}",
-                        integrator.name(),
-                        n_center
-                    )));
+                    cint_raise!(InvalidValue, "Integrator {} requires 4 centers for S8 symmetry, but got {n_center}", integrator.name())?;
                 }
                 if shls_slice[0] != shls_slice[1] || shls_slice[0] != shls_slice[2] || shls_slice[0] != shls_slice[3] {
-                    return Err(CIntError::InvalidValue(format!(
-                        "Integrator {} does not support S8 symmetry with different shell slices {:?}",
-                        integrator.name(),
-                        shls_slice
-                    )));
+                    cint_raise!(
+                        InvalidValue,
+                        "Integrator {} does not support S8 symmetry with different shell slices {shls_slice:?})",
+                        integrator.name()
+                    )?;
                 }
             },
             CIntSymm::S1 => {
@@ -761,10 +725,7 @@ impl CInt {
 
         // grids only available for S1 symmetry
         if integrator.name().starts_with("int1e_grids") && cint_symm != CIntSymm::S1 {
-            return Err(CIntError::InvalidValue(format!(
-                "Integrator {} does not support grids with symmetry other than s1",
-                integrator.name()
-            )));
+            cint_raise!(InvalidValue, "Integrator {} does not support grids with symmetry other than s1", integrator.name())?;
         }
 
         Ok(())
@@ -786,12 +747,12 @@ impl CInt {
         };
         let actual = std::mem::size_of::<F>();
         if actual != expected {
-            Err(CIntError::InvalidValue(format!(
+            cint_raise!(
+                InvalidValue,
                 "Expected float type size {expected} bytes, but got {actual} bytes. This is probably because your `cint_type` does not match integral (`integral_spinor` for spinor, otherwise `integral` for spheric/cartesian)."
-            )))
-        } else {
-            Ok(())
+            )?;
         }
+        Ok(())
     }
 
     /// Check if the optimizer is compatible with the integrator.
@@ -802,12 +763,12 @@ impl CInt {
         match optimizer {
             CIntOptimizer::Int(_) => {
                 if integrator.kind() != CIntKind::Int {
-                    return Err(CIntError::InvalidValue(format!("Optimizer is for Int, but integrator is {:?}", integrator.kind())));
+                    cint_raise!(InvalidValue, "Optimizer is for Int, but integrator is {:?}", integrator.kind())?;
                 }
             },
             CIntOptimizer::Ecp(_) => {
                 if integrator.kind() != CIntKind::Ecp {
-                    return Err(CIntError::InvalidValue(format!("Optimizer is for Ecp, but integrator is {:?}", integrator.kind())));
+                    cint_raise!(InvalidValue, "Optimizer is for Ecp, but integrator is {:?}", integrator.kind())?;
                 }
             },
         }
