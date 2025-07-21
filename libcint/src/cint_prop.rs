@@ -704,6 +704,42 @@ impl CInt {
         const NGRIDS: usize = crate::ffi::cint_ffi::NGRIDS as usize;
         self.env[NGRIDS] as usize
     }
+
+    /// Balances the partition of shells into blocks of a given size.
+    ///
+    /// This function can be useful if the full bulk of integrals is not
+    /// available in memory, and you have to generate them batch by batch.
+    ///
+    /// The outputs are
+    /// - `shl_start`: the starting index of the shell in the partition
+    ///   (included)
+    /// - `shl_end`: the ending index of the shell in the partition (not
+    ///   included)
+    /// - `nbatch_ao`: the number of AOs in the batch.
+    ///
+    /// # PySCF equivalent
+    ///
+    /// `ao2mo.outcore.balance_partition`
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    /// let partition = cint_data.balance_partition(20);
+    /// assert_eq!(partition, vec![[0, 9, 19], [9, 17, 20], [17, 19, 4]]);
+    /// ```
+    pub fn balance_partition(&self, block_size: usize) -> Vec<[usize; 3]> {
+        crate::util::balance_partition(self, block_size, None, None)
+    }
+
+    /// Balances the partition of shells into blocks of a given size.
+    ///
+    /// This function is similar to [`CInt::balance_partition`], but allows
+    /// user to specify the start and end id of the shells.
+    pub fn balance_partition_advanced(&self, block_size: usize, start_id: Option<usize>, end_id: Option<usize>) -> Vec<[usize; 3]> {
+        crate::util::balance_partition(self, block_size, start_id, end_id)
+    }
 }
 
 #[cfg(test)]

@@ -95,6 +95,89 @@ impl AsRef<[[usize; 2]]> for ShlsSlice {
 
 /* #endregion */
 
+/* #region partition */
+
+/// Partitions an array into blocks of a given size.
+///
+/// # PySCF equivalent
+///
+/// `lib.misc._blocksize_partition`
+///
+/// # Example
+///
+/// ```
+/// let arr = [0, 10, 20, 35, 45, 51, 56];
+/// let block_size = 20;
+/// let partition = libcint::util::blocksize_partition(&arr, block_size);
+/// assert_eq!(partition, vec![0, 2, 3, 5, 6]);
+/// ```
+///
+/// # Note
+///
+/// - This function does not warn on situation when some intervals in `arr` are
+///   much larger than `block_size`.
+/// - This function panics on empty `arr` or when `block_size` is zero.
+pub fn blocksize_partition(arr: &[usize], block_size: usize) -> Vec<usize> {
+    assert!(block_size > 0, "Block size must be greater than zero");
+    assert!(!arr.is_empty(), "Array must not be empty");
+    let n = arr.len() - 1;
+    if n == 0 {
+        return vec![0];
+    }
+
+    let mut partition = vec![0];
+    let mut p0 = 0;
+    for i in 1..n {
+        if arr[i + 1] - arr[p0] > block_size {
+            partition.push(i);
+            p0 = i;
+        }
+    }
+    partition.push(n);
+    partition
+}
+
+/// Balances the partition of shells into blocks of a given size.
+///
+/// This function can be useful if the full bulk of integrals is not available
+/// in memory, and you have to generate them batch by batch.
+///
+/// The outputs are
+/// - `shl_start`: the starting index of the shell in the partition (included)
+/// - `shl_end`: the ending index of the shell in the partition (not included)
+/// - `nbatch_ao`: the number of AOs in the batch.
+///
+/// # PySCF equivalent
+///
+/// `ao2mo.outcore.balance_partition`
+///
+/// # Example
+///
+/// ```
+/// use libcint::prelude::*;
+/// let cint_data = init_h2o_def2_tzvp();
+/// let block_size = 20;
+/// let partition = libcint::util::balance_partition(&cint_data, block_size, None, None);
+/// assert_eq!(partition, vec![[0, 9, 19], [9, 17, 20], [17, 19, 4]]);
+/// ```
+pub fn balance_partition(cint_data: &CInt, block_size: usize, start_id: Option<usize>, end_id: Option<usize>) -> Vec<[usize; 3]> {
+    let shl_start = start_id.unwrap_or(0);
+    let shl_end = end_id.unwrap_or(cint_data.nbas());
+    let ao_loc = cint_data.ao_loc();
+    let ao_loc_sliced = &ao_loc[shl_start..=shl_end];
+    let block_partition = blocksize_partition(ao_loc_sliced, block_size);
+    let mut shl_partition = vec![];
+    for i in 0..(block_partition.len() - 1) {
+        let start = block_partition[i] + shl_start;
+        let end = block_partition[i + 1] + shl_start;
+        let step = ao_loc[end] - ao_loc[start];
+        shl_partition.push([start, end, step]);
+    }
+    shl_partition
+}
+
+/* #endregion */
+
 /* #region mathematical computation */
 
 /// Computes the Gaussian integral:
