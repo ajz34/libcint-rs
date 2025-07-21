@@ -22,7 +22,9 @@ fn build_libcint() {
             .define("WITH_F12", with_f12)
             .define("WITH_4C1E", with_4c1e)
             .build();
+        // CMAKE_INSTALL_LIBDIR can be lib64 on some platforms
         println!("cargo:rustc-link-search=native={}/lib", dst.display());
+        println!("cargo:rustc-link-search=native={}/lib64", dst.display());
     }
 }
 
