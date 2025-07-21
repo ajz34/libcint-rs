@@ -228,7 +228,7 @@ impl CInt {
     /// This implementation follows `gto.moleintor.make_loc`.
     ///
     /// For `gto.Mole` object, methods `ao_loc`, `ao_loc_nr`, `ao_loc_2c` are
-    /// also relavent.
+    /// also relevant.
     ///
     /// # Examples
     ///
@@ -267,7 +267,7 @@ impl CInt {
     /// This implementation follows `gto.moleintor.make_loc`.
     ///
     /// For `gto.Mole` object, methods `ao_loc`, `ao_loc_nr`, `ao_loc_2c` are
-    /// also relavent.
+    /// also relevant.
     ///
     /// # Examples
     ///
@@ -314,7 +314,7 @@ impl CInt {
     /// # PySCF Equivalent
     ///
     /// For `gto.Mole` object, methods `nao_nr`, `nao_cart`, `nao_2c` are
-    /// relavent.
+    /// relevant.
     ///
     ///
     /// # Examples
@@ -350,7 +350,7 @@ impl CInt {
     /// # PySCF Equivalent
     ///
     /// For `gto.Mole` object, methods `nao_nr`, `nao_cart`, `nao_2c` are
-    /// relavent.
+    /// relevant.
     ///
     ///
     /// # Examples
@@ -400,7 +400,7 @@ impl CInt {
         nao
     }
 
-    /// Coordinates fo the given atom id in unit Bohr (a.u.).
+    /// Coordinates of the given atom id in unit Bohr (a.u.).
     ///
     /// # PySCF Equivalent
     ///
@@ -599,7 +599,7 @@ impl CInt {
     /// # PySCF Equivalent
     ///
     /// Method `Mole.aoslice_by_atom`. This implementation does not allow
-    /// aribitary `ao_loc` (which can be obtained by [`CInt::make_loc`]).
+    /// arbitrary `ao_loc` (which can be obtained by [`CInt::make_loc`]).
     /// However, user can provide `cint_type` to specify if you wish to use
     /// sph, cart or spinor.
     ///
@@ -629,7 +629,7 @@ impl CInt {
     /// # PySCF Equivalent
     ///
     /// Method `Mole.aoslice_by_atom`. This implementation does not allow
-    /// aribitary `ao_loc` (which can be obtained by [`CInt::make_loc`]).
+    /// arbitrary `ao_loc` (which can be obtained by [`CInt::make_loc`]).
     /// However, user can provide `cint_type` to specify if you wish to use
     /// sph, cart or spinor.
     ///

@@ -3,7 +3,7 @@
 use crate::prelude::*;
 use core::ops::Add;
 
-/// Concating two molecules for integral.
+/// Concatenating two molecules for integral.
 impl Add for &CInt {
     type Output = CInt;
 

@@ -12,7 +12,7 @@ This project contains libcint (C language) FFI bindings, wrapper and build-from-
 | FFI Binding (qcint) | [v6.1.2](https://github.com/sunqm/qcint/tree/v6.1.2) |
 | ECP Source Code (PySCF) | [v2.9.0](https://github.com/pyscf/pyscf/tree/v2.9.0) |
 
-This crate is not official bindgen project, nither [libcint](https://github.com/sunqm/libcint), [PySCF](https://github.com/pyscf/pyscf), nor [REST](https://gitee.com/RESTGroup/rest). It is originally intended to be some pioneer work for possible future development of [rest_libcint](https://gitee.com/RESTGroup/rest_libcint) wrapper.
+This crate is not official bindgen project, neither [libcint](https://github.com/sunqm/libcint), [PySCF](https://github.com/pyscf/pyscf), nor [REST](https://gitee.com/RESTGroup/rest). It is originally intended to be some pioneer work for possible future development of [rest_libcint](https://gitee.com/RESTGroup/rest_libcint) wrapper.
 
 ## Minimal Example
 

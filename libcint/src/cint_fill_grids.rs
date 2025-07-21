@@ -1,4 +1,4 @@
-//! Implementation of grids inplementation at lower API level.
+//! Implementation of grids implementation at lower API level.
 
 use crate::prelude::*;
 use rayon::prelude::*;
@@ -7,7 +7,7 @@ use rstsr_common::prelude::*;
 
 const BLKSIZE: usize = 312;
 
-/// Implementation of grids inplementation at lower API level
+/// Implementation of grids implementation at lower API level
 impl CInt {
     pub fn max_cache_size_grids(&self, integrator: &dyn Integrator, shls_slice: &[[c_int; 2]]) -> usize {
         let natm = self.natm() as c_int;

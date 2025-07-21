@@ -182,7 +182,7 @@ impl CInt {
         let aosym = args.aosym;
         let cint_opt = data.get_optimizer(&*integrator);
 
-        // perfrom most checks
+        // perform most checks
         data.check_float_type::<F>()?;
         data.check_shls_slice(&*integrator, &shls_slice, aosym)?;
         data.check_optimizer(&*integrator, &cint_opt)?;
@@ -1158,7 +1158,7 @@ impl CInt {
     /// - `cint_opt` - optimizer that should be obtained before calling this
     ///   function. If `None`, then no optimization will be performed and will
     ///   pass null pointer.
-    /// - `shape` - **In general cases, it is not recommanded to use.** If
+    /// - `shape` - **In general cases, it is not recommended to use.** If
     ///   output larger than 4GB, then libcint internal realization may
     ///   overflow.
     /// - `cache` - cache buffer, need to be allocated enough space before

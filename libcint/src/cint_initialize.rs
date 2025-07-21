@@ -3,7 +3,7 @@
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 
-/// Serde intermediate structure for convertion between `CInt` to other
+/// Serde intermediate structure for conversion between `CInt` to other
 /// serializable formats.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CIntSerdeIntermediate {

@@ -24,7 +24,7 @@ use crate::ffi::cint_wrapper::get_cint_integrator;
 /// | `atm` | atom |
 /// | `bas` | shell |
 /// | `shl` | shell |
-/// | `ao` | atomic orbital basis (for users, absolute where starting shell is alway the first shell from `bas`) |
+/// | `ao` | atomic orbital basis (for users, absolute where starting shell is always the first shell from `bas`) |
 /// | `cgto` | atomic orbital basis (for developers, relative to specified starting shell by `shls_slice`) |
 /// | `cint`, `CInt` | libcint's [`CInt`] structure or instances |
 /// | `c_int` | [`std::ffi::c_int`] type ([`i32`] in most cases) |
@@ -32,7 +32,7 @@ use crate::ffi::cint_wrapper::get_cint_integrator;
 pub struct CInt {
     /// Slots of atoms.
     ///
-    /// Names of this field can be retrived in [`cint_ffi`].
+    /// Names of this field can be retrieved in [`cint_ffi`].
     ///
     /// | Index | Name          | Description | Related getter | Related setter |
     /// |-------|---------------|-------------|----------------|----------------|
@@ -154,7 +154,7 @@ pub enum CIntType {
 
 /// Symmetry of the integral.
 ///
-/// Nameing convention is
+/// Naming convention is
 /// - 2-center integrals $(\mu | \nu)$ or `uv` or `ij`;
 /// - 3-center integrals $(\mu \nu | \kappa)$ or `uvk` or `ijk`;
 /// - 4-center integrals $(\mu \nu | \kappa \lambda)$ or `uvkl` or `ijkl`.
@@ -211,7 +211,7 @@ pub struct CIntOutput<F> {
 /// Integrate arguments for function [`CInt::integrate_with_args`] and
 /// [`CInt::integrate_with_args_spinor`].
 ///
-/// Builder of this struct can be retrived by [`CInt::integrate_args_builder`]
+/// Builder of this struct can be retrieved by [`CInt::integrate_args_builder`]
 /// and [`CInt::integrate_args_builder_spinor`].
 #[derive(Builder, Debug)]
 #[builder(pattern = "owned", build_fn(error = "CIntError"))]
@@ -252,7 +252,7 @@ pub struct IntegrateArgs<'l, F> {
 /// Integrate arguments for function [`CInt::integrate_cross_with_args`] and
 /// [`CInt::integrate_cross_with_args_spinor`].
 ///
-/// Builder of this struct can be retrived by
+/// Builder of this struct can be retrieved by
 /// [`CInt::integrate_cross_args_builder`]
 /// and [`CInt::integrate_cross_args_builder_spinor`].
 #[derive(Builder, Debug)]
@@ -476,7 +476,7 @@ impl CInt {
     ///
     /// <div class="warning">
     ///
-    /// **Does not check whether AO symmetry is correct to the correspoding
+    /// **Does not check whether AO symmetry is correct to the corresponding
     /// integrator**
     ///
     /// For example,
@@ -606,8 +606,7 @@ impl CInt {
     ///   orbitals (basis).
     /// - $\mathrm{tp}(\mu \nu)$ means triangular-packed shape of the $(\mu,
     ///   \nu)$ indices pair. This is always packed by upper-triangular indices
-    ///   for col-major, or equilvalently lower-triangular indices for
-    ///   row-major.
+    ///   for col-major, or equivalently lower-triangular indices for row-major.
     /// - $g$ indicates grids, which is used in integrals like `int1e_grids`,
     ///   `int1e_grids_ip`.
     /// - "same layout" means the underlying data is the same, regardless of how

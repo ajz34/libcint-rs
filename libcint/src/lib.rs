@@ -35,7 +35,7 @@
 //! | FFI Binding (qcint) | [v6.1.2](https://github.com/sunqm/qcint/tree/v6.1.2) |
 //! | ECP Source Code (PySCF) | [v2.9.0](https://github.com/pyscf/pyscf/tree/v2.9.0) |
 //!
-//! This crate is not official bindgen project, nither
+//! This crate is not official bindgen project, neither
 //! [libcint](https://github.com/sunqm/libcint),
 //! [PySCF](https://github.com/pyscf/pyscf),
 //! nor [REST](https://gitee.com/RESTGroup/rest).
