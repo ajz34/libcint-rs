@@ -1,5 +1,6 @@
 #![allow(clippy::excessive_precision)]
 #![allow(clippy::needless_range_loop)]
+#![allow(clippy::approx_constant)]
 
 //! This project contains libcint (C language) FFI bindings, wrapper and
 //! build-from-source.
