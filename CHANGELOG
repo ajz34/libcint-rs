@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.5 -- 2025-08-21
+
+API Document Fix:
+
+ByteDance's public CDN static resource library has recently been taken offline. The website states that the shutdown was due to illegal activities.
+
+Thanks for previous ByteDance's share in the past years.
+
+Changes to Sustech CDN mirror for now.
+
 ## v0.1.4 -- 2025-07-21
 
 Enhancements:
