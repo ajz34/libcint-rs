@@ -343,14 +343,8 @@ impl CInt {
             }
         }
 
-        let args = if out.is_some() {
-            IntegrateArgsBuilder::default()
-                .intor(intor)
-                .aosym(aosym)
-                .shls_slice(&shls_slice)
-                .row_major(row_major)
-                .out(out.unwrap())
-                .build()?
+        let args = if let Some(out) = out {
+            IntegrateArgsBuilder::default().intor(intor).aosym(aosym).shls_slice(&shls_slice).row_major(row_major).out(out).build()?
         } else {
             IntegrateArgsBuilder::default().intor(intor).aosym(aosym).shls_slice(&shls_slice).row_major(row_major).build()?
         };

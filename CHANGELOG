@@ -1,5 +1,12 @@
 # Changelog
 
+
+## v0.1.6 -- 2025-11-14
+
+
+MSRV Specified to 1.82.0, downgrade edition to 2021 for better compatibility.
+
+
 ## v0.1.5 -- 2025-08-21
 
 API Document Fix:

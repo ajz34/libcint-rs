@@ -1,4 +1,5 @@
 //! Data and functions only for doc and unit testing.
+#![allow(clippy::approx_constant)]
 
 use crate::prelude::*;
 use num::{Complex, ToPrimitive};

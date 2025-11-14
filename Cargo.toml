@@ -6,16 +6,17 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.5"
-edition = "2024"
+version = "0.1.6"
+edition = "2021"
+rust-version = "1.82.0"
 repository = "https://github.com/ajz34/libcint-rs"
 keywords = ["chemistry", "integral", "scientific"]
 categories = ["science"]
 license = "Apache-2.0"
 
 [workspace.dependencies]
-libcint = { path = "./libcint", version = "0.1.5" }
-libcint-src = { path = "./libcint-src", version = "0.1.5" }
+libcint = { path = "./libcint", version = "0.1.6" }
+libcint-src = { path = "./libcint-src", version = "0.1.6" }
 
 [profile.dev]
 opt-level = 2

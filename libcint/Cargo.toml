@@ -5,6 +5,7 @@ readme = "readme.md"
 
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
@@ -18,7 +19,7 @@ num = { version = "0.4" }
 libm = { version = "0.2" }
 duplicate = { version = "2.0"}
 derive_builder = { version = "0.20"}
-rstsr-common = { version = "0.3", features = ["rayon"] }
+rstsr-common = { version = "0.5", features = ["rayon"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 
