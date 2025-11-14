@@ -7,7 +7,11 @@ fn build_libcint() {
     // - CINT_VER: version of libcint (`v6.1.2` for example, should start with `v`)
 
     let cint_src = std::env::var("CINT_SRC").unwrap_or({
-        if cfg!(feature = "qcint") { "https://github.com/sunqm/qcint.git".into() } else { "https://github.com/sunqm/libcint.git".into() }
+        if cfg!(feature = "qcint") {
+            "https://github.com/sunqm/qcint.git".into()
+        } else {
+            "https://github.com/sunqm/libcint.git".into()
+        }
     });
     let cint_ver = std::env::var("CINT_VER").unwrap_or("v6.1.2".into());
 

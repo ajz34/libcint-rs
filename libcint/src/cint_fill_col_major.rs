@@ -383,7 +383,7 @@ impl CInt {
             Spheric | Cartesian => integrator.n_comp(),
             Spinor => integrator.n_spinor_comp(),
         }; // number of components for intor
-        // n_center must be 4 for S2kl symmetry, checked in `check_shls_slice`
+           // n_center must be 4 for S2kl symmetry, checked in `check_shls_slice`
         let cgto_shape = self.cgto_shape_s2kl(shls_slice); // AO shape, without intor component
         let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
         let out_shape = [cgto_shape[0], cgto_shape[1], cgto_shape[2], n_comp];
@@ -473,7 +473,7 @@ impl CInt {
             Spheric | Cartesian => integrator.n_comp(),
             Spinor => integrator.n_spinor_comp(),
         }; // number of components for intor
-        // n_center must be 4 for S4 symmetry, checked in `check_shls_slice`
+           // n_center must be 4 for S4 symmetry, checked in `check_shls_slice`
         let cgto_shape = self.cgto_shape_s4(shls_slice); // AO shape, without intor component
         let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
         let out_shape = [cgto_shape[0], cgto_shape[1], n_comp];
@@ -564,7 +564,7 @@ impl CInt {
             Spheric | Cartesian => integrator.n_comp(),
             Spinor => integrator.n_spinor_comp(),
         }; // number of components for intor
-        // n_center must be 4 for S8 symmetry, checked in `check_shls_slice`
+           // n_center must be 4 for S8 symmetry, checked in `check_shls_slice`
         let cgto_shape = self.cgto_shape_s8(shls_slice); // AO shape, without intor component
         let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
         let out_shape = [cgto_shape[0], n_comp];

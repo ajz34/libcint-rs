@@ -1,7 +1,7 @@
 use crate::cint::CIntKind;
 use crate::ffi::cecp_ffi::*;
-use crate::ffi::wrapper_traits::Integrator;
 use crate::ffi::wrapper_traits::panic_spinor;
+use crate::ffi::wrapper_traits::Integrator;
 use crate::impl_integrator;
 use core::any::Any;
 use core::ffi::{c_int, c_void};

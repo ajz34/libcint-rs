@@ -74,7 +74,11 @@ impl CInt {
     /// ```
     #[inline]
     pub fn nbas(&self) -> usize {
-        if self.is_ecp_merged() { self.bas.len() - self.ecpbas.len() } else { self.bas.len() }
+        if self.is_ecp_merged() {
+            self.bas.len() - self.ecpbas.len()
+        } else {
+            self.bas.len()
+        }
     }
 
     /// Number of atoms in the system.
