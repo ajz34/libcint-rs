@@ -179,5 +179,7 @@ pub mod ffi;
 pub mod test_mol;
 pub mod util;
 
+pub mod gto;
+
 #[allow(unused_imports)]
 use prelude::*;
