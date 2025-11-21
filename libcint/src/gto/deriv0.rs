@@ -2,26 +2,74 @@ use crate::gto::prelude_dev::*;
 
 const ANG_MAX_USIZE: usize = ANG_MAX as usize;
 
-pub fn gto_contract_exp0(ectr: &mut [BlkF64], coord: &[BlkF64; 3], alpha: &[f64], coeff: &[f64], nprim: usize, nctr: usize, fac: f64) {
+/// Compute contracted GTO value, zeroth order.
+///
+/// This function only handles batch of grids with fixed size [`BLKSIZE`], to be
+/// better SIMD optimized.
+///
+/// # Formula
+///
+/// $$
+/// \begin{align*}
+/// \phi_k (r_g) &= \mathrm{fac} \times \sum_p C_{kp} \phi_p (r_g) \\\\
+/// \phi_p (r_g) &= \exp(- \alpha_p r_g^2) \\\\
+/// r_g^2 &= x_g^2 + y_g^2 + z_g^2
+/// \end{align*}
+/// $$
+///
+/// # Indices Table
+///
+/// | index | size | notes |
+/// |--|--|--|
+/// | $k$ | `nctr` | contracted AO |
+/// | $p$ | `nprim` | primitive AO |
+/// | $g$ | `BLKSIZE` | grids |
+///
+/// # Argument Table
+///
+/// | variable | formula | dimension | notes |
+/// |--|--|--|--|
+/// | `ectr` | $\phi_k (r_g)$ | $(k, g)$ | GTO value of contracted AO |
+/// | `coord` | $(x_g, y_g, z_g)$ | $(3, g)$ | coordinates of grids (taking AO's center as origin) |
+/// | `alpha` | $\alpha_p$ | $(p,)$ | exponents of primitive AO |
+/// | `coeff` | $C_{kp}$ | $(k, p)$ | cGTO contraction coefficients |
+/// | `fac` | $\mathrm{fac}$ | scalar | Additional factor (also see [`cint_common_fac_sp`]) |
+pub fn gto_contract_exp0(
+    // arguments
+    ectr: &mut [f64blk],
+    coord: &[f64blk; 3],
+    alpha: &[f64],
+    coeff: &[f64],
+    fac: f64,
+    // dimensions
+    nprim: usize,
+    nctr: usize,
+) {
     const X: usize = 0;
     const Y: usize = 1;
     const Z: usize = 2;
 
-    let mut rr = BlkF64::zero();
-    for i in 0..BLKSIZE {
-        rr[i] = coord[X][i] * coord[X][i] + coord[Y][i] * coord[Y][i] + coord[Z][i] * coord[Z][i];
+    // r² = x² + y² + z²
+    let mut rr = unsafe { f64blk::uninit() };
+    for g in 0..BLKSIZE {
+        rr[g] = coord[X][g].mul_add(coord[X][g], coord[Y][g].mul_add(coord[Y][g], coord[Z][g] * coord[Z][g]));
     }
+    // zero ectr
     for k in 0..nctr {
-        for i in 0..BLKSIZE {
-            ectr[k][i] = 0.0;
+        for g in 0..BLKSIZE {
+            ectr[k][g] = 0.0;
         }
     }
-    for j in 0..nprim {
-        for i in 0..BLKSIZE {
-            let arr = alpha[j] * rr[i];
-            let eprim = (-arr).exp() * fac;
-            for k in 0..nctr {
-                ectr[k][i] += eprim * coeff[k * nprim + j];
+    for p in 0..nprim {
+        let mut eprim = unsafe { f64blk::uninit() };
+        for g in 0..BLKSIZE {
+            let arr = alpha[p] * rr[g];
+            eprim[g] = (-arr).exp() * fac;
+        }
+        // we make the grid index to be the least iterated, different to PySCF
+        for k in 0..nctr {
+            for g in 0..BLKSIZE {
+                ectr[k][g] = eprim[g].mul_add(coeff[k * nprim + p], ectr[k][g]);
             }
         }
     }
@@ -30,8 +78,8 @@ pub fn gto_contract_exp0(ectr: &mut [BlkF64], coord: &[BlkF64; 3], alpha: &[f64]
 #[allow(clippy::too_many_arguments)]
 pub fn gto_shell_eval_grid_cart(
     gto: &mut [&mut [&mut [f64]]],
-    exps: &[BlkF64],
-    coord: &[BlkF64; 3],
+    exps: &[f64blk],
+    coord: &[f64blk; 3],
     l: usize,
     nctr: usize,
     iao: usize,
@@ -40,7 +88,7 @@ pub fn gto_shell_eval_grid_cart(
 ) {
     unsafe { core::hint::assert_unchecked(bgrid <= BLKSIZE) }
 
-    let mut pows = unsafe { [[BlkF64::uninit(); ANG_MAX_USIZE + 1]; 3] };
+    let mut pows = unsafe { [[f64blk::uninit(); ANG_MAX_USIZE + 1]; 3] };
 
     match l {
         0 => {
@@ -52,26 +100,26 @@ pub fn gto_shell_eval_grid_cart(
         },
         1 => {
             for k in 0..nctr {
-                for i in 0..bgrid {
-                    gto[0][iao + 3 * k + X][igrid + i] = coord[X][i] * exps[k][i];
-                    gto[0][iao + 3 * k + Y][igrid + i] = coord[Y][i] * exps[k][i];
-                    gto[0][iao + 3 * k + Z][igrid + i] = coord[Z][i] * exps[k][i];
+                for g in 0..bgrid {
+                    gto[0][iao + 3 * k + X][igrid + g] = coord[X][g] * exps[k][g];
+                    gto[0][iao + 3 * k + Y][igrid + g] = coord[Y][g] * exps[k][g];
+                    gto[0][iao + 3 * k + Z][igrid + g] = coord[Z][g] * exps[k][g];
                 }
             }
         },
         2 => {
             for k in 0..nctr {
-                for i in 0..bgrid {
-                    let e = exps[k][i];
-                    let x = coord[X][i];
-                    let y = coord[Y][i];
-                    let z = coord[Z][i];
-                    gto[0][iao + 6 * k + XX][igrid + i] = e * x * x;
-                    gto[0][iao + 6 * k + XY][igrid + i] = e * x * y;
-                    gto[0][iao + 6 * k + XZ][igrid + i] = e * x * z;
-                    gto[0][iao + 6 * k + YY][igrid + i] = e * y * y;
-                    gto[0][iao + 6 * k + YZ][igrid + i] = e * y * z;
-                    gto[0][iao + 6 * k + ZZ][igrid + i] = e * z * z;
+                for g in 0..bgrid {
+                    let e = exps[k][g];
+                    let x = coord[X][g];
+                    let y = coord[Y][g];
+                    let z = coord[Z][g];
+                    gto[0][iao + 6 * k + XX][igrid + g] = e * x * x;
+                    gto[0][iao + 6 * k + XY][igrid + g] = e * x * y;
+                    gto[0][iao + 6 * k + XZ][igrid + g] = e * x * z;
+                    gto[0][iao + 6 * k + YY][igrid + g] = e * y * y;
+                    gto[0][iao + 6 * k + YZ][igrid + g] = e * y * z;
+                    gto[0][iao + 6 * k + ZZ][igrid + g] = e * z * z;
                 }
             }
         },
@@ -121,7 +169,7 @@ pub fn gto_shloc_by_atom(shls_slice: [usize; 2], bas: &[[c_int; BAS_SLOTS as usi
 }
 
 pub fn gto_fill_grid2atm(
-    grid2atm: &mut [[BlkF64; 3]],
+    grid2atm: &mut [[f64blk; 3]],
     coord: &[[f64; 3]],
     igrid: usize,
     bgrid: usize,
@@ -153,7 +201,7 @@ pub fn gto_eval_cart_iter(
     atm: &[[c_int; ATM_SLOTS as usize]],
     bas: &[[c_int; BAS_SLOTS as usize]],
     env: &[f64],
-    buf: &mut [BlkF64],
+    buf: &mut [f64blk],
 ) {
     const ATOM_OF: usize = crate::ffi::cint_ffi::ATOM_OF as usize;
     const NPRIM_MAX: usize = crate::ffi::cint_ffi::NPRIM_MAX as usize;
@@ -179,7 +227,7 @@ pub fn gto_eval_cart_iter(
         let nprim = bas[bas_id][NPRIM_OF] as usize;
         let nctr = bas[bas_id][NCTR_OF] as usize;
         let l = bas[bas_id][ANG_OF] as usize;
-        let fac1 = fac * unsafe { CINTcommon_fac_sp(l as c_int) };
+        let fac1 = fac * cint_common_fac_sp(l as c_int);
 
         let p_exp = bas[bas_id][PTR_EXP] as usize;
         let p_coeff = bas[bas_id][PTR_COEFF] as usize;
@@ -189,7 +237,7 @@ pub fn gto_eval_cart_iter(
         let coord = &grid2atm[atm_id - atm0];
         let iao = ao_loc[bas_id] - ao_loc[sh0];
 
-        gto_contract_exp0(eprim, coord, alpha, coeff, nprim, nctr, fac1);
+        gto_contract_exp0(eprim, coord, alpha, coeff, fac1, nprim, nctr);
         gto_shell_eval_grid_cart(ao, &eprim[0..nctr], coord, l, nctr, iao, igrid, ngrids);
     }
 }
@@ -204,7 +252,7 @@ fn playground() {
     let mut ao_slices: Vec<&mut [f64]> = ao.chunks_exact_mut(ngrids).collect();
     let ao_refs: &mut [&mut [&mut [f64]]] = &mut [ao_slices.as_mut_slice()];
     let coord: Vec<[f64; 3]> = (0..ngrids).map(|i| [i as f64 * 0.1, i as f64 * 0.2, i as f64 * 0.3]).collect();
-    let mut buf = vec![BlkF64::zero(); (cint_data.natm() * 3) + NPRIM_MAX.max(NCTR_MAX) as usize];
+    let mut buf = vec![f64blk::zero(); (cint_data.natm() * 3) + NPRIM_MAX.max(NCTR_MAX) as usize];
     gto_eval_cart_iter(
         ao_refs,
         1.0,
@@ -220,6 +268,8 @@ fn playground() {
     );
     println!("ao[0..10]: {:?}", &ao[0..10]);
 }
+
+/*
 
 pub fn gto_eval_loop(
     ao: &mut [f64], // (nprop, nao, ngrids)
@@ -250,3 +300,5 @@ pub fn gto_eval_loop(
 
     todo!()
 }
+
+*/

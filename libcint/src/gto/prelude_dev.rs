@@ -24,6 +24,25 @@ pub const ZZ: usize = 5;
 
 use core::ops::*;
 
+/// Common factor for spherical harmonics, by libcint's convention.
+///
+/// For efficiency, libcint will pre-scale normalization factor to the integral,
+/// for s and p functions. For other angular momenta, the scaling will be
+/// performed along with cartesian-spherical transformation.
+///
+/// - $l = 0$ (s): $\sqrt{\frac{1}{4\pi}}$
+/// - $l = 1$ (p): $\sqrt{\frac{3}{4\pi}}$
+/// - otherwise: 1
+///
+/// libcint C function: `CINTcommon_fac_sp`.
+pub fn cint_common_fac_sp(l: c_int) -> f64 {
+    match l {
+        0 => 0.282094791773878143, // sqrt(1 / (4 * pi))
+        1 => 0.488602511902919921, // sqrt(3 / (4 * pi))
+        _ => 1.0,
+    }
+}
+
 unsafe extern "C" {
     pub fn CINTcommon_fac_sp(l: c_int) -> f64;
 }
@@ -104,14 +123,14 @@ mod impl_trait_for_f64x8 {
         #[inline(always)]
         fn trait_fn(self, rhs: Self) -> Self::Output {
             f64x8([
-                f64::trait_fn(self.0[0], rhs.0[0]),
-                f64::trait_fn(self.0[1], rhs.0[1]),
-                f64::trait_fn(self.0[2], rhs.0[2]),
-                f64::trait_fn(self.0[3], rhs.0[3]),
-                f64::trait_fn(self.0[4], rhs.0[4]),
-                f64::trait_fn(self.0[5], rhs.0[5]),
-                f64::trait_fn(self.0[6], rhs.0[6]),
-                f64::trait_fn(self.0[7], rhs.0[7]),
+                f64::trait_fn(self[0], rhs[0]),
+                f64::trait_fn(self[1], rhs[1]),
+                f64::trait_fn(self[2], rhs[2]),
+                f64::trait_fn(self[3], rhs[3]),
+                f64::trait_fn(self[4], rhs[4]),
+                f64::trait_fn(self[5], rhs[5]),
+                f64::trait_fn(self[6], rhs[6]),
+                f64::trait_fn(self[7], rhs[7]),
             ])
         }
     }
@@ -122,14 +141,14 @@ mod impl_trait_for_f64x8 {
         #[inline(always)]
         fn trait_fn(self, rhs: f64) -> Self::Output {
             f64x8([
-                f64::trait_fn(self.0[0], rhs),
-                f64::trait_fn(self.0[1], rhs),
-                f64::trait_fn(self.0[2], rhs),
-                f64::trait_fn(self.0[3], rhs),
-                f64::trait_fn(self.0[4], rhs),
-                f64::trait_fn(self.0[5], rhs),
-                f64::trait_fn(self.0[6], rhs),
-                f64::trait_fn(self.0[7], rhs),
+                f64::trait_fn(self[0], rhs),
+                f64::trait_fn(self[1], rhs),
+                f64::trait_fn(self[2], rhs),
+                f64::trait_fn(self[3], rhs),
+                f64::trait_fn(self[4], rhs),
+                f64::trait_fn(self[5], rhs),
+                f64::trait_fn(self[6], rhs),
+                f64::trait_fn(self[7], rhs),
             ])
         }
     }
@@ -140,14 +159,14 @@ mod impl_trait_for_f64x8 {
         #[inline(always)]
         fn trait_fn(self, rhs: f64x8) -> Self::Output {
             f64x8([
-                f64::trait_fn(self, rhs.0[0]),
-                f64::trait_fn(self, rhs.0[1]),
-                f64::trait_fn(self, rhs.0[2]),
-                f64::trait_fn(self, rhs.0[3]),
-                f64::trait_fn(self, rhs.0[4]),
-                f64::trait_fn(self, rhs.0[5]),
-                f64::trait_fn(self, rhs.0[6]),
-                f64::trait_fn(self, rhs.0[7]),
+                f64::trait_fn(self, rhs[0]),
+                f64::trait_fn(self, rhs[1]),
+                f64::trait_fn(self, rhs[2]),
+                f64::trait_fn(self, rhs[3]),
+                f64::trait_fn(self, rhs[4]),
+                f64::trait_fn(self, rhs[5]),
+                f64::trait_fn(self, rhs[6]),
+                f64::trait_fn(self, rhs[7]),
             ])
         }
     }
@@ -163,28 +182,30 @@ mod impl_trait_for_f64x8 {
 impl Trait for f64x8 {
     #[inline(always)]
     fn trait_fn(&mut self, rhs: Self) {
-        self.0[0].trait_fn(rhs.0[0]);
-        self.0[1].trait_fn(rhs.0[1]);
-        self.0[2].trait_fn(rhs.0[2]);
-        self.0[3].trait_fn(rhs.0[3]);
-        self.0[4].trait_fn(rhs.0[4]);
-        self.0[5].trait_fn(rhs.0[5]);
-        self.0[6].trait_fn(rhs.0[6]);
-        self.0[7].trait_fn(rhs.0[7]);
+        self[0].trait_fn(rhs[0]);
+        self[1].trait_fn(rhs[1]);
+        self[2].trait_fn(rhs[2]);
+        self[3].trait_fn(rhs[3]);
+        self[4].trait_fn(rhs[4]);
+        self[5].trait_fn(rhs[5]);
+        self[6].trait_fn(rhs[6]);
+        self[7].trait_fn(rhs[7]);
     }
 }
 
 impl f64x8 {
-    #[inline(always)]
-    pub fn fma(&mut self, a: &f64x8, b: &f64x8) {
-        self.0[0] = self.0[0].mul_add(a.0[0], b.0[0]);
-        self.0[1] = self.0[1].mul_add(a.0[1], b.0[1]);
-        self.0[2] = self.0[2].mul_add(a.0[2], b.0[2]);
-        self.0[3] = self.0[3].mul_add(a.0[3], b.0[3]);
-        self.0[4] = self.0[4].mul_add(a.0[4], b.0[4]);
-        self.0[5] = self.0[5].mul_add(a.0[5], b.0[5]);
-        self.0[6] = self.0[6].mul_add(a.0[6], b.0[6]);
-        self.0[7] = self.0[7].mul_add(a.0[7], b.0[7]);
+    #[inline]
+    pub fn add_mul(self, b: f64x8, c: f64x8) -> f64x8 {
+        f64x8([
+            self[0].mul_add(b[0], c[0]),
+            self[1].mul_add(b[1], c[1]),
+            self[2].mul_add(b[2], c[2]),
+            self[3].mul_add(b[3], c[3]),
+            self[4].mul_add(b[4], c[4]),
+            self[5].mul_add(b[5], c[5]),
+            self[6].mul_add(b[6], c[6]),
+            self[7].mul_add(b[7], c[7]),
+        ])
     }
 }
 
@@ -192,9 +213,10 @@ impl f64x8 {
 
 #[repr(align(64))]
 #[derive(Clone, Debug, Copy)]
-pub struct BlkF64(pub [f64; BLKSIZE]);
+#[allow(non_camel_case_types)]
+pub struct f64blk(pub [f64; BLKSIZE]);
 
-impl Index<usize> for BlkF64 {
+impl Index<usize> for f64blk {
     type Output = f64;
     #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
@@ -202,14 +224,14 @@ impl Index<usize> for BlkF64 {
     }
 }
 
-impl IndexMut<usize> for BlkF64 {
+impl IndexMut<usize> for f64blk {
     #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
     }
 }
 
-impl BlkF64 {
+impl f64blk {
     /// # Safety
     ///
     /// This function returns an uninitialized `BlkF64`. The caller must ensure
@@ -218,15 +240,15 @@ impl BlkF64 {
     #[allow(clippy::uninit_assumed_init)]
     #[allow(invalid_value)]
     pub const unsafe fn uninit() -> Self {
-        BlkF64(core::mem::MaybeUninit::uninit().assume_init())
+        f64blk(core::mem::MaybeUninit::uninit().assume_init())
     }
 
     pub const fn zero() -> Self {
-        BlkF64([0.0f64; BLKSIZE])
+        f64blk([0.0f64; BLKSIZE])
     }
 
     pub const fn splat(val: f64) -> Self {
-        BlkF64([val; BLKSIZE])
+        f64blk([val; BLKSIZE])
     }
 
     pub const fn fill(&mut self, val: f64) {
@@ -280,12 +302,20 @@ impl BlkF64 {
             dst.copy_from_slice(&self.0[..len_slc]);
         }
     }
+
+    pub const fn as_f64x8_slice(&self) -> &[f64x8; BLKSIMD] {
+        unsafe { transmute(&self.0) }
+    }
+
+    pub const fn as_f64x8_slice_mut(&mut self) -> &mut [f64x8; BLKSIMD] {
+        unsafe { transmute(&mut self.0) }
+    }
 }
 
 #[test]
 fn test_blkf64_uninit() {
     #[allow(clippy::uninit_assumed_init)]
     #[allow(invalid_value)]
-    let v: [[BlkF64; 10]; 10] = unsafe { [[BlkF64::uninit(); 10]; 10] };
+    let v: [[f64blk; 10]; 10] = unsafe { [[f64blk::uninit(); 10]; 10] };
     println!("{:?}", v);
 }

@@ -1,12 +1,12 @@
 use crate::gto::prelude_dev::*;
 
 pub fn gto_nabla1(
-    fx1: &mut [BlkF64],
-    fy1: &mut [BlkF64],
-    fz1: &mut [BlkF64],
-    fx0: &[BlkF64],
-    fy0: &[BlkF64],
-    fz0: &[BlkF64],
+    fx1: &mut [f64blk],
+    fy1: &mut [f64blk],
+    fz1: &mut [f64blk],
+    fx0: &[f64blk],
+    fy0: &[f64blk],
+    fz0: &[f64blk],
     l: usize,
     a: f64,
 ) {
@@ -28,12 +28,12 @@ pub fn gto_nabla1(
 }
 
 pub fn gto_x1(
-    fx1: &mut [BlkF64],
-    fy1: &mut [BlkF64],
-    fz1: &mut [BlkF64],
-    fx0: &[BlkF64],
-    fy0: &[BlkF64],
-    fz0: &[BlkF64],
+    fx1: &mut [f64blk],
+    fy1: &mut [f64blk],
+    fz1: &mut [f64blk],
+    fx0: &[f64blk],
+    fy0: &[f64blk],
+    fz0: &[f64blk],
     l: usize,
     ri: [f64; 3],
 ) {
@@ -46,8 +46,8 @@ pub fn gto_x1(
     }
 }
 
-pub fn gto_prim_exp(eprim: &mut [BlkF64], coord: &[BlkF64; 3], alpha: &[f64], _coeff: &[f64], _nprim: usize, nctr: usize, fac: f64) {
-    let mut rr = unsafe { BlkF64::uninit() };
+pub fn gto_prim_exp(eprim: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], _coeff: &[f64], _nprim: usize, nctr: usize, fac: f64) {
+    let mut rr = unsafe { f64blk::uninit() };
     for i in 0..BLKSIZE {
         rr[i] = coord[0][i] * coord[0][i] + coord[1][i] * coord[1][i] + coord[2][i] * coord[2][i];
     }
