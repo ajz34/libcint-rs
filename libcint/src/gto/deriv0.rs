@@ -1,18 +1,23 @@
 use crate::gto::prelude_dev::*;
 
-const ANG_MAX_USIZE: usize = ANG_MAX as usize;
-
 /// Compute contracted GTO value, zeroth order.
 ///
 /// This function only handles batch of grids with fixed size [`BLKSIZE`], to be
 /// better SIMD optimized.
 ///
+/// This only handles $l = 0$ orbitals.
+///
 /// # Formula
+///
+/// $$ $$
 ///
 /// $$
 /// \begin{align*}
-/// \phi_k (r_g) &= \mathrm{fac} \times \sum_p C_{kp} \phi_p (r_g) \\\\
-/// \phi_p (r_g) &= \exp(- \alpha_p r_g^2) \\\\
+/// \mathscr G_k (\bm r_g) &= \mathrm{fac} \times \sum_p C_{kp} \mathscr G_p
+/// (\bm r_g)
+/// \\\\
+/// \mathscr G_p (\bm r_g) &= \exp(- \alpha_p r_g^2)
+/// \\\\
 /// r_g^2 &= x_g^2 + y_g^2 + z_g^2
 /// \end{align*}
 /// $$
@@ -23,17 +28,17 @@ const ANG_MAX_USIZE: usize = ANG_MAX as usize;
 /// |--|--|--|
 /// | $k$ | `nctr` | contracted AO |
 /// | $p$ | `nprim` | primitive AO |
-/// | $g$ | `BLKSIZE` | grids |
+/// | $g$ | [`BLKSIZE`] | grids |
 ///
 /// # Argument Table
 ///
-/// | variable | formula | dimension | notes |
-/// |--|--|--|--|
-/// | `ectr` | $\phi_k (r_g)$ | $(k, g)$ | GTO value of contracted AO |
-/// | `coord` | $(x_g, y_g, z_g)$ | $(3, g)$ | coordinates of grids (taking AO's center as origin) |
-/// | `alpha` | $\alpha_p$ | $(p,)$ | exponents of primitive AO |
-/// | `coeff` | $C_{kp}$ | $(k, p)$ | cGTO contraction coefficients |
-/// | `fac` | $\mathrm{fac}$ | scalar | Additional factor (also see [`cint_common_fac_sp`]) |
+/// | variable | formula | dimension | shape | notes |
+/// |--|--|--|--|--|
+/// | `ectr` | $\phi_k (r_g)$ | $(k, g)$ | `(nctr, BLKSIZE)` | GTO value of contracted AO |
+/// | `coord` | $(x_g, y_g, z_g)$ | $(3, g)$ | `(3, BLKSIZE)` | coordinates of grids (taking AO's center as origin) |
+/// | `alpha` | $\alpha_p$ | $(p,)$ | `nprim` | exponents of primitive AO |
+/// | `coeff` | $C_{kp}$ | $(k, p)$ | `(nctr, BLKSIZE)` | cGTO contraction coefficients |
+/// | `fac` | $\mathrm{fac}$ | scalar | | Additional factor (also see [`cint_common_fac_sp`]) |
 pub fn gto_contract_exp0(
     // arguments
     ectr: &mut [f64blk],
@@ -75,20 +80,82 @@ pub fn gto_contract_exp0(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Evaluate GTO shell in Cartesian basis at grids, at arbitary angular momentum
+/// $l$.
+///
+/// # Formula
+///
+/// $$
+/// \phi_\mu (\bm r_g) = x_g^{\mu_x} y_g^{\mu_y} z_g^{\mu_z} \times
+/// \mathscr G_{\mu_k} (\bm r_g)
+/// $$
+///
+/// Notes on index $\mu$:
+/// - This index represents the cartesian atomic orbital basis. The size of
+///   $\mu$ is the multiplication of $n_\mathrm{cart} = (l + 1) (l + 2) / 2$,
+///   and $n_\mathrm{ctr}$ (the number of contracted functions in the shell).
+/// - $\mu_x$, $\mu_y$, $\mu_z$ are the cartesian exponents of the basis
+///   function, satisfying $\mu_x + \mu_y + \mu_z = l$. Note that for a shell of
+///   basis, the angular momentum $l$ is fixed for all contracted functions.
+/// - The ordering of $(\mu_x, \mu_y, \mu_z)$ follows the convention in PySCF,
+///   i.e., the most rapidly changing index is $\mu_z$, then $\mu_y$, and
+///   finally $\mu_x$.
+/// - $\mu_k$ is the index of contracted function.
+///
+/// For example of angular momentum $l=2$ (d shell) with $n_\mathrm{ctr} = 2$,
+/// the ordering of $\mu$ is:
+///
+/// | $\mu$ | $(\mu_x, \mu_y, \mu_z)$ | $\mu_k$ || $\mu$ | $(\mu_x, \mu_y, \mu_z)$ | $\mu_k$ |
+/// |--|--|--|--|--|--|--|
+/// |  0 | (2, 0, 0) | 0 ||  6 | (2, 0, 0) | 1 |
+/// |  1 | (1, 1, 0) | 0 ||  7 | (1, 1, 0) | 1 |
+/// |  2 | (1, 0, 1) | 0 ||  8 | (1, 0, 1) | 1 |
+/// |  3 | (0, 2, 0) | 0 ||  9 | (0, 2, 0) | 1 |
+/// |  4 | (0, 1, 1) | 0 || 10 | (0, 1, 1) | 1 |
+/// |  5 | (0, 0, 2) | 0 || 11 | (0, 0, 2) | 1 |
+///
+/// # Indices Table
+///
+/// | index | size | notes |
+/// |--|--|--|
+/// | $\mu$ | `ncart * nctr` | cartesian AO basis function |
+/// | $\mu_k$ | `nctr` | contracted AO function |
+/// | $g$ | `bgrid` | grids, usually equal but may be smaller than [`BLKSIZE`] |
+///
+/// # Argument Table
+///
+/// | variable | formula | dimension | shape | notes |
+/// |--|--|--|--|--|
+/// | `gto` | $\phi_\mu (\bm r_g)$ | $(\mathbb{A}, \mu, g)$ | `(1, nao, ngrid)` | GTO value of cartesian AO basis |
+/// | `exps` | $\mathscr G_{\mu_k} (\bm r_g)$ | $(\mu_k, g)$ | `(nctr, BLKSIZE)` | cGTO value (given by function [`gto_contract_exp0`]) |
+/// | `coord` | $(x_g, y_g, z_g)$ | $(3, g)$ | `(3, BLKSIZE)` | coordinates of grids (taking AO's center as origin) |
+/// | `l` | $l$ | scalar | | angular momentum of the shell |
+///
+/// Note of `gto`:
+/// - The first dimension `\mathbb{A}` is for properties, currently always 1
+///   since we are evaluating only the basis value, not its derivatives.
+///
+/// # Offset Table
+///
+/// | variable | notes |
+/// |--|--|
+/// | `iao` | starting index $\mu$ of the shell in `gto` |
+/// | `igrid` | starting index $g$ of the grids in `gto` |
 pub fn gto_shell_eval_grid_cart(
+    // arguments
     gto: &mut [&mut [&mut [f64]]],
     exps: &[f64blk],
     coord: &[f64blk; 3],
     l: usize,
+    // dimensions
     nctr: usize,
+    bgrid: usize,
+    // offsets
     iao: usize,
     igrid: usize,
-    bgrid: usize,
 ) {
+    const ANG_MAX: usize = crate::ffi::cint_ffi::ANG_MAX as usize;
     unsafe { core::hint::assert_unchecked(bgrid <= BLKSIZE) }
-
-    let mut pows = unsafe { [[f64blk::uninit(); ANG_MAX_USIZE + 1]; 3] };
 
     match l {
         0 => {
@@ -101,9 +168,13 @@ pub fn gto_shell_eval_grid_cart(
         1 => {
             for k in 0..nctr {
                 for g in 0..bgrid {
-                    gto[0][iao + 3 * k + X][igrid + g] = coord[X][g] * exps[k][g];
-                    gto[0][iao + 3 * k + Y][igrid + g] = coord[Y][g] * exps[k][g];
-                    gto[0][iao + 3 * k + Z][igrid + g] = coord[Z][g] * exps[k][g];
+                    let e = exps[k][g];
+                    let x = coord[X][g];
+                    let y = coord[Y][g];
+                    let z = coord[Z][g];
+                    gto[0][iao + 3 * k + X][igrid + g] = x * e;
+                    gto[0][iao + 3 * k + Y][igrid + g] = y * e;
+                    gto[0][iao + 3 * k + Z][igrid + g] = z * e;
                 }
             }
         },
@@ -114,36 +185,57 @@ pub fn gto_shell_eval_grid_cart(
                     let x = coord[X][g];
                     let y = coord[Y][g];
                     let z = coord[Z][g];
-                    gto[0][iao + 6 * k + XX][igrid + g] = e * x * x;
-                    gto[0][iao + 6 * k + XY][igrid + g] = e * x * y;
-                    gto[0][iao + 6 * k + XZ][igrid + g] = e * x * z;
-                    gto[0][iao + 6 * k + YY][igrid + g] = e * y * y;
-                    gto[0][iao + 6 * k + YZ][igrid + g] = e * y * z;
-                    gto[0][iao + 6 * k + ZZ][igrid + g] = e * z * z;
+                    gto[0][iao + 6 * k + XX][igrid + g] = x * x * e;
+                    gto[0][iao + 6 * k + XY][igrid + g] = x * y * e;
+                    gto[0][iao + 6 * k + XZ][igrid + g] = x * z * e;
+                    gto[0][iao + 6 * k + YY][igrid + g] = y * y * e;
+                    gto[0][iao + 6 * k + YZ][igrid + g] = y * z * e;
+                    gto[0][iao + 6 * k + ZZ][igrid + g] = z * z * e;
+                }
+            }
+        },
+        3 => {
+            for k in 0..nctr {
+                for g in 0..bgrid {
+                    let e = exps[k][g];
+                    let x = coord[X][g];
+                    let y = coord[Y][g];
+                    let z = coord[Z][g];
+                    gto[0][iao + 10 * k + XXX][igrid + g] = x * x * x * e;
+                    gto[0][iao + 10 * k + XXY][igrid + g] = x * x * y * e;
+                    gto[0][iao + 10 * k + XXZ][igrid + g] = x * x * z * e;
+                    gto[0][iao + 10 * k + XYY][igrid + g] = x * y * y * e;
+                    gto[0][iao + 10 * k + XYZ][igrid + g] = x * y * z * e;
+                    gto[0][iao + 10 * k + XZZ][igrid + g] = x * z * z * e;
+                    gto[0][iao + 10 * k + YYY][igrid + g] = y * y * y * e;
+                    gto[0][iao + 10 * k + YYZ][igrid + g] = y * y * z * e;
+                    gto[0][iao + 10 * k + YZZ][igrid + g] = y * z * z * e;
+                    gto[0][iao + 10 * k + ZZZ][igrid + g] = z * z * z * e;
                 }
             }
         },
         _ => {
+            let mut pows = unsafe { [[f64blk::uninit(); 3]; ANG_MAX + 1] };
             let ncart = (l + 1) * (l + 2) / 2;
-            for k in 0..nctr {
+            for i in 0..bgrid {
+                pows[0][X][i] = 1.0;
+                pows[0][Y][i] = 1.0;
+                pows[0][Z][i] = 1.0;
+            }
+            for lx in 1..=l {
                 for i in 0..bgrid {
-                    pows[X][0][i] = 1.0;
-                    pows[Y][0][i] = 1.0;
-                    pows[Z][0][i] = 1.0;
+                    pows[lx][X][i] = pows[lx - 1][X][i] * coord[X][i];
+                    pows[lx][Y][i] = pows[lx - 1][Y][i] * coord[Y][i];
+                    pows[lx][Z][i] = pows[lx - 1][Z][i] * coord[Z][i];
                 }
-                for lx in 1..=l {
-                    for i in 0..bgrid {
-                        pows[X][lx][i] = pows[X][lx - 1][i] * coord[X][i];
-                        pows[Y][lx][i] = pows[Y][lx - 1][i] * coord[Y][i];
-                        pows[Z][lx][i] = pows[Z][lx - 1][i] * coord[Z][i];
-                    }
-                }
+            }
+            for k in 0..nctr {
                 let mut icart = 0;
                 for lx in (0..=l).rev() {
                     for ly in (0..=(l - lx)).rev() {
                         let lz = l - lx - ly;
                         for i in 0..bgrid {
-                            gto[0][iao + ncart * k + icart][igrid + i] = exps[k][i] * pows[X][lx][i] * pows[Y][ly][i] * pows[Z][lz][i];
+                            gto[0][iao + ncart * k + icart][igrid + i] = exps[k][i] * pows[lx][X][i] * pows[ly][Y][i] * pows[lz][Z][i];
                         }
                         icart += 1;
                     }
@@ -238,7 +330,7 @@ pub fn gto_eval_cart_iter(
         let iao = ao_loc[bas_id] - ao_loc[sh0];
 
         gto_contract_exp0(eprim, coord, alpha, coeff, fac1, nprim, nctr);
-        gto_shell_eval_grid_cart(ao, &eprim[0..nctr], coord, l, nctr, iao, igrid, ngrids);
+        gto_shell_eval_grid_cart(ao, &eprim[0..nctr], coord, l, nctr, ngrids, iao, igrid);
     }
 }
 

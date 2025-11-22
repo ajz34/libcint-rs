@@ -15,12 +15,24 @@ pub const TENSOR: usize = 1;
 pub const X: usize = 0;
 pub const Y: usize = 1;
 pub const Z: usize = 2;
+
 pub const XX: usize = 0;
 pub const XY: usize = 1;
 pub const XZ: usize = 2;
 pub const YY: usize = 3;
 pub const YZ: usize = 4;
 pub const ZZ: usize = 5;
+
+pub const XXX: usize = 0;
+pub const XXY: usize = 1;
+pub const XXZ: usize = 2;
+pub const XYY: usize = 3;
+pub const XYZ: usize = 4;
+pub const XZZ: usize = 5;
+pub const YYY: usize = 6;
+pub const YYZ: usize = 7;
+pub const YZZ: usize = 8;
+pub const ZZZ: usize = 9;
 
 use core::ops::*;
 
