@@ -5,8 +5,13 @@ pub use core::mem::transmute;
 
 pub const BLKSIZE: usize = 56;
 pub const BLKSIMD: usize = 7;
-// 128s42p21d12f8g6h4i3j
+// maximum number of cartesian functions for a shell
+// 128s, 42p, 21d, 12f, 8g, 6h, 4i, 3j
 pub const NCTR_CART: usize = 128;
+// maximum components to be evaluated
+// derivatives: 1, 4, 10, 20, 35 (to 4-th order)
+// ipipsp: 4 * 9
+pub const NCOMP_MAX: usize = 36;
 
 // 2 slots of int param[]
 pub const POS_E1: usize = 0;
