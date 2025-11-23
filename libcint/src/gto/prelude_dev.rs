@@ -1,3 +1,6 @@
+pub use crate::gto::deriv_0::*;
+pub use crate::gto::grid_ao_drv::*;
+
 pub use crate::cint_ffi::*;
 pub use crate::prelude::*;
 pub use core::ffi::c_int;
