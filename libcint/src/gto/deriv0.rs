@@ -1,6 +1,44 @@
 use crate::gto::prelude_dev::*;
 use rayon::prelude::*;
 
+pub fn gto_copy_grids_cart(
+    // arguments
+    gto: &[f64blk],
+    ao: &mut [f64],
+    l: usize,
+    // dimensions
+    nctr: usize,
+    ncomp: usize,
+    nao: usize,
+    ngrid: usize,
+    // offsets
+    iao: usize,
+    igrid: usize,
+) {
+    let ncart = (l + 1) * (l + 2) / 2;
+    let nshlbas = nctr * ncart;
+    if igrid + BLKSIZE < ngrid {
+        for a in 0..ncomp {
+            for mu in 0..nshlbas {
+                let ptr = a * nao * ngrid + (iao + mu) * ngrid + igrid;
+                let dst = &mut ao[ptr..ptr + BLKSIZE];
+                let src = &gto[a * nshlbas + mu];
+                unsafe { src.write_ensure(dst) }
+            }
+        }
+    } else {
+        let bgrid = ngrid - igrid;
+        for a in 0..ncomp {
+            for mu in 0..nshlbas {
+                let ptr = a * nao * ngrid + (iao + mu) * ngrid + igrid;
+                let dst = &mut ao[ptr..ptr + bgrid];
+                let src = &gto[a * nshlbas + mu];
+                src.write(dst);
+            }
+        }
+    }
+}
+
 /// Compute contracted GTO value, zeroth order.
 ///
 /// This function only handles batch of grids with fixed size [`BLKSIZE`], to be
@@ -144,87 +182,82 @@ pub fn gto_contract_exp0(
 /// | `igrid` | starting index $g$ of the grids in `gto` |
 pub fn gto_shell_eval_grid_cart(
     // arguments
-    gto: &mut [&mut [&mut [f64]]],
+    gto: &mut [f64blk],
     exps: &[f64blk],
     coord: &[f64blk; 3],
     l: usize,
     // dimensions
     nctr: usize,
-    bgrid: usize,
-    // offsets
-    iao: usize,
-    igrid: usize,
 ) {
     const ANG_MAX: usize = crate::ffi::cint_ffi::ANG_MAX as usize;
-    unsafe { core::hint::assert_unchecked(bgrid <= BLKSIZE) }
 
     match l {
         0 => {
             for k in 0..nctr {
-                for i in 0..bgrid {
-                    gto[0][iao + k][igrid + i] = exps[k][i];
+                for g in 0..BLKSIZE {
+                    gto[k][g] = exps[k][g];
                 }
             }
         },
         1 => {
             for k in 0..nctr {
-                for g in 0..bgrid {
+                for g in 0..BLKSIZE {
                     let e = exps[k][g];
                     let x = coord[X][g];
                     let y = coord[Y][g];
                     let z = coord[Z][g];
-                    gto[0][iao + 3 * k + X][igrid + g] = x * e;
-                    gto[0][iao + 3 * k + Y][igrid + g] = y * e;
-                    gto[0][iao + 3 * k + Z][igrid + g] = z * e;
+                    gto[3 * k + X][g] = x * e;
+                    gto[3 * k + Y][g] = y * e;
+                    gto[3 * k + Z][g] = z * e;
                 }
             }
         },
         2 => {
             for k in 0..nctr {
-                for g in 0..bgrid {
+                for g in 0..BLKSIZE {
                     let e = exps[k][g];
                     let x = coord[X][g];
                     let y = coord[Y][g];
                     let z = coord[Z][g];
-                    gto[0][iao + 6 * k + XX][igrid + g] = x * x * e;
-                    gto[0][iao + 6 * k + XY][igrid + g] = x * y * e;
-                    gto[0][iao + 6 * k + XZ][igrid + g] = x * z * e;
-                    gto[0][iao + 6 * k + YY][igrid + g] = y * y * e;
-                    gto[0][iao + 6 * k + YZ][igrid + g] = y * z * e;
-                    gto[0][iao + 6 * k + ZZ][igrid + g] = z * z * e;
+                    gto[6 * k + XX][g] = x * x * e;
+                    gto[6 * k + XY][g] = x * y * e;
+                    gto[6 * k + XZ][g] = x * z * e;
+                    gto[6 * k + YY][g] = y * y * e;
+                    gto[6 * k + YZ][g] = y * z * e;
+                    gto[6 * k + ZZ][g] = z * z * e;
                 }
             }
         },
         3 => {
             for k in 0..nctr {
-                for g in 0..bgrid {
+                for g in 0..BLKSIZE {
                     let e = exps[k][g];
                     let x = coord[X][g];
                     let y = coord[Y][g];
                     let z = coord[Z][g];
-                    gto[0][iao + 10 * k + XXX][igrid + g] = x * x * x * e;
-                    gto[0][iao + 10 * k + XXY][igrid + g] = x * x * y * e;
-                    gto[0][iao + 10 * k + XXZ][igrid + g] = x * x * z * e;
-                    gto[0][iao + 10 * k + XYY][igrid + g] = x * y * y * e;
-                    gto[0][iao + 10 * k + XYZ][igrid + g] = x * y * z * e;
-                    gto[0][iao + 10 * k + XZZ][igrid + g] = x * z * z * e;
-                    gto[0][iao + 10 * k + YYY][igrid + g] = y * y * y * e;
-                    gto[0][iao + 10 * k + YYZ][igrid + g] = y * y * z * e;
-                    gto[0][iao + 10 * k + YZZ][igrid + g] = y * z * z * e;
-                    gto[0][iao + 10 * k + ZZZ][igrid + g] = z * z * z * e;
+                    gto[10 * k + XXX][g] = x * x * x * e;
+                    gto[10 * k + XXY][g] = x * x * y * e;
+                    gto[10 * k + XXZ][g] = x * x * z * e;
+                    gto[10 * k + XYY][g] = x * y * y * e;
+                    gto[10 * k + XYZ][g] = x * y * z * e;
+                    gto[10 * k + XZZ][g] = x * z * z * e;
+                    gto[10 * k + YYY][g] = y * y * y * e;
+                    gto[10 * k + YYZ][g] = y * y * z * e;
+                    gto[10 * k + YZZ][g] = y * z * z * e;
+                    gto[10 * k + ZZZ][g] = z * z * z * e;
                 }
             }
         },
         _ => {
             let mut pows = unsafe { [[f64blk::uninit(); 3]; ANG_MAX + 1] };
             let ncart = (l + 1) * (l + 2) / 2;
-            for i in 0..bgrid {
+            for i in 0..BLKSIZE {
                 pows[0][X][i] = 1.0;
                 pows[0][Y][i] = 1.0;
                 pows[0][Z][i] = 1.0;
             }
             for lx in 1..=l {
-                for i in 0..bgrid {
+                for i in 0..BLKSIZE {
                     pows[lx][X][i] = pows[lx - 1][X][i] * coord[X][i];
                     pows[lx][Y][i] = pows[lx - 1][Y][i] * coord[Y][i];
                     pows[lx][Z][i] = pows[lx - 1][Z][i] * coord[Z][i];
@@ -235,8 +268,8 @@ pub fn gto_shell_eval_grid_cart(
                 for lx in (0..=l).rev() {
                     for ly in (0..=(l - lx)).rev() {
                         let lz = l - lx - ly;
-                        for i in 0..bgrid {
-                            gto[0][iao + ncart * k + icart][igrid + i] = exps[k][i] * pows[lx][X][i] * pows[ly][Y][i] * pows[lz][Z][i];
+                        for g in 0..BLKSIZE {
+                            gto[ncart * k + icart][g] = exps[k][g] * pows[lx][X][g] * pows[ly][Y][g] * pows[lz][Z][g];
                         }
                         icart += 1;
                     }
@@ -325,7 +358,7 @@ pub fn gto_fill_grid2atm(
 #[allow(clippy::too_many_arguments)]
 pub fn gto_eval_cart_iter(
     // arguments
-    ao: &mut [&mut [&mut [f64]]], // (nprop, nao, ngrid)
+    ao: &mut [f64], // (ncomp, nao, ngrid)
     coord: &[[f64; 3]],
     fac: f64,
     shls_slice: [usize; 2],
@@ -333,7 +366,9 @@ pub fn gto_eval_cart_iter(
     // buffer
     buf: &mut [f64blk],
     // dimensions
-    bgrid: usize,
+    ncomp: usize,
+    nao: usize,
+    ngrid: usize,
     // offsets
     iao: usize,
     igrid: usize,
@@ -357,7 +392,9 @@ pub fn gto_eval_cart_iter(
     let nbuf_grid2atm = atm_count * 3;
     let nbuf_eprim = NPRIM_MAX.max(NCTR_MAX);
     let (grid2atm, buf) = buf.split_at_mut(nbuf_grid2atm);
-    let (eprim, _) = buf.split_at_mut(nbuf_eprim);
+    let (eprim, buf) = buf.split_at_mut(nbuf_eprim);
+    let (cart_gto, _) = buf.split_at_mut(NCOMP_MAX * NCTR_CART);
+    let bgrid = (ngrid - igrid).min(BLKSIZE);
 
     let grid2atm = unsafe { grid2atm.as_chunks_unchecked_mut::<3>() };
     gto_fill_grid2atm(grid2atm, coord, bgrid, &atm[atm0..atm1], env);
@@ -376,12 +413,13 @@ pub fn gto_eval_cart_iter(
         let iao = iao + ao_loc[bas_id] - ao_loc[sh0];
 
         gto_contract_exp0(eprim, coord, alpha, coeff, fac1, nprim, nctr);
-        gto_shell_eval_grid_cart(ao, &eprim[0..nctr], coord, l, nctr, bgrid, iao, igrid);
+        gto_shell_eval_grid_cart(cart_gto, &eprim[0..nctr], coord, l, nctr);
+        gto_copy_grids_cart(cart_gto, ao, l, nctr, ncomp, nao, ngrid, iao, igrid);
     }
 }
 
 pub fn gto_eval_loop<const NE1: usize, const NTENSOR: usize>(
-    ao: &mut [f64], // (nprop, nao, ngrid)
+    ao: &mut [f64], // (ncomp, nao, ngrid)
     coord: &[[f64; 3]],
     fac: f64,
     shls_slice: [usize; 2],
@@ -392,14 +430,11 @@ pub fn gto_eval_loop<const NE1: usize, const NTENSOR: usize>(
 ) {
     let [sh0, sh1] = shls_slice;
     let nao = ao_loc[sh1] - ao_loc[sh0];
-    let nprop = NE1 * NTENSOR;
+    let ncomp = NE1 * NTENSOR;
     let ngrid = coord.len();
 
     // convert `ao` from 1-D `&mut [f64]` to 3-D `&mut [&mut [&mut [f64]]]`
-    assert!(ao.len() == nprop * nao * ngrid);
-    let mut ao: Vec<Vec<&mut [f64]>> = ao.chunks_exact_mut(nao * ngrid).map(|chunk| chunk.chunks_exact_mut(ngrid).collect()).collect();
-    let ao: Vec<&mut [&mut [f64]]> = ao.iter_mut().map(|v| v.as_mut_slice()).collect_vec();
-    let ao: &[&mut [&mut [f64]]] = ao.as_slice();
+    assert!(ao.len() == ncomp * nao * ngrid);
 
     // split shells by atoms
     let shloc = gto_shloc_by_atom(shls_slice, bas);
@@ -408,7 +443,10 @@ pub fn gto_eval_loop<const NE1: usize, const NTENSOR: usize>(
     // split grids to blocks
     let nblk = ngrid.div_ceil(BLKSIZE);
 
-    const NCACHE: usize = if NPRIM_MAX < NCTR_MAX { NCTR_MAX } else { NPRIM_MAX } as usize + NCTR_CART + 3;
+    // grid2atm: usually 3, since we always split shells by atoms
+    // eprim or ectr: max(nprim, nctr)
+    // cart_gto: ncomp_max * nctr_cart (not used in cart, but will use for sph)
+    const NCACHE: usize = 3 * (if NPRIM_MAX < NCTR_MAX { NCTR_MAX } else { NPRIM_MAX } as usize + NCOMP_MAX * NCTR_CART + 3);
     let nthreads = rayon::current_num_threads();
     let thread_cache = (0..nthreads).map(|_| unsafe { aligned_uninitialized_vec::<f64blk>(NCACHE) }).collect_vec();
 
@@ -417,14 +455,16 @@ pub fn gto_eval_loop<const NE1: usize, const NTENSOR: usize>(
         let iblk = niter % nblk;
         let thread_id = rayon::current_thread_index().unwrap_or(0);
 
-        let [ish0, ish1] = [shloc[ishblk], shloc[ishblk + 1]];
-        let bgrid = if (iblk + 1) * BLKSIZE <= ngrid { BLKSIZE } else { ngrid - iblk * BLKSIZE };
+        let ish0 = shloc[ishblk];
+        let ish1 = shloc[ishblk + 1];
         let igrid = iblk * BLKSIZE;
         let iao = ao_loc[ish0] - ao_loc[sh0];
+        let bgrid = (ngrid - igrid).min(BLKSIZE);
 
         let ao = unsafe { cast_mut_slice(ao) };
+        let coord = &coord[igrid..igrid + bgrid];
         let cache = unsafe { cast_mut_slice(&thread_cache[thread_id]) };
-        gto_eval_cart_iter(ao, &coord[igrid..igrid + bgrid], fac, [ish0, ish1], ao_loc, cache, bgrid, iao, igrid, atm, bas, env);
+        gto_eval_cart_iter(ao, coord, fac, [ish0, ish1], ao_loc, cache, ncomp, nao, ngrid, iao, igrid, atm, bas, env);
     });
 }
 
@@ -440,9 +480,9 @@ fn playground() {
     gto_eval_loop::<1, 1>(&mut ao, &coord, 1.0, [0, cint_data.nbas()], &cint_data.ao_loc(), &cint_data.atm, &cint_data.bas, &cint_data.env);
 
     println!("ao[  0..10]: {:?}", &ao[0..10]);
-    println!("ao[  0..10]: {:?}", &ao[500..510]);
-    println!("ao[nao..10]: {:?}", &ao[ngrid..ngrid + 10]);
+    println!("ao[  0..10]: {:?}", &ao[50..60]);
     println!("ao[nao..10]: {:?}", &ao[45 * ngrid..45 * ngrid + 10]);
+    println!("fp(ao): {:}", cint_fp(&ao));
 }
 
 #[test]
@@ -456,5 +496,19 @@ fn test_c10h22_cart() {
     gto_eval_loop::<1, 1>(&mut ao, &coord, 1.0, [0, cint_data.nbas()], &cint_data.ao_loc(), &cint_data.atm, &cint_data.bas, &cint_data.env);
     let fp_ao = cint_fp(&ao);
     println!("fp_ao = {:}", fp_ao);
-    assert!((fp_ao - 198.05403491229913).abs() < 1e-12);
+    println!("ao[  0..10]: {:?}", &ao[0..10]);
+    println!("ao[  0..10]: {:?}", &ao[500..510]);
+    println!("ao[nao..10]: {:?}", &ao[ngrid..ngrid + 10]);
+    println!("ao[nao..10]: {:?}", &ao[45 * ngrid..45 * ngrid + 10]);
+    assert!((fp_ao - 198.05403491229913).abs() < 1e-10);
+
+    let ngrid = 1048576;
+    let mut ao = vec![0.0f64; nao * ngrid];
+    let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
+    let time = std::time::Instant::now();
+    gto_eval_loop::<1, 1>(&mut ao, &coord, 1.0, [0, cint_data.nbas()], &cint_data.ao_loc(), &cint_data.atm, &cint_data.bas, &cint_data.env);
+    let elapsed = time.elapsed();
+    println!("time: {:.3} s", elapsed.as_secs_f64());
+    let fp_ao = cint_fp(&ao);
+    println!("fp_ao (1M grids) = {:}", fp_ao);
 }
