@@ -356,7 +356,7 @@ pub fn gto_fill_grid2atm(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn gto_eval_cart_iter(
+pub fn gto_eval_iter<const CART: bool, const NE1: usize, const NTENSOR: usize>(
     // arguments
     ao: &mut [f64], // (ncomp, nao, ngrid)
     coord: &[[f64; 3]],
@@ -366,7 +366,6 @@ pub fn gto_eval_cart_iter(
     // buffer
     buf: &mut [f64blk],
     // dimensions
-    ncomp: usize,
     nao: usize,
     ngrid: usize,
     // offsets
@@ -386,6 +385,7 @@ pub fn gto_eval_cart_iter(
     const PTR_EXP: usize = crate::ffi::cint_ffi::PTR_EXP as usize;
     const PTR_COEFF: usize = crate::ffi::cint_ffi::PTR_COEFF as usize;
 
+    let ncomp = NE1 * NTENSOR;
     let [sh0, sh1] = shls_slice;
     let [atm0, atm1] = [bas[sh0][ATOM_OF] as usize, bas[sh1 - 1][ATOM_OF] as usize + 1];
     let atm_count = atm1 - atm0;
@@ -393,7 +393,8 @@ pub fn gto_eval_cart_iter(
     let nbuf_eprim = NPRIM_MAX.max(NCTR_MAX);
     let (grid2atm, buf) = buf.split_at_mut(nbuf_grid2atm);
     let (eprim, buf) = buf.split_at_mut(nbuf_eprim);
-    let (gto_cart, _) = buf.split_at_mut(NCOMP_MAX * NCTR_CART);
+    let (gto_cart, buf) = buf.split_at_mut(NCOMP_MAX * NCTR_CART);
+    let (gto_sph, _) = buf.split_at_mut(NCOMP_MAX * NCTR_CART);
     let bgrid = (ngrid - igrid).min(BLKSIZE);
 
     let grid2atm = unsafe { grid2atm.as_chunks_unchecked_mut::<3>() };
@@ -412,74 +413,10 @@ pub fn gto_eval_cart_iter(
         let coord = &grid2atm[atm_id - atm0];
         let iao = iao + ao_loc[bas_id] - ao_loc[sh0];
 
-        gto_contract_exp0(eprim, coord, alpha, coeff, fac1, nprim, nctr);
-        gto_shell_eval_grid_cart(gto_cart, &eprim[0..nctr], coord, l, nctr);
-        gto_copy_grids::<true>(gto_cart, ao, l, nctr, ncomp, nao, ngrid, iao, igrid);
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn gto_eval_sph_iter(
-    // arguments
-    ao: &mut [f64], // (ncomp, nao, ngrid)
-    coord: &[[f64; 3]],
-    fac: f64,
-    shls_slice: [usize; 2],
-    ao_loc: &[usize],
-    // buffer
-    buf: &mut [f64blk],
-    // dimensions
-    ncomp: usize,
-    nao: usize,
-    ngrid: usize,
-    // offsets
-    iao: usize,
-    igrid: usize,
-    // cint data
-    atm: &[[c_int; ATM_SLOTS as usize]],
-    bas: &[[c_int; BAS_SLOTS as usize]],
-    env: &[f64],
-) {
-    const ATOM_OF: usize = crate::ffi::cint_ffi::ATOM_OF as usize;
-    const NPRIM_MAX: usize = crate::ffi::cint_ffi::NPRIM_MAX as usize;
-    const NCTR_MAX: usize = crate::ffi::cint_ffi::NCTR_MAX as usize;
-    const NPRIM_OF: usize = crate::ffi::cint_ffi::NPRIM_OF as usize;
-    const NCTR_OF: usize = crate::ffi::cint_ffi::NCTR_OF as usize;
-    const ANG_OF: usize = crate::ffi::cint_ffi::ANG_OF as usize;
-    const PTR_EXP: usize = crate::ffi::cint_ffi::PTR_EXP as usize;
-    const PTR_COEFF: usize = crate::ffi::cint_ffi::PTR_COEFF as usize;
-
-    let [sh0, sh1] = shls_slice;
-    let [atm0, atm1] = [bas[sh0][ATOM_OF] as usize, bas[sh1 - 1][ATOM_OF] as usize + 1];
-    let atm_count = atm1 - atm0;
-    let nbuf_grid2atm = atm_count * 3;
-    let nbuf_eprim = NPRIM_MAX.max(NCTR_MAX);
-    let (grid2atm, buf) = buf.split_at_mut(nbuf_grid2atm);
-    let (eprim, buf) = buf.split_at_mut(nbuf_eprim);
-    let (gto_sph, buf) = buf.split_at_mut(NCOMP_MAX * NCTR_CART);
-    let (gto_cart, _) = buf.split_at_mut(NCOMP_MAX * NCTR_CART);
-    let bgrid = (ngrid - igrid).min(BLKSIZE);
-
-    let grid2atm = unsafe { grid2atm.as_chunks_unchecked_mut::<3>() };
-    gto_fill_grid2atm(grid2atm, coord, bgrid, &atm[atm0..atm1], env);
-    for bas_id in sh0..sh1 {
-        let nprim = bas[bas_id][NPRIM_OF] as usize;
-        let nctr = bas[bas_id][NCTR_OF] as usize;
-        let l = bas[bas_id][ANG_OF] as usize;
-        let fac1 = fac * cint_common_fac_sp(l as c_int);
-
-        let p_exp = bas[bas_id][PTR_EXP] as usize;
-        let p_coeff = bas[bas_id][PTR_COEFF] as usize;
-        let atm_id = bas[bas_id][ATOM_OF] as usize;
-        let alpha = &env[p_exp..p_exp + nprim];
-        let coeff = &env[p_coeff..p_coeff + nprim * nctr];
-        let coord = &grid2atm[atm_id - atm0];
-        let iao = iao + ao_loc[bas_id] - ao_loc[sh0];
-
-        if l <= 1 {
+        if CART || l <= 1 {
             gto_contract_exp0(eprim, coord, alpha, coeff, fac1, nprim, nctr);
-            gto_shell_eval_grid_cart(gto_sph, &eprim[0..nctr], coord, l, nctr);
-            gto_copy_grids::<false>(gto_sph, ao, l, nctr, ncomp, nao, ngrid, iao, igrid);
+            gto_shell_eval_grid_cart(gto_cart, &eprim[0..nctr], coord, l, nctr);
+            gto_copy_grids::<true>(gto_cart, ao, l, nctr, ncomp, nao, ngrid, iao, igrid);
         } else {
             gto_contract_exp0(eprim, coord, alpha, coeff, fac1, nprim, nctr);
             gto_shell_eval_grid_cart(gto_cart, &eprim[0..nctr], coord, l, nctr);
@@ -511,8 +448,6 @@ pub fn gto_eval_loop<const CART: bool, const NE1: usize, const NTENSOR: usize>(
     let nao = ao_loc[sh1] - ao_loc[sh0];
     let ncomp = NE1 * NTENSOR;
     let ngrid = coord.len();
-
-    // convert `ao` from 1-D `&mut [f64]` to 3-D `&mut [&mut [&mut [f64]]]`
     assert!(ao.len() == ncomp * nao * ngrid);
 
     // split shells by atoms
@@ -524,7 +459,8 @@ pub fn gto_eval_loop<const CART: bool, const NE1: usize, const NTENSOR: usize>(
 
     // grid2atm: usually 3, since we always split shells by atoms
     // eprim or ectr: max(nprim, nctr)
-    // cart_gto: ncomp_max * nctr_cart (not used in cart, but will use for sph)
+    // gto_cart: ncomp_max * nctr_cart
+    // gto_sph: ncomp_max * nctr_cart
     const NPRIMCTR_MAX: usize = if NPRIM_MAX > NCTR_MAX { NPRIM_MAX } else { NCTR_MAX } as usize;
     const NCACHE: usize = NPRIMCTR_MAX + 2 * NCOMP_MAX * NCTR_CART + 3;
     let nthreads = rayon::current_num_threads();
@@ -544,11 +480,7 @@ pub fn gto_eval_loop<const CART: bool, const NE1: usize, const NTENSOR: usize>(
         let ao = unsafe { cast_mut_slice(ao) };
         let coord = &coord[igrid..igrid + bgrid];
         let cache = unsafe { cast_mut_slice(&thread_cache[thread_id]) };
-        if CART {
-            gto_eval_cart_iter(ao, coord, fac, [ish0, ish1], ao_loc, cache, ncomp, nao, ngrid, iao, igrid, atm, bas, env);
-        } else {
-            gto_eval_sph_iter(ao, coord, fac, [ish0, ish1], ao_loc, cache, ncomp, nao, ngrid, iao, igrid, atm, bas, env);
-        }
+        gto_eval_iter::<CART, NE1, NTENSOR>(ao, coord, fac, [ish0, ish1], ao_loc, cache, nao, ngrid, iao, igrid, atm, bas, env);
     });
 }
 
