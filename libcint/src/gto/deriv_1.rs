@@ -295,7 +295,7 @@ pub fn gto_shell_eval_grid_cart_deriv1(
     }
 }
 
-pub struct GTOEvalDeriv1 {}
+pub struct GTOEvalDeriv1;
 impl GTOEvalAPI for GTOEvalDeriv1 {
     fn ne1(&self) -> usize {
         1

@@ -157,13 +157,13 @@ impl CInt {
         // parse intor sph/cart/spinor
         let mut intor = args.intor;
         if intor.ends_with("_sph") {
-            intor = &intor[..intor.len() - 4];
+            intor = intor.strip_suffix("_sph").unwrap();
             data.cint_type = Spheric;
         } else if intor.ends_with("_cart") {
-            intor = &intor[..intor.len() - 5];
+            intor = intor.strip_suffix("_cart").unwrap();
             data.cint_type = Cartesian;
         } else if intor.ends_with("_spinor") {
-            intor = &intor[..intor.len() - 7];
+            intor = intor.strip_suffix("_spinor").unwrap();
             data.cint_type = Spinor;
         }
 
