@@ -1,9 +1,6 @@
 //! Implementation of grids implementation at lower API level.
 
 use crate::prelude::*;
-use rayon::prelude::*;
-use rstsr_common::layout::IndexedIterLayout;
-use rstsr_common::prelude::*;
 
 const BLKSIZE: usize = 312;
 

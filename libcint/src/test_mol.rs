@@ -2,8 +2,6 @@
 #![allow(clippy::approx_constant)]
 
 use crate::prelude::*;
-use num::{Complex, ToPrimitive};
-use rayon::prelude::*;
 
 /// Fingerprint of a vector.
 ///

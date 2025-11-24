@@ -110,18 +110,6 @@ pub struct CInt {
     pub cint_type: CIntType,
 }
 
-/// Error for [`CInt`] operations.
-#[derive(Debug, Clone)]
-pub enum CIntError {
-    IntegratorNotFound(String),
-    IntegratorNotAvailable(String),
-    RuntimeError(String),
-    InvalidValue(String),
-    UninitializedFieldError(UninitializedFieldError),
-    ParseError(String),
-    Miscellaneous(String),
-}
-
 /// Distinguish between general integral or ECP (effective core potential)
 /// integral.
 ///
@@ -310,7 +298,7 @@ pub struct IntorCrossArgs<'l, F> {
 ///
 /// [`get_integrator_f`], [`CInt::get_integrator`]
 pub fn get_integrator(intor: &str) -> Box<dyn Integrator> {
-    get_integrator_f(intor).unwrap()
+    get_integrator_f(intor).cint_unwrap()
 }
 
 /// Obtain integrator by name, failable version.
@@ -330,55 +318,6 @@ pub fn get_integrator_f(intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
 
     // should have checked anything, gracefully returns
     Ok(intor)
-}
-
-/* #endregion */
-
-/* #region CIntError impl */
-
-impl Display for CIntError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(self, f)
-    }
-}
-
-impl Error for CIntError {}
-
-impl From<UninitializedFieldError> for CIntError {
-    fn from(err: UninitializedFieldError) -> Self {
-        CIntError::UninitializedFieldError(err)
-    }
-}
-
-#[macro_export]
-macro_rules! cint_trace {
-    () => {
-        concat!(file!(), ":", line!(), ":", column!(), ": ")
-    };
-}
-
-#[macro_export]
-macro_rules! cint_error {
-    ($errtype: ident, $($arg:tt)*) => {{
-        use $crate::prelude::*;
-        let mut s = String::new();
-        write!(s, cint_trace!()).unwrap();
-        write!(s, concat!("CIntError ", stringify!($errtype), ": ")).unwrap();
-        write!(s, $($arg)*).unwrap();
-        CIntError::$errtype(s)
-    }};
-}
-
-#[macro_export]
-macro_rules! cint_raise {
-    ($errtype: ident, $($arg:tt)*) => {{
-        use $crate::prelude::*;
-        let mut s = String::new();
-        write!(s, cint_trace!()).unwrap();
-        write!(s, concat!("CIntError ", stringify!($errtype), ": ")).unwrap();
-        write!(s, $($arg)*).unwrap();
-        Err(CIntError::$errtype(s))
-    }};
 }
 
 /* #endregion */
@@ -707,7 +646,7 @@ impl CInt {
     ///   [`integrate_cross_with_args`](Self::integrate_cross_with_args) for
     ///   more advanced usage (full arguments that this crate supports).
     pub fn integrate(&self, intor: &str, aosym: impl Into<CIntSymm>, shls_slice: impl Into<ShlsSlice>) -> CIntOutput<f64> {
-        self.integrate_f(intor, aosym, shls_slice.into()).unwrap()
+        self.integrate_f(intor, aosym, shls_slice.into()).cint_unwrap()
     }
 
     /// Main electronic integral driver (for spinor type) **in column-major**.
@@ -767,7 +706,7 @@ impl CInt {
     ///   [`integrate_cross_with_args_spinor`](Self::integrate_cross_with_args_spinor)
     ///   for more advanced usage (full arguments that this crate supports).
     pub fn integrate_spinor(&self, intor: &str, aosym: impl Into<CIntSymm>, shls_slice: impl Into<ShlsSlice>) -> CIntOutput<Complex<f64>> {
-        self.integrate_spinor_f(intor, aosym, shls_slice.into()).unwrap()
+        self.integrate_spinor_f(intor, aosym, shls_slice.into()).cint_unwrap()
     }
 
     /// Main electronic integral driver (for non-spinor type) in column-major.
@@ -867,7 +806,7 @@ impl CInt {
         aosym: impl Into<CIntSymm>,
         shls_slice: impl Into<ShlsSlice>,
     ) -> CIntOutput<f64> {
-        CInt::integrate_cross_f(intor, mols, aosym, shls_slice).unwrap()
+        CInt::integrate_cross_f(intor, mols, aosym, shls_slice).cint_unwrap()
     }
 
     /// Integrate with multiple molecules **in column-major**.
@@ -907,7 +846,7 @@ impl CInt {
         aosym: impl Into<CIntSymm>,
         shls_slice: impl Into<ShlsSlice>,
     ) -> CIntOutput<Complex<f64>> {
-        CInt::integrate_cross_spinor_f(intor, mols, aosym, shls_slice).unwrap()
+        CInt::integrate_cross_spinor_f(intor, mols, aosym, shls_slice).cint_unwrap()
     }
 
     /// Integrate with multiple molecules (for spinor type.) **in
@@ -1035,7 +974,7 @@ impl CInt {
     ///   [`integrate_cross_with_args`](Self::integrate_cross_with_args) for
     ///   more advanced usage (full arguments that this crate supports).
     pub fn integrate_row_major(&self, intor: &str, aosym: impl Into<CIntSymm>, shls_slice: impl Into<ShlsSlice>) -> CIntOutput<f64> {
-        self.integrate_row_major_f(intor, aosym, shls_slice.into()).unwrap()
+        self.integrate_row_major_f(intor, aosym, shls_slice.into()).cint_unwrap()
     }
 
     /// Main electronic integral driver (for non-spinor type) in row-major.
@@ -1091,7 +1030,7 @@ impl CInt {
         aosym: impl Into<CIntSymm>,
         shls_slice: impl Into<ShlsSlice>,
     ) -> CIntOutput<Complex<f64>> {
-        self.integrate_row_major_spinor_f(intor, aosym, shls_slice.into()).unwrap()
+        self.integrate_row_major_spinor_f(intor, aosym, shls_slice.into()).cint_unwrap()
     }
 
     /// Main electronic integral driver (for spinor type) in row-major.
@@ -1159,7 +1098,7 @@ impl CInt {
         aosym: impl Into<CIntSymm>,
         shls_slice: impl Into<ShlsSlice>,
     ) -> CIntOutput<f64> {
-        CInt::integrate_cross_row_major_f(intor, mols, aosym, shls_slice).unwrap()
+        CInt::integrate_cross_row_major_f(intor, mols, aosym, shls_slice).cint_unwrap()
     }
 
     /// Integrate with multiple molecules **in row-major**.
@@ -1201,7 +1140,7 @@ impl CInt {
         aosym: impl Into<CIntSymm>,
         shls_slice: impl Into<ShlsSlice>,
     ) -> CIntOutput<Complex<f64>> {
-        CInt::integrate_cross_row_major_spinor_f(intor, mols, aosym, shls_slice).unwrap()
+        CInt::integrate_cross_row_major_spinor_f(intor, mols, aosym, shls_slice).cint_unwrap()
     }
 
     /// Integrate with multiple molecules (for spinor type) **in row-major**.

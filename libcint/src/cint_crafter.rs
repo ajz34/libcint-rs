@@ -2,11 +2,8 @@
 //!
 //! Implementation in this module is mostly not intended for basic users.
 
-#![allow(dead_code)]
-
 use crate::cint::{IntegrateArgsBuilder, IntorCrossArgs};
 use crate::prelude::*;
-use rayon::prelude::*;
 
 /// Implementation of integral at higher API level (for advanced user usage).
 impl CInt {
@@ -22,7 +19,7 @@ impl CInt {
     /// - `env` field not properly initialized for ECP integrator (should call
     ///   `merge_ecpbas` before this function)
     pub fn optimizer(&self, intor: &str) -> CIntOptimizer {
-        self.optimizer_f(intor).unwrap()
+        self.optimizer_f(intor).cint_unwrap()
     }
 
     /// Obtain integrator optimizer.
@@ -113,7 +110,7 @@ impl CInt {
     /// - [`CInt::integrate_with_args_f`]: for failable version of this
     ///   function.
     pub fn integrate_with_args(&self, args: IntegrateArgs<f64>) -> CIntOutput<f64> {
-        self.integrate_with_args_inner(args).unwrap()
+        self.integrate_with_args_inner(args).cint_unwrap()
     }
 
     /// Perform integral by arguments from builder, failable version.
@@ -132,7 +129,7 @@ impl CInt {
     /// [`CInt::integrate_with_args`]
     /// [`CInt::integrate_with_args_spinor_f`]
     pub fn integrate_with_args_spinor(&self, args: IntegrateArgs<Complex<f64>>) -> CIntOutput<Complex<f64>> {
-        self.integrate_with_args_inner(args).unwrap()
+        self.integrate_with_args_inner(args).cint_unwrap()
     }
 
     /// Perform integral by arguments from builder for spinor integrals,
@@ -157,13 +154,13 @@ impl CInt {
         // parse intor sph/cart/spinor
         let mut intor = args.intor;
         if intor.ends_with("_sph") {
-            intor = intor.strip_suffix("_sph").unwrap();
+            intor = intor.trim_end_matches("_sph");
             data.cint_type = Spheric;
         } else if intor.ends_with("_cart") {
-            intor = intor.strip_suffix("_cart").unwrap();
+            intor = intor.trim_end_matches("_cart");
             data.cint_type = Cartesian;
         } else if intor.ends_with("_spinor") {
-            intor = intor.strip_suffix("_spinor").unwrap();
+            intor = intor.trim_end_matches("_spinor");
             data.cint_type = Spinor;
         }
 
@@ -256,7 +253,7 @@ impl CInt {
     ///   function.
     /// - [`CInt::integrate_cross_with_args_spinor`]: for spinor integrals.
     pub fn integrate_cross_with_args(args: IntorCrossArgs<f64>) -> CIntOutput<f64> {
-        CInt::integrate_cross_with_args_inner(args).unwrap()
+        CInt::integrate_cross_with_args_inner(args).cint_unwrap()
     }
 
     /// Perform cross integral with multiple `CInt` instances, failable version.
@@ -275,7 +272,7 @@ impl CInt {
     ///
     /// [`CInt::integrate_cross_with_args`]
     pub fn integrate_cross_with_args_spinor(args: IntorCrossArgs<Complex<f64>>) -> CIntOutput<Complex<f64>> {
-        CInt::integrate_cross_with_args_inner(args).unwrap()
+        CInt::integrate_cross_with_args_inner(args).cint_unwrap()
     }
 
     /// Perform cross integral with multiple `CInt` instances for spinor
@@ -499,8 +496,8 @@ impl CInt {
         };
 
         // additional check
-        data.check_float_type::<F>().unwrap();
-        data.check_shls_slice(&integrator, shls_slice, aosym).unwrap();
+        data.check_float_type::<F>().cint_unwrap();
+        data.check_shls_slice(&integrator, shls_slice, aosym).cint_unwrap();
 
         // integral preparation and execution
         let mut out_shape = data.cgto_shape(shls_slice, aosym);
@@ -514,7 +511,7 @@ impl CInt {
         let out_size = out_shape.iter().product();
         let mut out = unsafe { aligned_uninitialized_vec::<F>(out_size) };
         let cint_opt = data.get_optimizer(&integrator);
-        data.integral_inplace(&integrator, &mut out, shls_slice, Some(&cint_opt), aosym).unwrap();
+        data.integral_inplace(&integrator, &mut out, shls_slice, Some(&cint_opt), aosym).cint_unwrap();
         (out, out_shape)
     }
 }
