@@ -203,8 +203,11 @@ pub struct CIntOutput<F> {
     /// `.into()` will panic.
     pub out: Option<Vec<F>>,
 
-    /// Column-major shape of the output buffer. Please see [`CInt::integrate`]
-    /// for more information.
+    /// Shape of the output buffer. Please see [`CInt::integrate`] for more
+    /// information.
+    ///
+    /// **Note**: The shape can be in row-major or col-major order, depending on
+    /// the function to be called. User should take care of this.
     pub shape: Vec<usize>,
 }
 
@@ -352,6 +355,18 @@ macro_rules! cint_trace {
     () => {
         concat!(file!(), ":", line!(), ":", column!(), ": ")
     };
+}
+
+#[macro_export]
+macro_rules! cint_error {
+    ($errtype: ident, $($arg:tt)*) => {{
+        use $crate::prelude::*;
+        let mut s = String::new();
+        write!(s, cint_trace!()).unwrap();
+        write!(s, concat!("CIntError ", stringify!($errtype), ": ")).unwrap();
+        write!(s, $($arg)*).unwrap();
+        CIntError::$errtype(s)
+    }};
 }
 
 #[macro_export]
