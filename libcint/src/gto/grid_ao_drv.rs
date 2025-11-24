@@ -232,6 +232,93 @@ pub fn gto_nprim_max(shls_slice: [usize; 2], bas: &[[c_int; BAS_SLOTS as usize]]
     (sh0..sh1).map(|ish| bas[ish][NPRIM_OF] as usize).max().unwrap_or(0)
 }
 
+pub fn gto_screen_index(
+    // arguments
+    coords: &[[f64; 3]],
+    shls_slice: [usize; 2],
+    // configurations
+    nbins: Option<u8>,
+    cutoff: Option<f64>,
+    // cint data
+    atm: &[[c_int; ATM_SLOTS as usize]],
+    bas: &[[c_int; BAS_SLOTS as usize]],
+    env: &[f64],
+) -> (Vec<u8>, [usize; 2]) {
+    const NPRIM_OF: usize = crate::ffi::cint_ffi::NPRIM_OF as usize;
+    const NCTR_OF: usize = crate::ffi::cint_ffi::NCTR_OF as usize;
+    const ANG_OF: usize = crate::ffi::cint_ffi::ANG_OF as usize;
+    const PTR_EXP: usize = crate::ffi::cint_ffi::PTR_EXP as usize;
+    const PTR_COEFF: usize = crate::ffi::cint_ffi::PTR_COEFF as usize;
+    const ATOM_OF: usize = crate::ffi::cint_ffi::ATOM_OF as usize;
+    const PTR_COORD: usize = crate::ffi::cint_ffi::PTR_COORD as usize;
+
+    let ngrid = coords.len();
+    let nblk = coords.len().div_ceil(BLKSIZE);
+    let nbins = nbins.unwrap_or(NBINS);
+    let [sh0, sh1] = shls_slice;
+    let nbas = sh1 - sh0;
+    let cutoff = cutoff.unwrap_or(CUTOFF);
+    if !(0.0..=0.1).contains(&cutoff) {
+        eprintln!("Warning: unreasonable cutoff value {:}", cutoff);
+    }
+    let cutoff = cutoff.clamp(1e-300, 0.1);
+    let scale = -(nbins as f64) / cutoff.ln();
+    let mut output = vec![0u8; nbas * nblk];
+
+    output.par_chunks_exact_mut(nblk).zip(sh0..sh1).into_par_iter().for_each(|(screen_index, bas_id)| {
+        let nprim = bas[bas_id][NPRIM_OF] as usize;
+        let nctr = bas[bas_id][NCTR_OF] as usize;
+        let l = bas[bas_id][ANG_OF] as usize;
+        let p_exp = &env[bas[bas_id][PTR_EXP] as usize..][..nprim];
+        let p_coeff = &env[bas[bas_id][PTR_COEFF] as usize..][..nprim * nctr];
+        let atm_id = bas[bas_id][ATOM_OF] as usize;
+        let r_atm: [f64; 3] = env[atm[atm_id][PTR_COORD] as usize..][..3].try_into().unwrap();
+
+        let mut maxc: f64 = 0.0;
+        let mut min_exp: f64 = f64::MAX;
+        for p in 0..nprim {
+            min_exp = min_exp.min(p_exp[p]);
+            for k in 0..nctr {
+                maxc = maxc.max(p_coeff[p * nctr + k].abs());
+            }
+        }
+        let log_coeff = maxc.ln();
+        let (r2sup, arr_min) = if l > 0 {
+            let r2sup = l as f64 / (2.0 * min_exp);
+            let arr_min = min_exp * r2sup - 0.5 * r2sup.ln() * l as f64 - log_coeff;
+            (r2sup, arr_min)
+        } else {
+            (0.0, -log_coeff)
+        };
+        for iblk in 0..nblk {
+            let igrid = iblk * BLKSIZE;
+            let bgrid = (ngrid - igrid).min(BLKSIZE);
+            let mut rr_min = f64::MAX;
+            for g in 0..bgrid {
+                let dx = coords[igrid + g][X] - r_atm[X];
+                let dy = coords[igrid + g][Y] - r_atm[Y];
+                let dz = coords[igrid + g][Z] - r_atm[Z];
+                let rr = dx * dx + dy * dy + dz * dz;
+                rr_min = rr_min.min(rr);
+            }
+            let arr = if l == 0 {
+                min_exp * rr_min - log_coeff
+            } else if rr_min < r2sup {
+                arr_min
+            } else {
+                min_exp * rr_min - 0.5 * rr_min.ln() * l as f64 - log_coeff
+            };
+            let si = nbins as f64 - arr * scale;
+            if si <= 0.0 {
+                screen_index[iblk] = 0;
+            } else {
+                screen_index[iblk] = si.ceil().min(nbins as f64) as u8;
+            }
+        }
+    });
+    (output, [nbas, nblk])
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn gto_eval_iter<const CART: bool>(
     evaluator: &dyn GTOEvalAPI,
@@ -369,4 +456,24 @@ pub fn gto_eval_loop<const CART: bool>(
         let cache = unsafe { cast_mut_slice(&thread_cache[thread_id]) };
         gto_eval_iter::<CART>(evaluator, ao, coord, fac, [ish0, ish1], ao_loc, cache, nao, ngrid, iao, igrid, atm, bas, env);
     });
+}
+
+#[test]
+fn test_gto_screen_index() {
+    let cint_data = init_c10h22_def2_qzvp();
+    let ngrid = 2048;
+    let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
+    let shls_slice = [0, cint_data.nbas()];
+
+    let cutoff = 0.01;
+    let (non0tab, [nbas, nblk]) = gto_screen_index(&coord, shls_slice, None, Some(cutoff), &cint_data.atm, &cint_data.bas, &cint_data.env);
+    assert_eq!([nbas, nblk], [464, 37]);
+    let non0tab_f64 = non0tab.iter().map(|&x| x as f64).collect_vec();
+    assert!((cint_fp(&non0tab_f64) - -86.95900863817528).abs() < 1e-10);
+
+    let cutoff = 1e-15;
+    let (non0tab, [nbas, nblk]) = gto_screen_index(&coord, shls_slice, None, Some(cutoff), &cint_data.atm, &cint_data.bas, &cint_data.env);
+    assert_eq!([nbas, nblk], [464, 37]);
+    let non0tab_f64 = non0tab.iter().map(|&x| x as f64).collect_vec();
+    assert!((cint_fp(&non0tab_f64) - 220.1771347194273).abs() < 1e-10);
 }
