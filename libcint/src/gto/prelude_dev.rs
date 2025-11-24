@@ -1,4 +1,5 @@
 pub use crate::gto::deriv_0::*;
+pub use crate::gto::deriv_1::*;
 pub use crate::gto::grid_ao_drv::*;
 use num::traits::MulAdd;
 use num::traits::NumAssignOps;
@@ -13,17 +14,6 @@ pub use core::mem::MaybeUninit;
 pub const BLKSIZE: usize = 56;
 pub const SIMDD: usize = 8;
 pub const BLKSIMD: usize = BLKSIZE / SIMDD;
-// maximum number of cartesian functions for a shell
-// 128s, 42p, 21d, 12f, 8g, 6h, 4i, 3j
-pub const NCTR_CART: usize = 128;
-// maximum components to be evaluated
-// derivatives: 1, 4, 10, 20, 35 (to 4-th order)
-// ipipsp: 4 * 9
-pub const NCOMP_MAX: usize = 36;
-
-// 2 slots of int param[]
-pub const POS_E1: usize = 0;
-pub const TENSOR: usize = 1;
 
 pub const X: usize = 0;
 pub const Y: usize = 1;
