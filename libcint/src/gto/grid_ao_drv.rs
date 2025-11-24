@@ -91,6 +91,18 @@ pub fn gto_prim_exp(eprim: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], _c
     }
 }
 
+pub fn gto_set_zero(ao: &mut [f64], ao_shape: [usize; 3], ao_offset: [usize; 2], nao_to_set: usize) {
+    let [ncomp, nao, ngrid] = ao_shape;
+    let [iao, igrid] = ao_offset;
+    for a in 0..ncomp {
+        for mu in iao..iao + nao_to_set {
+            let ptr = a * nao * ngrid + mu * ngrid + igrid;
+            let bgrid = (ngrid - igrid).min(BLKSIZE);
+            ao[ptr..ptr + bgrid].fill(0.0);
+        }
+    }
+}
+
 pub fn gto_copy_grids<const CART: bool>(
     // arguments
     gto: &[f64blk],
@@ -328,6 +340,7 @@ pub fn gto_eval_iter<const CART: bool>(
     fac: f64,
     shls_slice: [usize; 2],
     ao_loc: &[usize],
+    non0tab: Option<&[u8]>,
     // buffer
     buf: &mut [f64blk],
     // dimensions
@@ -364,6 +377,7 @@ pub fn gto_eval_iter<const CART: bool>(
     let (gto_cart, buf) = buf.split_at_mut(nbuf_gto);
     let (gto_sph, _) = buf.split_at_mut(nbuf_gto);
     let bgrid = (ngrid - igrid).min(BLKSIZE);
+    let nblk = ngrid.div_ceil(BLKSIZE);
 
     let grid2atm = unsafe { grid2atm.as_chunks_unchecked_mut::<3>() };
     gto_fill_grid2atm(grid2atm, coord, bgrid, &atm[atm0..atm1], env);
@@ -380,6 +394,12 @@ pub fn gto_eval_iter<const CART: bool>(
         let coeff = &env[p_coeff..p_coeff + nprim * nctr];
         let coord = &grid2atm[atm_id - atm0];
         let iao = iao + ao_loc[bas_id] - ao_loc[sh0];
+
+        if non0tab.is_some_and(|non0tab| non0tab[(bas_id - sh0) * nblk + igrid / BLKSIZE] == 0) {
+            let ndeg = if CART { (l + 1) * (l + 2) / 2 } else { 2 * l + 1 };
+            gto_set_zero(ao, [ncomp, nao, ngrid], [iao, igrid], nctr * ndeg);
+            continue;
+        }
 
         if CART || l <= 1 {
             evaluator.gto_exp(eprim, coord, alpha, coeff, fac1, nprim, nctr);
@@ -409,6 +429,7 @@ pub fn gto_eval_loop<const CART: bool>(
     fac: f64,
     shls_slice: [usize; 2],
     ao_loc: &[usize],
+    non0tab: Option<&[u8]>,
     atm: &[[c_int; ATM_SLOTS as usize]],
     bas: &[[c_int; BAS_SLOTS as usize]],
     env: &[f64],
@@ -418,6 +439,12 @@ pub fn gto_eval_loop<const CART: bool>(
     let nao = ao_loc[sh1] - ao_loc[sh0];
     let ngrid = coord.len();
     assert!(ao.len() >= ncomp * nao * ngrid);
+
+    let nblk = ngrid.div_ceil(BLKSIZE);
+    let nbas = sh1 - sh0;
+    if let Some(non0tab) = non0tab {
+        assert!(non0tab.len() == nbas * nblk);
+    }
 
     // split shells by atoms
     let shloc = gto_shloc_by_atom(shls_slice, bas);
@@ -454,7 +481,8 @@ pub fn gto_eval_loop<const CART: bool>(
         let ao = unsafe { cast_mut_slice(ao) };
         let coord = &coord[igrid..igrid + bgrid];
         let cache = unsafe { cast_mut_slice(&thread_cache[thread_id]) };
-        gto_eval_iter::<CART>(evaluator, ao, coord, fac, [ish0, ish1], ao_loc, cache, nao, ngrid, iao, igrid, atm, bas, env);
+        let non0tab_slice = non0tab.map(|non0tab| &non0tab[ish0 * nblk..ish1 * nblk]);
+        gto_eval_iter::<CART>(evaluator, ao, coord, fac, [ish0, ish1], ao_loc, non0tab_slice, cache, nao, ngrid, iao, igrid, atm, bas, env);
     });
 }
 

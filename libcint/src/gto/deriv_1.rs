@@ -348,6 +348,7 @@ fn playground_cart() {
         1.0,
         [0, cint_data.nbas()],
         &cint_data.ao_loc(),
+        None,
         &cint_data.atm,
         &cint_data.bas,
         &cint_data.env,
@@ -371,6 +372,7 @@ fn test_c10h22_sph() {
         1.0,
         [0, cint_data.nbas()],
         &cint_data.ao_loc(),
+        None,
         &cint_data.atm,
         &cint_data.bas,
         &cint_data.env,
@@ -390,6 +392,7 @@ fn test_c10h22_sph() {
         1.0,
         [0, cint_data.nbas()],
         &cint_data.ao_loc(),
+        None,
         &cint_data.atm,
         &cint_data.bas,
         &cint_data.env,
@@ -398,4 +401,30 @@ fn test_c10h22_sph() {
     println!("time: {:.3} s", elapsed.as_secs_f64());
     let fp_ao = cint_fp(&ao);
     println!("fp_ao (1M grids) = {:}", fp_ao);
+}
+
+#[test]
+fn test_c10h22_sph_non0tab() {
+    let cint_data = init_c10h22_def2_qzvp();
+    let ngrid = 2048;
+    let nao = cint_data.nao();
+    println!("nao: {:}", nao);
+    let mut ao = vec![f64::NAN; 4 * nao * ngrid];
+    let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
+    let (non0tab, _) = gto_screen_index(&coord, [0, cint_data.nbas()], None, Some(0.01), &cint_data.atm, &cint_data.bas, &cint_data.env);
+    gto_eval_loop::<false>(
+        &GTOEvalDeriv1 {},
+        &mut ao,
+        &coord,
+        1.0,
+        [0, cint_data.nbas()],
+        &cint_data.ao_loc(),
+        Some(&non0tab),
+        &cint_data.atm,
+        &cint_data.bas,
+        &cint_data.env,
+    );
+    let fp_ao = cint_fp(&ao);
+    println!("fp_ao = {:}", fp_ao);
+    assert!((fp_ao - 1150.7578110811928).abs() < 1e-10);
 }
