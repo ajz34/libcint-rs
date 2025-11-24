@@ -40,8 +40,7 @@ impl FingerPrint for VecT {
     type Output = T;
 
     fn fingerprint(&self) -> Self::Output {
-        let arr = (0..self.len()).into_par_iter().map(|l| l.to_f64().unwrap().cos());
-        arr.zip(self).map(|(a, &b)| a * b).sum()
+        self.par_iter().enumerate().map(|(l, &b)| (l as f64).cos() * b).sum()
     }
 }
 
@@ -56,9 +55,7 @@ impl<const N: usize> FingerPrint for VecT {
     type Output = T;
 
     fn fingerprint(&self) -> Self::Output {
-        let arr = (0..self.len() * N).into_par_iter().map(|l| l.to_f64().unwrap().cos());
-        let vec = self.iter().flatten().copied().collect_vec();
-        arr.zip(vec).map(|(a, b)| a * b).sum()
+        self.iter().flatten().enumerate().map(|(l, &b)| (l as f64).cos() * b).sum()
     }
 }
 
