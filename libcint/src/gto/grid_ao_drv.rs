@@ -341,6 +341,7 @@ pub fn gto_eval_iter<const CART: bool>(
     shls_slice: [usize; 2],
     ao_loc: &[usize],
     non0tab: Option<&[u8]>,
+    fill_zero: bool,
     // buffer
     buf: &mut [f64blk],
     // dimensions
@@ -385,8 +386,6 @@ pub fn gto_eval_iter<const CART: bool>(
         let nprim = bas[bas_id][NPRIM_OF] as usize;
         let nctr = bas[bas_id][NCTR_OF] as usize;
         let l = bas[bas_id][ANG_OF] as usize;
-        let fac1 = fac * cint_common_fac_sp(l as c_int);
-
         let p_exp = bas[bas_id][PTR_EXP] as usize;
         let p_coeff = bas[bas_id][PTR_COEFF] as usize;
         let atm_id = bas[bas_id][ATOM_OF] as usize;
@@ -394,10 +393,13 @@ pub fn gto_eval_iter<const CART: bool>(
         let coeff = &env[p_coeff..p_coeff + nprim * nctr];
         let coord = &grid2atm[atm_id - atm0];
         let iao = iao + ao_loc[bas_id] - ao_loc[sh0];
+        let fac1 = fac * cint_common_fac_sp(l as c_int);
 
         if non0tab.is_some_and(|non0tab| non0tab[(bas_id - sh0) * nblk + igrid / BLKSIZE] == 0) {
-            let ndeg = if CART { (l + 1) * (l + 2) / 2 } else { 2 * l + 1 };
-            gto_set_zero(ao, [ncomp, nao, ngrid], [iao, igrid], nctr * ndeg);
+            if fill_zero {
+                let ndeg = if CART { (l + 1) * (l + 2) / 2 } else { 2 * l + 1 };
+                gto_set_zero(ao, [ncomp, nao, ngrid], [iao, igrid], nctr * ndeg);
+            }
             continue;
         }
 
@@ -430,6 +432,7 @@ pub fn gto_eval_loop<const CART: bool>(
     shls_slice: [usize; 2],
     ao_loc: &[usize],
     non0tab: Option<&[u8]>,
+    fill_zero: bool,
     atm: &[[c_int; ATM_SLOTS as usize]],
     bas: &[[c_int; BAS_SLOTS as usize]],
     env: &[f64],
@@ -482,7 +485,24 @@ pub fn gto_eval_loop<const CART: bool>(
         let coord = &coord[igrid..igrid + bgrid];
         let cache = unsafe { cast_mut_slice(&thread_cache[thread_id]) };
         let non0tab_slice = non0tab.map(|non0tab| &non0tab[ish0 * nblk..ish1 * nblk]);
-        gto_eval_iter::<CART>(evaluator, ao, coord, fac, [ish0, ish1], ao_loc, non0tab_slice, cache, nao, ngrid, iao, igrid, atm, bas, env);
+        gto_eval_iter::<CART>(
+            evaluator,
+            ao,
+            coord,
+            fac,
+            [ish0, ish1],
+            ao_loc,
+            non0tab_slice,
+            fill_zero,
+            cache,
+            nao,
+            ngrid,
+            iao,
+            igrid,
+            atm,
+            bas,
+            env,
+        );
     });
 }
 
