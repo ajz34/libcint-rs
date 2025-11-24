@@ -1,7 +1,6 @@
 //! Initializers for the CINT library.
 
 use crate::prelude::*;
-use serde::{Deserialize, Serialize};
 
 /// Serde intermediate structure for conversion between `CInt` to other
 /// serializable formats.
@@ -29,8 +28,8 @@ impl CIntSerdeIntermediate {
             Err(err) => {
                 // let token to be the path of the file
                 let err_msg = err.to_string();
-                let file_content = std::fs::read_to_string(token).map_err(|_| CIntError::ParseError(err_msg))?;
-                serde_json::from_str::<CIntSerdeIntermediate>(&file_content).map_err(|err| CIntError::ParseError(err.to_string()))
+                let file_content = std::fs::read_to_string(token).map_err(|_| cint_error!(ParseError, "{err_msg:?}"))?;
+                serde_json::from_str::<CIntSerdeIntermediate>(&file_content).map_err(|err| cint_error!(ParseError, "{:?}", err.to_string()))
             },
         }
     }
@@ -68,19 +67,19 @@ impl From<CInt> for CIntSerdeIntermediate {
 impl CInt {
     /// Convert `CInt` to JSON string.
     pub fn to_json(&self) -> String {
-        self.to_json_f().unwrap()
+        self.to_json_f().cint_unwrap()
     }
 
     /// Convert JSON string (or the path of JSON file) to `CInt`.
     ///
     /// This function accepts the JSON string from PySCF's `mol.dumps()`.
     pub fn from_json(token: &str) -> CInt {
-        CInt::from_json_f(token).unwrap()
+        CInt::from_json_f(token).cint_unwrap()
     }
 
     pub fn to_json_f(&self) -> Result<String, CIntError> {
         let cint_data: CIntSerdeIntermediate = self.clone().into();
-        serde_json::to_string(&cint_data).map_err(|err| CIntError::ParseError(err.to_string()))
+        serde_json::to_string(&cint_data).map_err(|err| cint_error!(ParseError, "{:?}", err.to_string()))
     }
 
     pub fn from_json_f(token: &str) -> Result<CInt, CIntError> {

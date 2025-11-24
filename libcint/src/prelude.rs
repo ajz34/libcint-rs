@@ -1,7 +1,8 @@
 //! Use `libcint::prelude::*` to import this crate.
 
-pub use crate::cint::{CInt, CIntError, CIntKind, CIntOptimizer, CIntOutput, CIntSymm, CIntType};
+pub use crate::cint::{CInt, CIntKind, CIntOptimizer, CIntOutput, CIntSymm, CIntType};
 pub use crate::cint_change::fakemol_for_charges;
+pub use crate::cint_result::{CIntError, CIntErrorBase};
 pub use crate::ffi::wrapper_traits::Integrator;
 pub use crate::util::ShlsSlice;
 
@@ -10,6 +11,7 @@ pub use crate::test_mol::{cint_fingerprint, cint_fp, init_c10h22_def2_qzvp, init
 
 // for developing
 pub(crate) use crate::cint::*;
+pub(crate) use crate::cint_result::CIntResultAPI;
 pub(crate) use crate::ffi::cecp_ffi;
 pub(crate) use crate::ffi::cecp_ffi::ECPOpt;
 pub(crate) use crate::ffi::cint_ffi;
@@ -20,8 +22,14 @@ pub(crate) use crate::{cint_error, cint_raise, cint_trace};
 pub(crate) use derive_builder::{Builder, UninitializedFieldError};
 pub(crate) use duplicate::duplicate_item;
 pub(crate) use itertools::Itertools;
-pub(crate) use num::complex::{Complex, ComplexFloat};
+pub(crate) use num::complex::ComplexFloat;
+pub(crate) use num::{Complex, ToPrimitive};
+pub(crate) use rayon::prelude::*;
+pub(crate) use rstsr_common::layout::exports::IndexedIterLayout;
+pub(crate) use rstsr_common::prelude::*;
+pub(crate) use serde::{Deserialize, Serialize};
 pub(crate) use std::any::Any;
+pub(crate) use std::backtrace::Backtrace;
 pub(crate) use std::error::Error;
 pub(crate) use std::ffi::{c_int, c_void};
 pub(crate) use std::fmt::{Debug, Display, Write};

@@ -1,9 +1,6 @@
 //! Implementation of integral at lower API level (crafting, col-major).
 
 use crate::prelude::*;
-use rayon::prelude::*;
-use rstsr_common::layout::IndexedIterLayout;
-use rstsr_common::prelude::*;
 
 /// Implementation of integral at lower API level (crafting, col-major).
 impl CInt {

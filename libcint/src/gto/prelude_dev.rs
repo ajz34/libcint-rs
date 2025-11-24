@@ -39,8 +39,6 @@ pub const YYZ: usize = 7;
 pub const YZZ: usize = 8;
 pub const ZZZ: usize = 9;
 
-use core::ops::*;
-
 /// Common factor for spherical harmonics, by libcint's convention.
 ///
 /// For efficiency, libcint will pre-scale normalization factor to the integral,

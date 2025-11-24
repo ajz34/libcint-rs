@@ -173,6 +173,7 @@ pub mod cint_crafter;
 pub mod cint_fill_col_major;
 pub mod cint_fill_grids;
 pub mod cint_fill_row_major;
+pub mod cint_result;
 
 pub mod ffi;
 
