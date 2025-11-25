@@ -1,3 +1,5 @@
+use core::f64;
+
 use crate::gto::prelude_dev::*;
 
 pub fn gto_contract_exp1(
@@ -296,7 +298,7 @@ pub fn gto_shell_eval_grid_cart_deriv1(
 }
 
 pub struct GTOEvalDeriv1;
-impl GTOEvalAPI for GTOEvalDeriv1 {
+impl GtoEvalAPI for GTOEvalDeriv1 {
     fn ne1(&self) -> usize {
         1
     }

@@ -211,7 +211,7 @@ impl CInt {
             None => out_vec.as_mut().unwrap(),
         };
         if out.len() < out_size {
-            cint_raise!(InvalidValue, "Output vector size {} is smaller than required size {}", out.len(), out_size)?;
+            cint_raise!(InvalidValue, "Output vector size {} is smaller than required size {out_size}", out.len())?;
         }
 
         // actual integral execution
