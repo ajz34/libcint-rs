@@ -1,7 +1,7 @@
 use crate::gto::prelude_dev::*;
 use rayon::prelude::*;
 
-pub trait GTOEvalAPI: Send + Sync {
+pub trait GtoEvalAPI: Send + Sync {
     fn ne1(&self) -> usize;
     fn ntensor(&self) -> usize;
     fn ncomp(&self) -> usize {
@@ -269,11 +269,11 @@ pub fn gto_screen_index(
     let nbins = nbins.unwrap_or(NBINS);
     let [sh0, sh1] = shls_slice;
     let nbas = sh1 - sh0;
-    let cutoff = cutoff.unwrap_or(CUTOFF);
-    if !(0.0..=0.1).contains(&cutoff) {
-        eprintln!("Warning: unreasonable cutoff value {:}", cutoff);
+    let cutoff_old = cutoff.unwrap_or(CUTOFF);
+    let cutoff = cutoff_old.clamp(1e-300, 0.1);
+    if !(0.0..=0.1).contains(&cutoff_old) {
+        eprintln!("Warning: unreasonable cutoff value {cutoff_old}, will set to {cutoff}.");
     }
-    let cutoff = cutoff.clamp(1e-300, 0.1);
     let scale = -(nbins as f64) / cutoff.ln();
     let mut output = vec![0u8; nbas * nblk];
 
@@ -333,7 +333,7 @@ pub fn gto_screen_index(
 
 #[allow(clippy::too_many_arguments)]
 pub fn gto_eval_iter<const CART: bool>(
-    evaluator: &dyn GTOEvalAPI,
+    evaluator: &dyn GtoEvalAPI,
     // arguments
     ao: &mut [f64], // (ncomp, nao, ngrid)
     coord: &[[f64; 3]],
@@ -425,7 +425,7 @@ pub fn gto_eval_iter<const CART: bool>(
 }
 
 pub fn gto_eval_loop<const CART: bool>(
-    evaluator: &dyn GTOEvalAPI,
+    evaluator: &dyn GtoEvalAPI,
     ao: &mut [f64], // (ncomp, nao, ngrid)
     coord: &[[f64; 3]],
     fac: f64,
