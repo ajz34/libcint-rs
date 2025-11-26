@@ -271,6 +271,7 @@ impl GtoEvalAPI for GtoEvalDeriv0 {
         _alpha: &[f64],
         _coeff: &[f64],
         l: usize,
+        _center: [f64; 3],
         // dimensions
         shl_shape: [usize; 2],
     ) {
