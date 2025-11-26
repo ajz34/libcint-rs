@@ -228,17 +228,12 @@ pub fn gto_shell_eval_grid_cart(
                 }
             }
             for k in 0..nctr {
-                let mut icart = 0;
-                for lx in (0..=l).rev() {
-                    for ly in (0..=(l - lx)).rev() {
-                        let lz = l - lx - ly;
-                        for g in 0..BLKSIMD {
-                            *gto[ncart * k + icart].get_simd_mut(g) =
-                                exps[k].get_simd(g) * pows[lx][X].get_simd(g) * pows[ly][Y].get_simd(g) * pows[lz][Z].get_simd(g);
-                        }
-                        icart += 1;
+                gto_l_iter(l).enumerate().for_each(|(icart, (lx, ly, lz))| {
+                    for g in 0..BLKSIMD {
+                        *gto[ncart * k + icart].get_simd_mut(g) =
+                            exps[k].get_simd(g) * pows[lx][X].get_simd(g) * pows[ly][Y].get_simd(g) * pows[lz][Z].get_simd(g);
                     }
-                }
+                })
             }
         },
     }
@@ -261,10 +256,10 @@ impl GtoEvalAPI for GTOEvalDeriv0 {
         coeff: &[f64],
         fac: f64,
         // dimensions
-        nprim: usize,
-        nctr: usize,
+        shl_shape: [usize; 2],
     ) {
         let ectr = ebuf;
+        let [nctr, nprim] = shl_shape;
         gto_contract_exp0(ectr, coord, alpha, coeff, fac, nprim, nctr);
     }
     fn gto_shell_eval(
@@ -273,10 +268,13 @@ impl GtoEvalAPI for GTOEvalDeriv0 {
         gto: &mut [f64blk],
         exps: &[f64blk],
         coord: &[f64blk; 3],
+        _alpha: &[f64],
+        _coeff: &[f64],
         l: usize,
         // dimensions
-        nctr: usize,
+        shl_shape: [usize; 2],
     ) {
+        let [nctr, _nprim] = shl_shape;
         gto_shell_eval_grid_cart(gto, exps, coord, l, nctr);
     }
 }

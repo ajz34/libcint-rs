@@ -1,5 +1,3 @@
-use core::f64;
-
 use crate::gto::prelude_dev::*;
 
 pub fn gto_contract_exp1(
@@ -265,33 +263,28 @@ pub fn gto_shell_eval_grid_cart_deriv1(
             let pows_1less = &pows_buffer;
 
             for k in 0..nctr {
-                let mut icart = 0;
-                for lx in (0..=l).rev() {
-                    for ly in (0..=(l - lx)).rev() {
-                        let lz = l - lx - ly;
-                        for g in 0..BLKSIMD {
-                            let e = exps[k].get_simd(g);
-                            let e_2a = exps_2a[k].get_simd(g);
-                            let x = coord[X].get_simd(g);
-                            let y = coord[Y].get_simd(g);
-                            let z = coord[Z].get_simd(g);
-                            let pows_x = pows[lx][X].get_simd(g);
-                            let pows_y = pows[ly][Y].get_simd(g);
-                            let pows_z = pows[lz][Z].get_simd(g);
-                            let pows_1less_x = pows_1less[lx][X].get_simd(g);
-                            let pows_1less_y = pows_1less[ly][Y].get_simd(g);
-                            let pows_1less_z = pows_1less[lz][Z].get_simd(g);
-                            let pows_xyz = pows_x * pows_y * pows_z;
+                gto_l_iter(l).enumerate().for_each(|(icart, (lx, ly, lz))| {
+                    for g in 0..BLKSIMD {
+                        let e = exps[k].get_simd(g);
+                        let e_2a = exps_2a[k].get_simd(g);
+                        let x = coord[X].get_simd(g);
+                        let y = coord[Y].get_simd(g);
+                        let z = coord[Z].get_simd(g);
+                        let pows_x = pows[lx][X].get_simd(g);
+                        let pows_y = pows[ly][Y].get_simd(g);
+                        let pows_z = pows[lz][Z].get_simd(g);
+                        let pows_1less_x = pows_1less[lx][X].get_simd(g);
+                        let pows_1less_y = pows_1less[ly][Y].get_simd(g);
+                        let pows_1less_z = pows_1less[lz][Z].get_simd(g);
+                        let pows_xyz = pows_x * pows_y * pows_z;
 
-                            let offset = ncart * k + icart;
-                            *gto[D1_0][offset].get_simd_mut(g) = e * pows_xyz;
-                            *gto[D1_X][offset].get_simd_mut(g) = e_2a * pows_xyz * x + e * (lx as f64) * pows_1less_x * pows_y * pows_z;
-                            *gto[D1_Y][offset].get_simd_mut(g) = e_2a * pows_xyz * y + e * (ly as f64) * pows_x * pows_1less_y * pows_z;
-                            *gto[D1_Z][offset].get_simd_mut(g) = e_2a * pows_xyz * z + e * (lz as f64) * pows_x * pows_y * pows_1less_z;
-                        }
-                        icart += 1;
+                        let offset = ncart * k + icart;
+                        *gto[D1_0][offset].get_simd_mut(g) = e * pows_xyz;
+                        *gto[D1_X][offset].get_simd_mut(g) = e_2a * pows_xyz * x + e * (lx as f64) * pows_1less_x * pows_y * pows_z;
+                        *gto[D1_Y][offset].get_simd_mut(g) = e_2a * pows_xyz * y + e * (ly as f64) * pows_x * pows_1less_y * pows_z;
+                        *gto[D1_Z][offset].get_simd_mut(g) = e_2a * pows_xyz * z + e * (lz as f64) * pows_x * pows_y * pows_1less_z;
                     }
-                }
+                });
             }
         },
     }
@@ -314,10 +307,10 @@ impl GtoEvalAPI for GTOEvalDeriv1 {
         coeff: &[f64],
         fac: f64,
         // dimensions
-        nprim: usize,
-        nctr: usize,
+        shl_shape: [usize; 2],
     ) {
         let ectr = ebuf;
+        let [nctr, nprim] = shl_shape;
         gto_contract_exp1(ectr, coord, alpha, coeff, fac, nprim, nctr);
     }
     fn gto_shell_eval(
@@ -326,10 +319,13 @@ impl GtoEvalAPI for GTOEvalDeriv1 {
         gto: &mut [f64blk],
         exps: &[f64blk],
         coord: &[f64blk; 3],
+        _alpha: &[f64],
+        _coeff: &[f64],
         l: usize,
         // dimensions
-        nctr: usize,
+        shl_shape: [usize; 2],
     ) {
+        let [nctr, _nprim] = shl_shape;
         gto_shell_eval_grid_cart_deriv1(gto, exps, coord, l, nctr);
     }
 }
