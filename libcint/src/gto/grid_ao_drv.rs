@@ -16,8 +16,7 @@ pub trait GtoEvalAPI: Send + Sync {
         coeff: &[f64],
         fac: f64,
         // dimensions
-        nprim: usize,
-        nctr: usize,
+        shl_shape: [usize; 2],
     );
     fn gto_shell_eval(
         &self,
@@ -25,9 +24,11 @@ pub trait GtoEvalAPI: Send + Sync {
         gto: &mut [f64blk],
         exps: &[f64blk],
         coord: &[f64blk; 3],
+        alpha: &[f64],
+        coeff: &[f64],
         l: usize,
         // dimensions
-        nctr: usize,
+        shl_shape: [usize; 2],
     );
 }
 
@@ -54,68 +55,8 @@ pub fn make_ao_loc(bas: &[[c_int; BAS_SLOTS as usize]], cint_type: CIntType) -> 
     ao_loc
 }
 
-pub fn gto_nabla1(
-    fx1: &mut [f64blk],
-    fy1: &mut [f64blk],
-    fz1: &mut [f64blk],
-    fx0: &[f64blk],
-    fy0: &[f64blk],
-    fz0: &[f64blk],
-    l: usize,
-    a: f64,
-) {
-    let a2 = -2.0 * a;
-    // first derivative
-    for n in 0..BLKSIZE {
-        fx1[0][n] = a2 * fx0[1][n];
-        fy1[0][n] = a2 * fy0[1][n];
-        fz1[0][n] = a2 * fz0[1][n];
-    }
-    // recursive derivatives
-    for i in 1..=l {
-        for n in 0..BLKSIZE {
-            fx1[i][n] = i as f64 * fx0[i - 1][n] + a2 * fx0[i + 1][n];
-            fy1[i][n] = i as f64 * fy0[i - 1][n] + a2 * fy0[i + 1][n];
-            fz1[i][n] = i as f64 * fz0[i - 1][n] + a2 * fz0[i + 1][n];
-        }
-    }
-}
-
-pub fn gto_x1(
-    fx1: &mut [f64blk],
-    fy1: &mut [f64blk],
-    fz1: &mut [f64blk],
-    fx0: &[f64blk],
-    fy0: &[f64blk],
-    fz0: &[f64blk],
-    l: usize,
-    ri: [f64; 3],
-) {
-    for i in 0..=l {
-        for n in 0..BLKSIZE {
-            fx1[i][n] = ri[0] * fx0[i][n] + fx0[i + 1][n];
-            fy1[i][n] = ri[1] * fy0[i][n] + fy0[i + 1][n];
-            fz1[i][n] = ri[2] * fz0[i][n] + fz0[i + 1][n];
-        }
-    }
-}
-
-pub fn gto_prim_exp(eprim: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], _coeff: &[f64], _nprim: usize, nctr: usize, fac: f64) {
-    let mut rr = unsafe { f64blk::uninit() };
-    for i in 0..BLKSIZE {
-        rr[i] = coord[0][i] * coord[0][i] + coord[1][i] * coord[1][i] + coord[2][i] * coord[2][i];
-    }
-
-    for j in 0..nctr {
-        for i in 0..BLKSIZE {
-            let arr = alpha[j] * rr[i];
-            eprim[j][i] = fac * (-arr).exp();
-        }
-    }
-}
-
-pub fn gto_set_zero(ao: &mut [f64], ao_shape: [usize; 3], ao_offset: [usize; 2], nao_to_set: usize) {
-    let [ncomp, nao, ngrid] = ao_shape;
+pub fn gto_set_zero(ao: &mut [f64], ncomp: usize, ao_shape: [usize; 2], ao_offset: [usize; 2], nao_to_set: usize) {
+    let [nao, ngrid] = ao_shape;
     let [iao, igrid] = ao_offset;
     for a in 0..ncomp {
         for mu in iao..iao + nao_to_set {
@@ -126,38 +67,34 @@ pub fn gto_set_zero(ao: &mut [f64], ao_shape: [usize; 3], ao_offset: [usize; 2],
     }
 }
 
-pub fn gto_copy_grids<const CART: bool>(
+pub fn gto_copy_grids(
     // arguments
     gto: &[f64blk],
     ao: &mut [f64],
-    l: usize,
-    // dimensions
-    nctr: usize,
+    nao_to_set: usize,
     ncomp: usize,
-    nao: usize,
-    ngrid: usize,
-    // offsets
-    iao: usize,
-    igrid: usize,
+    ao_shape: [usize; 2],
+    ao_offset: [usize; 2],
 ) {
-    let nang = if CART { (l + 1) * (l + 2) / 2 } else { 2 * l + 1 };
-    let nshlbas = nctr * nang;
+    let [nao, ngrid] = ao_shape;
+    let [iao, igrid] = ao_offset;
+
     if igrid + BLKSIZE < ngrid {
         for a in 0..ncomp {
-            for mu in 0..nshlbas {
+            for mu in 0..nao_to_set {
                 let ptr = a * nao * ngrid + (iao + mu) * ngrid + igrid;
                 let dst = &mut ao[ptr..ptr + BLKSIZE];
-                let src = &gto[a * nshlbas + mu];
+                let src = &gto[a * nao_to_set + mu];
                 unsafe { src.write_ensure(dst) }
             }
         }
     } else {
         let bgrid = ngrid - igrid;
         for a in 0..ncomp {
-            for mu in 0..nshlbas {
+            for mu in 0..nao_to_set {
                 let ptr = a * nao * ngrid + (iao + mu) * ngrid + igrid;
                 let dst = &mut ao[ptr..ptr + bgrid];
-                let src = &gto[a * nshlbas + mu];
+                let src = &gto[a * nao_to_set + mu];
                 src.write(dst);
             }
         }
@@ -368,12 +305,9 @@ pub fn gto_eval_iter(
     fill_zero: bool,
     // buffer
     buf: &mut [f64blk],
-    // dimensions
-    nao: usize,
-    ngrid: usize,
-    // offsets
-    iao: usize,
-    igrid: usize,
+    // dimensions info
+    ao_shape: [usize; 2],
+    ao_offset: [usize; 2],
 ) {
     const ATOM_OF: usize = crate::ffi::cint_ffi::ATOM_OF as usize;
     const NPRIM_OF: usize = crate::ffi::cint_ffi::NPRIM_OF as usize;
@@ -387,6 +321,8 @@ pub fn gto_eval_iter(
     let env = &mol.env;
     let cint_type = mol.cint_type;
 
+    let [_nao, ngrid] = ao_shape;
+    let [iao, igrid] = ao_offset;
     let ncomp = evaluator.ncomp();
     let nctr_cart_max = gto_nctr_cart_max(shls_slice, bas);
     let nctr_max = gto_nctr_max(shls_slice, bas);
@@ -396,10 +332,10 @@ pub fn gto_eval_iter(
     let [atm0, atm1] = [bas[sh0][ATOM_OF] as usize, bas[sh1 - 1][ATOM_OF] as usize + 1];
     let atm_count = atm1 - atm0;
     let nbuf_grid2atm = atm_count * 3;
-    let nbuf_eprim = 2 * nctr_max.max(nprim_max);
+    let nbuf_ebuf = 2 * nctr_max.max(nprim_max);
     let nbuf_gto = ncomp * nctr_cart_max;
     let (grid2atm, buf) = buf.split_at_mut(nbuf_grid2atm);
-    let (eprim, buf) = buf.split_at_mut(nbuf_eprim);
+    let (ebuf, buf) = buf.split_at_mut(nbuf_ebuf);
     let (gto_cart, buf) = buf.split_at_mut(nbuf_gto);
     let (gto_sph, _) = buf.split_at_mut(nbuf_gto);
     let bgrid = (ngrid - igrid).min(BLKSIZE);
@@ -419,26 +355,27 @@ pub fn gto_eval_iter(
         let coord = &grid2atm[atm_id - atm0];
         let iao = iao + ao_loc[bas_id] - ao_loc[sh0];
         let fac1 = fac * cint_common_fac_sp(l as c_int);
+        let ndeg = match cint_type {
+            Spheric => CInt::len_sph(l as c_int),
+            Cartesian => CInt::len_cart(l as c_int),
+            Spinor => unreachable!("spinor not supported"),
+        };
+        let nao_to_set = nctr * ndeg;
 
         if non0tab.is_some_and(|non0tab| non0tab[(bas_id - sh0) * nblk + igrid / BLKSIZE] == 0) {
             if fill_zero {
-                let ndeg = match cint_type {
-                    Spheric => CInt::len_sph(l as c_int),
-                    Cartesian => CInt::len_cart(l as c_int),
-                    Spinor => unreachable!("spinor not supported"),
-                };
-                gto_set_zero(ao, [ncomp, nao, ngrid], [iao, igrid], nctr * ndeg);
+                gto_set_zero(ao, ncomp, ao_shape, [iao, igrid], nao_to_set);
             }
             continue;
         }
 
         if cint_type == Cartesian || l <= 1 {
-            evaluator.gto_exp(eprim, coord, alpha, coeff, fac1, nprim, nctr);
-            evaluator.gto_shell_eval(gto_cart, eprim, coord, l, nctr);
-            gto_copy_grids::<true>(gto_cart, ao, l, nctr, ncomp, nao, ngrid, iao, igrid);
+            evaluator.gto_exp(ebuf, coord, alpha, coeff, fac1, [nctr, nprim]);
+            evaluator.gto_shell_eval(gto_cart, ebuf, coord, alpha, coeff, l, [nctr, nprim]);
+            gto_copy_grids(gto_cart, ao, nao_to_set, ncomp, ao_shape, [iao, igrid]);
         } else {
-            evaluator.gto_exp(eprim, coord, alpha, coeff, fac1, nprim, nctr);
-            evaluator.gto_shell_eval(gto_cart, eprim, coord, l, nctr);
+            evaluator.gto_exp(ebuf, coord, alpha, coeff, fac1, [nctr, nprim]);
+            evaluator.gto_shell_eval(gto_cart, ebuf, coord, alpha, coeff, l, [nctr, nprim]);
             let ncart = (l + 1) * (l + 2) / 2;
             let nsph = 2 * l + 1;
             for a in 0..ncomp {
@@ -448,7 +385,7 @@ pub fn gto_eval_iter(
                     unsafe { CINTc2s_ket_sph1(ptr_sph, ptr_cart, BLKSIZE as c_int, BLKSIZE as c_int, l as c_int) };
                 }
             }
-            gto_copy_grids::<false>(gto_sph, ao, l, nctr, ncomp, nao, ngrid, iao, igrid);
+            gto_copy_grids(gto_sph, ao, nao_to_set, ncomp, ao_shape, [iao, igrid]);
         }
     }
 }
@@ -515,7 +452,9 @@ pub fn gto_eval_loop(
         let coord = &coord[igrid..igrid + bgrid];
         let cache = unsafe { cast_mut_slice(&thread_cache[thread_id]) };
         let non0tab_slice = non0tab.map(|non0tab| &non0tab[(ish0 - sh0) * nblk..(ish1 - sh0) * nblk]);
-        gto_eval_iter(mol, evaluator, ao, coord, fac, [ish0, ish1], &ao_loc, non0tab_slice, fill_zero, cache, nao, ngrid, iao, igrid);
+        let ao_shape = [nao, ngrid];
+        let ao_offset = [iao, igrid];
+        gto_eval_iter(mol, evaluator, ao, coord, fac, [ish0, ish1], &ao_loc, non0tab_slice, fill_zero, cache, ao_shape, ao_offset);
     });
 
     Ok(())
