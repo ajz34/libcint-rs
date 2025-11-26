@@ -14,7 +14,7 @@ pub use core::mem::MaybeUninit;
 
 pub const BLKSIZE: usize = 56;
 pub const SIMDD: usize = 8;
-pub const BLKSIMD: usize = BLKSIZE / SIMDD;
+pub const BLKSIMDD: usize = BLKSIZE / SIMDD;
 pub const NBINS: u8 = 100;
 pub const CUTOFF: f64 = 1e-15;
 pub const GTOZERO: f64 = 1e-30;

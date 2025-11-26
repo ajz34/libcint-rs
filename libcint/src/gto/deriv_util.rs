@@ -10,12 +10,12 @@ use num::Num;
 
 #[repr(align(64))]
 #[derive(Clone, Debug, Copy)]
-pub struct FpSimd<T: Copy>(pub [T; SIMDD]);
+pub struct FpSimd<T: Copy, const N: usize = SIMDD>(pub [T; N]);
 
 #[allow(non_camel_case_types)]
-pub type f64simd = FpSimd<f64>;
+pub type f64simd = FpSimd<f64, SIMDD>;
 
-impl<T: Copy> Index<usize> for FpSimd<T> {
+impl<T: Copy, const N: usize> Index<usize> for FpSimd<T, N> {
     type Output = T;
     #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
@@ -23,17 +23,17 @@ impl<T: Copy> Index<usize> for FpSimd<T> {
     }
 }
 
-impl<T: Copy> IndexMut<usize> for FpSimd<T> {
+impl<T: Copy, const N: usize> IndexMut<usize> for FpSimd<T, N> {
     #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
     }
 }
 
-impl<T: Num + Copy> FpSimd<T> {
+impl<T: Num + Copy, const N: usize> FpSimd<T, N> {
     #[inline(always)]
     pub fn zero() -> Self {
-        FpSimd([T::zero(); 8])
+        FpSimd([T::zero(); N])
     }
 
     /// # Safety
@@ -49,12 +49,12 @@ impl<T: Num + Copy> FpSimd<T> {
 
     #[inline(always)]
     pub const fn splat(val: T) -> Self {
-        FpSimd([val; 8])
+        FpSimd([val; N])
     }
 
     #[inline(always)]
     pub const fn fill(&mut self, val: T) {
-        self.0 = [val; 8];
+        self.0 = [val; N];
     }
 
     pub fn map<F>(&self, f: F) -> Self
@@ -76,7 +76,7 @@ mod impl_trait_for_f64simd {
     use super::*;
 
     // simd * simd
-    impl<T: Num + Copy> Trait for FpSimd<T> {
+    impl<T: Num + Copy> Trait for FpSimd<T, SIMDD> {
         type Output = Self;
         #[inline(always)]
         fn trait_fn(self, rhs: Self) -> Self::Output {
@@ -94,7 +94,7 @@ mod impl_trait_for_f64simd {
     }
 
     // simd * scalar
-    impl<T: Num + Copy> Trait<T> for FpSimd<T> {
+    impl<T: Num + Copy> Trait<T> for FpSimd<T, SIMDD> {
         type Output = Self;
         #[inline(always)]
         fn trait_fn(self, rhs: T) -> Self::Output {
@@ -119,7 +119,7 @@ mod impl_trait_for_f64simd {
     [MulAssign] [mul_assign];
     [DivAssign] [div_assign];
 )]
-impl<T: NumAssignOps + Copy> Trait for FpSimd<T> {
+impl<T: NumAssignOps + Copy> Trait for FpSimd<T, SIMDD> {
     #[inline(always)]
     fn trait_fn(&mut self, rhs: Self) {
         self[0].trait_fn(rhs[0]);
@@ -133,12 +133,12 @@ impl<T: NumAssignOps + Copy> Trait for FpSimd<T> {
     }
 }
 
-impl<T> FpSimd<T>
+impl<T> FpSimd<T, SIMDD>
 where
     T: MulAdd<Output = T> + Copy,
 {
     #[inline(always)]
-    pub fn add_mul(self, b: FpSimd<T>, c: FpSimd<T>) -> FpSimd<T> {
+    pub fn add_mul(self, b: FpSimd<T, SIMDD>, c: FpSimd<T, SIMDD>) -> FpSimd<T, SIMDD> {
         FpSimd([
             self[0].mul_add(b[0], c[0]),
             self[1].mul_add(b[1], c[1]),
@@ -151,7 +151,7 @@ where
         ])
     }
 
-    pub fn fma_from(&mut self, b: FpSimd<T>, c: FpSimd<T>) {
+    pub fn fma_from(&mut self, b: FpSimd<T, SIMDD>, c: FpSimd<T, SIMDD>) {
         *self = FpSimd([
             b[0].mul_add(c[0], self[0]),
             b[1].mul_add(c[1], self[1]),
@@ -276,24 +276,24 @@ impl<T: Copy> Blk<T> {
 
 impl<T: Copy> Blk<T> {
     #[inline(always)]
-    pub const fn as_simd_slice(&self) -> &[FpSimd<T>; BLKSIMD] {
+    pub const fn as_simdd_slice(&self) -> &[FpSimd<T, SIMDD>; BLKSIMDD] {
         unsafe { transmute(&self.0) }
     }
 
     #[inline(always)]
-    pub const fn as_simd_slice_mut(&mut self) -> &mut [FpSimd<T>; BLKSIMD] {
+    pub const fn as_simdd_slice_mut(&mut self) -> &mut [FpSimd<T, SIMDD>; BLKSIMDD] {
         unsafe { transmute(&mut self.0) }
     }
 
     #[inline(always)]
-    pub const fn get_simd(&self, index: usize) -> FpSimd<T> {
-        let slice = self.as_simd_slice();
+    pub const fn get_simdd(&self, index: usize) -> FpSimd<T, SIMDD> {
+        let slice = self.as_simdd_slice();
         slice[index]
     }
 
     #[inline(always)]
-    pub const fn get_simd_mut(&mut self, index: usize) -> &mut FpSimd<T> {
-        let slice = self.as_simd_slice_mut();
+    pub const fn get_simdd_mut(&mut self, index: usize) -> &mut FpSimd<T, SIMDD> {
+        let slice = self.as_simdd_slice_mut();
         &mut slice[index]
     }
 }
