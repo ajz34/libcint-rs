@@ -56,6 +56,8 @@ pub fn get_gto_eval_name_f(eval_name: &str) -> Option<(Box<dyn GtoEvalAPI>, Opti
             "deriv0" => Some((Box::new(GtoEvalDeriv0), cint_type)),
             "deriv1" => Some((Box::new(GtoEvalDeriv1), cint_type)),
             "deriv2" => Some((Box::new(GtoEvalDeriv2), cint_type)),
+            "deriv3" => Some((Box::new(GtoEvalDeriv3), cint_type)),
+            "deriv4" => Some((Box::new(GtoEvalDeriv4), cint_type)),
             _ => None,
         },
         _ => None,
