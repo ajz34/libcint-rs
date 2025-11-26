@@ -30,19 +30,19 @@ pub fn gto_shell_eval_grid_cart_deriv2(
     // zero out the output buffer
     for icomp in 0..COMP_NUM {
         for mu in 0..nao_to_set {
-            for g in 0..BLKSIMD {
-                gto[icomp][mu].get_simd_mut(g).fill(0.0);
+            for g in 0..BLKSIMDD {
+                gto[icomp][mu].get_simdd_mut(g).fill(0.0);
             }
         }
     }
 
-    for g in 0..BLKSIMD {
-        let x = coord[0].get_simd(g);
-        let y = coord[1].get_simd(g);
-        let z = coord[2].get_simd(g);
+    for g in 0..BLKSIMDD {
+        let x = coord[0].get_simdd(g);
+        let y = coord[1].get_simdd(g);
+        let z = coord[2].get_simdd(g);
 
         for p in 0..nprim {
-            let e = eprim[p].get_simd(g);
+            let e = eprim[p].get_simdd(g);
             if e.is_gto_zero() {
                 continue;
             }
@@ -65,7 +65,7 @@ pub fn gto_shell_eval_grid_cart_deriv2(
                 for k in 0..nctr {
                     let c = f64simd::splat(coeff[k * nprim + p]);
                     for icomp in 0..COMP_NUM {
-                        gto[icomp][k * ncart + icart].get_simd_mut(g).fma_from(c, buf[icomp]);
+                        gto[icomp][k * ncart + icart].get_simdd_mut(g).fma_from(c, buf[icomp]);
                     }
                 }
             }

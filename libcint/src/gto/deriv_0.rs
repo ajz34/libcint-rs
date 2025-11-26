@@ -162,76 +162,76 @@ pub fn gto_shell_eval_grid_cart(
         },
         1 => {
             for k in 0..nctr {
-                for g in 0..BLKSIMD {
-                    let e = exps[k].get_simd(g);
-                    let x = coord[X].get_simd(g);
-                    let y = coord[Y].get_simd(g);
-                    let z = coord[Z].get_simd(g);
+                for g in 0..BLKSIMDD {
+                    let e = exps[k].get_simdd(g);
+                    let x = coord[X].get_simdd(g);
+                    let y = coord[Y].get_simdd(g);
+                    let z = coord[Z].get_simdd(g);
 
-                    *gto[3 * k + X].get_simd_mut(g) = x * e;
-                    *gto[3 * k + Y].get_simd_mut(g) = y * e;
-                    *gto[3 * k + Z].get_simd_mut(g) = z * e;
+                    *gto[3 * k + X].get_simdd_mut(g) = x * e;
+                    *gto[3 * k + Y].get_simdd_mut(g) = y * e;
+                    *gto[3 * k + Z].get_simdd_mut(g) = z * e;
                 }
             }
         },
         2 => {
             for k in 0..nctr {
-                for g in 0..BLKSIMD {
-                    let e = exps[k].get_simd(g);
-                    let x = coord[X].get_simd(g);
-                    let y = coord[Y].get_simd(g);
-                    let z = coord[Z].get_simd(g);
+                for g in 0..BLKSIMDD {
+                    let e = exps[k].get_simdd(g);
+                    let x = coord[X].get_simdd(g);
+                    let y = coord[Y].get_simdd(g);
+                    let z = coord[Z].get_simdd(g);
 
-                    *gto[6 * k + XX].get_simd_mut(g) = x * x * e;
-                    *gto[6 * k + XY].get_simd_mut(g) = x * y * e;
-                    *gto[6 * k + XZ].get_simd_mut(g) = x * z * e;
-                    *gto[6 * k + YY].get_simd_mut(g) = y * y * e;
-                    *gto[6 * k + YZ].get_simd_mut(g) = y * z * e;
-                    *gto[6 * k + ZZ].get_simd_mut(g) = z * z * e;
+                    *gto[6 * k + XX].get_simdd_mut(g) = x * x * e;
+                    *gto[6 * k + XY].get_simdd_mut(g) = x * y * e;
+                    *gto[6 * k + XZ].get_simdd_mut(g) = x * z * e;
+                    *gto[6 * k + YY].get_simdd_mut(g) = y * y * e;
+                    *gto[6 * k + YZ].get_simdd_mut(g) = y * z * e;
+                    *gto[6 * k + ZZ].get_simdd_mut(g) = z * z * e;
                 }
             }
         },
         3 => {
             for k in 0..nctr {
-                for g in 0..BLKSIMD {
-                    let e = exps[k].get_simd(g);
-                    let x = coord[X].get_simd(g);
-                    let y = coord[Y].get_simd(g);
-                    let z = coord[Z].get_simd(g);
+                for g in 0..BLKSIMDD {
+                    let e = exps[k].get_simdd(g);
+                    let x = coord[X].get_simdd(g);
+                    let y = coord[Y].get_simdd(g);
+                    let z = coord[Z].get_simdd(g);
 
-                    *gto[10 * k + XXX].get_simd_mut(g) = x * x * x * e;
-                    *gto[10 * k + XXY].get_simd_mut(g) = x * x * y * e;
-                    *gto[10 * k + XXZ].get_simd_mut(g) = x * x * z * e;
-                    *gto[10 * k + XYY].get_simd_mut(g) = x * y * y * e;
-                    *gto[10 * k + XYZ].get_simd_mut(g) = x * y * z * e;
-                    *gto[10 * k + XZZ].get_simd_mut(g) = x * z * z * e;
-                    *gto[10 * k + YYY].get_simd_mut(g) = y * y * y * e;
-                    *gto[10 * k + YYZ].get_simd_mut(g) = y * y * z * e;
-                    *gto[10 * k + YZZ].get_simd_mut(g) = y * z * z * e;
-                    *gto[10 * k + ZZZ].get_simd_mut(g) = z * z * z * e;
+                    *gto[10 * k + XXX].get_simdd_mut(g) = x * x * x * e;
+                    *gto[10 * k + XXY].get_simdd_mut(g) = x * x * y * e;
+                    *gto[10 * k + XXZ].get_simdd_mut(g) = x * x * z * e;
+                    *gto[10 * k + XYY].get_simdd_mut(g) = x * y * y * e;
+                    *gto[10 * k + XYZ].get_simdd_mut(g) = x * y * z * e;
+                    *gto[10 * k + XZZ].get_simdd_mut(g) = x * z * z * e;
+                    *gto[10 * k + YYY].get_simdd_mut(g) = y * y * y * e;
+                    *gto[10 * k + YYZ].get_simdd_mut(g) = y * y * z * e;
+                    *gto[10 * k + YZZ].get_simdd_mut(g) = y * z * z * e;
+                    *gto[10 * k + ZZZ].get_simdd_mut(g) = z * z * z * e;
                 }
             }
         },
         _ => {
             let mut pows = unsafe { [[f64blk::uninit(); 3]; ANG_MAX + 1] };
             let ncart = (l + 1) * (l + 2) / 2;
-            for g in 0..BLKSIMD {
-                pows[0][X].get_simd_mut(g).fill(1.0);
-                pows[0][Y].get_simd_mut(g).fill(1.0);
-                pows[0][Z].get_simd_mut(g).fill(1.0);
+            for g in 0..BLKSIMDD {
+                pows[0][X].get_simdd_mut(g).fill(1.0);
+                pows[0][Y].get_simdd_mut(g).fill(1.0);
+                pows[0][Z].get_simdd_mut(g).fill(1.0);
             }
             for lx in 1..=l {
-                for g in 0..BLKSIMD {
-                    *pows[lx][X].get_simd_mut(g) = pows[lx - 1][X].get_simd(g) * coord[X].get_simd(g);
-                    *pows[lx][Y].get_simd_mut(g) = pows[lx - 1][Y].get_simd(g) * coord[Y].get_simd(g);
-                    *pows[lx][Z].get_simd_mut(g) = pows[lx - 1][Z].get_simd(g) * coord[Z].get_simd(g);
+                for g in 0..BLKSIMDD {
+                    *pows[lx][X].get_simdd_mut(g) = pows[lx - 1][X].get_simdd(g) * coord[X].get_simdd(g);
+                    *pows[lx][Y].get_simdd_mut(g) = pows[lx - 1][Y].get_simdd(g) * coord[Y].get_simdd(g);
+                    *pows[lx][Z].get_simdd_mut(g) = pows[lx - 1][Z].get_simdd(g) * coord[Z].get_simdd(g);
                 }
             }
             for k in 0..nctr {
                 for (icart, (lx, ly, lz)) in gto_l_iter(l).enumerate() {
-                    for g in 0..BLKSIMD {
-                        *gto[ncart * k + icart].get_simd_mut(g) =
-                            exps[k].get_simd(g) * pows[lx][X].get_simd(g) * pows[ly][Y].get_simd(g) * pows[lz][Z].get_simd(g);
+                    for g in 0..BLKSIMDD {
+                        *gto[ncart * k + icart].get_simdd_mut(g) =
+                            exps[k].get_simdd(g) * pows[lx][X].get_simdd(g) * pows[ly][Y].get_simdd(g) * pows[lz][Z].get_simdd(g);
                     }
                 }
             }
