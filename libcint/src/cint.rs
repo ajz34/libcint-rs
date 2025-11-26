@@ -17,6 +17,16 @@ use crate::ffi::cint_wrapper::get_cint_integrator;
 /// PySCF's `mol.intor` method. We refer to those functions for more
 /// documentations.
 ///
+/// Please also note column-major and row-major conventions. In most cases,
+/// [`CInt`] will be column-major. However, for electronic integrals, we also
+/// provide row-major functions
+/// [`integrate_row_major`](Self::integrate_row_major) and
+/// [`integrate_row_major_spinor`](Self::integrate_row_major_spinor). User
+/// should be very clear about the memory layout difference.
+///
+/// Also, function [`eval_gto`](Self::eval_gto) will evaluate GTO values on
+/// grids, which can be utilized in DFT computations.
+///
 /// Documentation and code conventions:
 ///
 /// | code name | description |

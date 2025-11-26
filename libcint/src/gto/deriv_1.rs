@@ -344,7 +344,7 @@ fn playground_cart() {
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
 
     gto_eval_loop::<true>(
-        &GTOEvalDeriv1 {},
+        &GTOEvalDeriv1,
         &mut ao,
         &coord,
         1.0,
@@ -355,7 +355,8 @@ fn playground_cart() {
         &cint_data.atm,
         &cint_data.bas,
         &cint_data.env,
-    );
+    )
+    .unwrap();
 
     println!("fp(ao): {:}", cint_fp(&ao));
 }
@@ -369,7 +370,7 @@ fn test_c10h22_sph() {
     let mut ao = vec![0.0f64; 4 * nao * ngrid];
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
     gto_eval_loop::<false>(
-        &GTOEvalDeriv1 {},
+        &GTOEvalDeriv1,
         &mut ao,
         &coord,
         1.0,
@@ -380,7 +381,8 @@ fn test_c10h22_sph() {
         &cint_data.atm,
         &cint_data.bas,
         &cint_data.env,
-    );
+    )
+    .unwrap();
     let fp_ao = cint_fp(&ao);
     println!("fp_ao = {:}", fp_ao);
     assert!((fp_ao - 1158.9931602933664).abs() < 1e-10);
@@ -390,7 +392,7 @@ fn test_c10h22_sph() {
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
     let time = std::time::Instant::now();
     gto_eval_loop::<false>(
-        &GTOEvalDeriv1 {},
+        &GTOEvalDeriv1,
         &mut ao,
         &coord,
         1.0,
@@ -401,7 +403,8 @@ fn test_c10h22_sph() {
         &cint_data.atm,
         &cint_data.bas,
         &cint_data.env,
-    );
+    )
+    .unwrap();
     let elapsed = time.elapsed();
     println!("time: {:.3} s", elapsed.as_secs_f64());
     let fp_ao = cint_fp(&ao);
@@ -418,7 +421,7 @@ fn test_c10h22_sph_non0tab() {
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
     let (non0tab, _) = gto_screen_index(&coord, [0, cint_data.nbas()], None, Some(0.01), &cint_data.atm, &cint_data.bas, &cint_data.env);
     gto_eval_loop::<false>(
-        &GTOEvalDeriv1 {},
+        &GTOEvalDeriv1,
         &mut ao,
         &coord,
         1.0,
@@ -429,7 +432,8 @@ fn test_c10h22_sph_non0tab() {
         &cint_data.atm,
         &cint_data.bas,
         &cint_data.env,
-    );
+    )
+    .unwrap();
     let fp_ao = cint_fp(&ao);
     println!("fp_ao = {:}", fp_ao);
     assert!((fp_ao - 1150.7578110811928).abs() < 1e-10);
@@ -445,7 +449,7 @@ fn test_c10h22_sph_non0tab_timing() {
     let mut ao = vec![0.0; 4 * nao * ngrid];
     let (non0tab, _) = gto_screen_index(&coord, [0, cint_data.nbas()], None, Some(0.01), &cint_data.atm, &cint_data.bas, &cint_data.env);
     gto_eval_loop::<false>(
-        &GTOEvalDeriv1 {},
+        &GTOEvalDeriv1,
         &mut ao,
         &coord,
         1.0,
@@ -456,7 +460,8 @@ fn test_c10h22_sph_non0tab_timing() {
         &cint_data.atm,
         &cint_data.bas,
         &cint_data.env,
-    );
+    )
+    .unwrap();
     let elapsed = time.elapsed();
     println!("time: {:.3} s", elapsed.as_secs_f64());
 }

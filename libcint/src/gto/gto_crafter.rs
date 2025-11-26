@@ -14,7 +14,13 @@ pub struct GtoArgs<'l, F: num::Num> {
     #[builder(default = None)]
     pub non0tab: Option<&'l [u8]>,
 
-    #[builder(default = false)]
+    #[builder(default = None)]
+    pub cutoff: Option<f64>,
+
+    #[builder(default = None)]
+    pub nbins: Option<u8>,
+
+    #[builder(default = true)]
     pub fill_zero: bool,
 
     #[builder(default = F::one())]
@@ -46,9 +52,9 @@ impl CInt {
         self.get_gto_eval_name_f(eval_name).cint_unwrap()
     }
 
-    pub fn eval_gto_with_args_inner(&self, args: GtoArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
+    pub fn eval_gto_with_args_f(&self, args: GtoArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
         let mut data = self.clone();
-        let GtoArgs { eval_name, coord, shls_slice, non0tab, mut fill_zero, fac, out } = args;
+        let GtoArgs { eval_name, coord, shls_slice, non0tab, cutoff, nbins, mut fill_zero, fac, out } = args;
 
         // check name, sph/cart, set evaluator
         let mut eval_name = eval_name.to_string();
@@ -65,16 +71,20 @@ impl CInt {
 
         // handle output and check its sanity
 
-        let ngrids = coord.len();
-        let ncomp = evaluator.ncomp();
         let shls_slice = match shls_slice {
             Some(slice) => slice,
             None => [0, data.nbas()],
         };
         let [sh0, sh1] = shls_slice;
-        let ao_loc = &data.ao_loc()[sh0..=sh1];
+        if sh0 > sh1 || sh1 > data.nbas() {
+            cint_raise!(InvalidValue, "shls_slice [{sh0}, {sh1}] is invalid for nbas = {}", data.nbas())?
+        }
+
         let nbas = sh1 - sh0;
-        let nao = ao_loc[nbas] - ao_loc[0];
+        let ao_loc = &data.ao_loc()[sh0..=sh1];
+        let ngrids = coord.len();
+        let ncomp = evaluator.ncomp();
+        let nao = ao_loc[sh1] - ao_loc[sh0];
         let out_size = ngrids * nao * ncomp;
         let out_shape = vec![ngrids, nao, ncomp];
 
@@ -82,7 +92,7 @@ impl CInt {
             Some(_) => None,
             None => {
                 // rust is fast on zero-value allocation, so we always allocate zeroed vec here
-                // also see `alloc::alloc::__rust_alloc_zeroed`
+                // also see `alloc::alloc::__rust_alloc_zeroed` or C `calloc`
                 fill_zero = false;
                 Some(vec![0.0; out_size])
             },
@@ -104,6 +114,12 @@ impl CInt {
                 cint_raise!(InvalidValue, "non0tab length {tab_len} is smaller than required size {expected_len}")?
             }
         }
+        let non0tab_with_cutoff = if non0tab.is_none() && cutoff.is_some() {
+            Some(gto_screen_index(coord, shls_slice, nbins, cutoff, &data.atm, &data.bas, &data.env).0)
+        } else {
+            None
+        };
+        let non0tab = non0tab.or(non0tab_with_cutoff.as_deref());
 
         match data.cint_type {
             Spheric => gto_eval_loop::<false>(
@@ -118,7 +134,7 @@ impl CInt {
                 &data.atm,
                 &data.bas,
                 &data.env,
-            ),
+            )?,
             Cartesian => gto_eval_loop::<true>(
                 evaluator.as_ref(),
                 out,
@@ -131,11 +147,23 @@ impl CInt {
                 &data.atm,
                 &data.bas,
                 &data.env,
-            ),
+            )?,
             _ => unreachable!("should have been handled above"),
         }
 
         Ok(CIntOutput { out: out_vec, shape: out_shape })
+    }
+
+    pub fn eval_gto_with_args(&self, args: GtoArgs<f64>) -> CIntOutput<f64> {
+        self.eval_gto_with_args_f(args).cint_unwrap()
+    }
+
+    pub fn eval_gto_f(&self, eval_name: &str, coord: &[[f64; 3]]) -> Result<CIntOutput<f64>, CIntError> {
+        self.eval_gto_with_args_f(GtoArgsBuilder::default().eval_name(eval_name).coord(coord).build()?)
+    }
+
+    pub fn eval_gto(&self, eval_name: &str, coord: &[[f64; 3]]) -> CIntOutput<f64> {
+        self.eval_gto_f(eval_name, coord).cint_unwrap()
     }
 }
 
@@ -144,7 +172,8 @@ fn playground() {
     let mol = init_h2o_def2_tzvp();
     let ngrid = 2048;
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
-    let output = mol.eval_gto_with_args_inner(mol.gto_args_builder().eval_name("deriv0_sph").coord(&coord).build().unwrap()).unwrap();
+    let args = mol.gto_args_builder().eval_name("deriv0_sph").coord(&coord).build().unwrap();
+    let output = mol.eval_gto_with_args(args);
     println!("output: {:?}", output.shape);
     println!("fp = {}", cint_fp(output.out.as_ref().unwrap()));
 }

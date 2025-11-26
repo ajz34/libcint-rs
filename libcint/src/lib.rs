@@ -11,6 +11,10 @@
 //! - [`CInt::integrate`]: integrate function (partly PySCF's `mol.intor`
 //!   counterpart, column-major which is the same to convention of libcint C
 //!   library, and the same memory layout to PySCF's 2/3-center integrals).
+//! - [`CInt::eval_gto`]: evaluate GTO values on grids, useful for DFT
+//!   computation (PySCF's `mol.eval_ao` or `mol.eval_gto` counterpart, with
+//!   same memory layout to PySCF, but note the returned shape is in
+//!   column-major).
 //! - [`CInt::integrate_row_major`]: integrate function with row-major output
 //!   (the same shape convention to PySCF, and same memory layout to PySCF
 //!   4-center integrals).
