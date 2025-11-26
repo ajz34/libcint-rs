@@ -1,7 +1,7 @@
 use crate::gto::prelude_dev::*;
 
 #[allow(non_upper_case_globals)]
-pub fn gto_shell_eval_grid_cart_deriv2(
+pub fn gto_shell_eval_grid_cart_deriv3(
     // arguments
     gto: &mut [f64blk],
     eprim: &[f64blk],
@@ -14,16 +14,37 @@ pub fn gto_shell_eval_grid_cart_deriv2(
 ) {
     const ANG_MAX: usize = crate::ffi::cint_ffi::ANG_MAX as usize;
 
-    const COMP_NUM: usize = 10;
-    const COMP: [[usize; 3]; COMP_NUM] =
-        [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [2, 0, 0], [1, 1, 0], [1, 0, 1], [0, 2, 0], [0, 1, 1], [0, 0, 2]];
+    const COMP_NUM: usize = 20;
+    const COMP: [[usize; 3]; COMP_NUM] = [
+        [0, 0, 0],
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+        [2, 0, 0],
+        [1, 1, 0],
+        [1, 0, 1],
+        [0, 2, 0],
+        [0, 1, 1],
+        [0, 0, 2],
+        [3, 0, 0],
+        [2, 1, 0],
+        [2, 0, 1],
+        [1, 2, 0],
+        [1, 1, 1],
+        [1, 0, 2],
+        [0, 3, 0],
+        [0, 2, 1],
+        [0, 1, 2],
+        [0, 0, 3],
+    ];
 
     let [nctr, nprim] = shl_shape;
     let ncart = (l + 1) * (l + 2) / 2;
     let nao_to_set = nctr * ncart;
-    let mut f0 = [[f64simd::zero(); 3]; ANG_MAX + 2];
-    let mut f1 = [[f64simd::zero(); 3]; ANG_MAX + 2];
-    let mut f2 = [[f64simd::zero(); 3]; ANG_MAX + 2];
+    let mut f0 = [[f64simd::zero(); 3]; ANG_MAX + 3];
+    let mut f1 = [[f64simd::zero(); 3]; ANG_MAX + 3];
+    let mut f2 = [[f64simd::zero(); 3]; ANG_MAX + 3];
+    let mut f3 = [[f64simd::zero(); 3]; ANG_MAX + 3];
     let mut buf = [f64simd::zero(); COMP_NUM];
     let mut gto = gto.chunks_exact_mut(nao_to_set).collect_vec();
 
@@ -49,15 +70,16 @@ pub fn gto_shell_eval_grid_cart_deriv2(
             f0[0][X] = f64simd::splat(1.0);
             f0[0][Y] = f64simd::splat(1.0);
             f0[0][Z] = f64simd::splat(1.0);
-            for ll in 1..=l + 2 {
+            for ll in 1..=l + 3 {
                 f0[ll][X] = f0[ll - 1][X] * x;
                 f0[ll][Y] = f0[ll - 1][Y] * y;
                 f0[ll][Z] = f0[ll - 1][Z] * z;
             }
-            gto_nabla1_simd(&mut f1, &f0, l + 1, alpha[p]);
-            gto_nabla1_simd(&mut f2, &f1, l, alpha[p]);
+            gto_nabla1_simd(&mut f1, &f0, l + 2, alpha[p]);
+            gto_nabla1_simd(&mut f2, &f1, l + 1, alpha[p]);
+            gto_nabla1_simd(&mut f3, &f2, l, alpha[p]);
 
-            let f = [&f0, &f1, &f2];
+            let f = [&f0, &f1, &f2, &f3];
             for (icart, (lx, ly, lz)) in gto_l_iter(l).enumerate() {
                 for (icomp, &[ix, iy, iz]) in COMP.iter().enumerate() {
                     buf[icomp] = e * f[ix][lx][X] * f[iy][ly][Y] * f[iz][lz][Z];
@@ -73,13 +95,13 @@ pub fn gto_shell_eval_grid_cart_deriv2(
     }
 }
 
-pub struct GtoEvalDeriv2;
-impl GtoEvalAPI for GtoEvalDeriv2 {
+pub struct GtoEvalDeriv3;
+impl GtoEvalAPI for GtoEvalDeriv3 {
     fn ne1(&self) -> usize {
         1
     }
     fn ntensor(&self) -> usize {
-        10
+        20
     }
     fn gto_exp(
         &self,
@@ -108,6 +130,6 @@ impl GtoEvalAPI for GtoEvalDeriv2 {
         // dimensions
         shl_shape: [usize; 2],
     ) {
-        gto_shell_eval_grid_cart_deriv2(gto, ebuf, coord, alpha, coeff, l, shl_shape);
+        gto_shell_eval_grid_cart_deriv3(gto, ebuf, coord, alpha, coeff, l, shl_shape);
     }
 }
