@@ -1,6 +1,5 @@
 use crate::gto::prelude_dev::*;
 
-#[allow(non_upper_case_globals)]
 pub fn gto_shell_eval_grid_cart_deriv2(
     // arguments
     gto: &mut [f64blk],
@@ -54,8 +53,8 @@ pub fn gto_shell_eval_grid_cart_deriv2(
                 f0[ll][Y] = f0[ll - 1][Y] * y;
                 f0[ll][Z] = f0[ll - 1][Z] * z;
             }
-            gto_nabla1_simd(&mut f1, &f0, l + 1, alpha[p]);
-            gto_nabla1_simd(&mut f2, &f1, l, alpha[p]);
+            gto_nabla1_simdd(&mut f1, &f0, l + 1, alpha[p]);
+            gto_nabla1_simdd(&mut f2, &f1, l, alpha[p]);
 
             let f = [&f0, &f1, &f2];
             for (icart, (lx, ly, lz)) in gto_l_iter(l).enumerate() {
@@ -105,6 +104,7 @@ impl GtoEvalAPI for GtoEvalDeriv2 {
         alpha: &[f64],
         coeff: &[f64],
         l: usize,
+        _center: [f64; 3],
         // dimensions
         shl_shape: [usize; 2],
     ) {

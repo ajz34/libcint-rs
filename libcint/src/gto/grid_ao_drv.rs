@@ -27,6 +27,7 @@ pub trait GtoEvalAPI: Send + Sync {
         alpha: &[f64],
         coeff: &[f64],
         l: usize,
+        center: [f64; 3],
         // dimensions
         shl_shape: [usize; 2],
     );
@@ -315,6 +316,7 @@ pub fn gto_eval_iter(
     const ANG_OF: usize = crate::ffi::cint_ffi::ANG_OF as usize;
     const PTR_EXP: usize = crate::ffi::cint_ffi::PTR_EXP as usize;
     const PTR_COEFF: usize = crate::ffi::cint_ffi::PTR_COEFF as usize;
+    const PTR_COORD: usize = crate::ffi::cint_ffi::PTR_COORD as usize;
 
     let atm = &mol.atm;
     let bas = &mol.bas;
@@ -353,6 +355,7 @@ pub fn gto_eval_iter(
         let alpha = &env[p_exp..p_exp + nprim];
         let coeff = &env[p_coeff..p_coeff + nprim * nctr];
         let coord = &grid2atm[atm_id - atm0];
+        let center = env[atm[atm_id][PTR_COORD] as usize..][..3].try_into().unwrap();
         let iao = iao + ao_loc[bas_id] - ao_loc[sh0];
         let fac1 = fac * cint_common_fac_sp(l as c_int);
         let nang = match cint_type {
@@ -371,11 +374,11 @@ pub fn gto_eval_iter(
 
         if cint_type == Cartesian || l <= 1 {
             evaluator.gto_exp(ebuf, coord, alpha, coeff, fac1, [nctr, nprim]);
-            evaluator.gto_shell_eval(gto_cart, ebuf, coord, alpha, coeff, l, [nctr, nprim]);
+            evaluator.gto_shell_eval(gto_cart, ebuf, coord, alpha, coeff, l, center, [nctr, nprim]);
             gto_copy_grids(gto_cart, ao, nao_to_set, ncomp, ao_shape, [iao, igrid]);
         } else {
             evaluator.gto_exp(ebuf, coord, alpha, coeff, fac1, [nctr, nprim]);
-            evaluator.gto_shell_eval(gto_cart, ebuf, coord, alpha, coeff, l, [nctr, nprim]);
+            evaluator.gto_shell_eval(gto_cart, ebuf, coord, alpha, coeff, l, center, [nctr, nprim]);
             let ncart = (l + 1) * (l + 2) / 2;
             let nsph = 2 * l + 1;
             for a in 0..ncomp {

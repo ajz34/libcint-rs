@@ -385,7 +385,7 @@ pub fn gto_nabla1(
     }
 }
 
-pub fn gto_nabla1_simd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, alpha: f64) {
+pub fn gto_nabla1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, alpha: f64) {
     let a2 = FpSimd::<f64>::splat(-2.0 * alpha);
     // first derivative
     f1[0][X] = a2 * f0[1][X];
@@ -416,6 +416,14 @@ pub fn gto_x1(
             fy1[i][n] = ri[1] * fy0[i][n] + fy0[i + 1][n];
             fz1[i][n] = ri[2] * fz0[i][n] + fz0[i + 1][n];
         }
+    }
+}
+
+pub fn gto_x1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, ri: [f64; 3]) {
+    for i in 0..=l {
+        f1[i][X] = f0[i][X].add_mul(f64simd::splat(ri[X]), f0[i + 1][X]);
+        f1[i][Y] = f0[i][Y].add_mul(f64simd::splat(ri[Y]), f0[i + 1][Y]);
+        f1[i][Z] = f0[i][Z].add_mul(f64simd::splat(ri[Z]), f0[i + 1][Z]);
     }
 }
 
