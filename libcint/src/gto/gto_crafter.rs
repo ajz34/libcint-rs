@@ -8,16 +8,16 @@ pub struct GtoArgs<'l, F: num::Num> {
 
     pub coord: &'l [[f64; 3]],
 
-    #[builder(default = None)]
+    #[builder(setter(into), default = None)]
     pub shls_slice: Option<[usize; 2]>,
 
-    #[builder(default = None)]
+    #[builder(setter(into), default = None)]
     pub non0tab: Option<&'l [u8]>,
 
-    #[builder(default = None)]
+    #[builder(setter(into), default = None)]
     pub cutoff: Option<f64>,
 
-    #[builder(default = None)]
+    #[builder(setter(into), default = None)]
     pub nbins: Option<u8>,
 
     #[builder(default = true)]
@@ -26,15 +26,37 @@ pub struct GtoArgs<'l, F: num::Num> {
     #[builder(default = F::one())]
     pub fac: F,
 
-    #[builder(default = None)]
+    #[builder(setter(into), default = None)]
     pub out: Option<&'l mut [F]>,
 }
 
-pub fn get_gto_eval_name_f(eval_name: &str) -> Option<Box<dyn GtoEvalAPI>> {
-    let name = eval_name.to_lowercase().trim_start_matches("gtoval_").trim_start_matches("gto_").to_string();
-    match name.as_str() {
-        "" | "deriv0" => Some(Box::new(GTOEvalDeriv0)),
-        "deriv1" => Some(Box::new(GTOEvalDeriv1)),
+pub fn get_gto_eval_name_f(eval_name: &str) -> Option<(Box<dyn GtoEvalAPI>, Option<CIntType>)> {
+    let name = eval_name.to_lowercase().replace(['_', '-'], " ");
+    let mut name_list = name.split_whitespace().collect_vec();
+
+    // drop "gto" prefix
+    name_list.retain(|&x| x != "gto" && x != "gtoval");
+
+    // determine cint_type (sph/cart/spinor)
+    let mut cint_type: Option<CIntType> = None;
+    if let Some(pos) = name_list.iter().position(|&x| x == "sph") {
+        name_list.remove(pos);
+        cint_type = Some(Spheric);
+    } else if let Some(pos) = name_list.iter().position(|&x| x == "cart") {
+        name_list.remove(pos);
+        cint_type = Some(Cartesian);
+    } else if let Some(pos) = name_list.iter().position(|&x| x == "spinor") {
+        name_list.remove(pos);
+        cint_type = Some(Spinor);
+    }
+
+    match name_list.len() {
+        0 => Some((Box::new(GTOEvalDeriv0), cint_type)),
+        1 => match name_list[0] {
+            "deriv0" => Some((Box::new(GTOEvalDeriv0), cint_type)),
+            "deriv1" => Some((Box::new(GTOEvalDeriv1), cint_type)),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -44,11 +66,11 @@ impl CInt {
         GtoArgsBuilder::default()
     }
 
-    pub fn get_gto_eval_name_f(&self, eval_name: &str) -> Result<Box<dyn GtoEvalAPI>, CIntError> {
+    pub fn get_gto_eval_name_f(&self, eval_name: &str) -> Result<(Box<dyn GtoEvalAPI>, Option<CIntType>), CIntError> {
         get_gto_eval_name_f(eval_name).ok_or(cint_error!(IntegratorNotFound, "{eval_name}"))
     }
 
-    pub fn get_gto_eval_name(&self, eval_name: &str) -> Box<dyn GtoEvalAPI> {
+    pub fn get_gto_eval_name(&self, eval_name: &str) -> (Box<dyn GtoEvalAPI>, Option<CIntType>) {
         self.get_gto_eval_name_f(eval_name).cint_unwrap()
     }
 
@@ -57,17 +79,10 @@ impl CInt {
         let GtoArgs { eval_name, coord, shls_slice, non0tab, cutoff, nbins, mut fill_zero, fac, out } = args;
 
         // check name, sph/cart, set evaluator
-        let mut eval_name = eval_name.to_string();
-        if eval_name.contains("_sph") || eval_name.contains("sph") {
-            eval_name = eval_name.replace("_sph", "").replace("sph", "");
-            data.cint_type = Spheric;
-        } else if eval_name.contains("_cart") || eval_name.contains("cart") {
-            eval_name = eval_name.replace("_cart", "").replace("cart", "");
-            data.cint_type = Cartesian;
-        } else if eval_name.contains("_spinor") || eval_name.contains("spinor") {
-            cint_raise!(InvalidValue, "eval_gto does not support spinor")?;
-        };
-        let evaluator = data.get_gto_eval_name_f(&eval_name)?;
+        let (evaluator, cint_type) = data.get_gto_eval_name_f(eval_name)?;
+        if let Some(cint_type) = cint_type {
+            data.set_cint_type(cint_type);
+        }
 
         // handle output and check its sanity
 
@@ -81,7 +96,7 @@ impl CInt {
         }
 
         let nbas = sh1 - sh0;
-        let ao_loc = &data.ao_loc()[sh0..=sh1];
+        let ao_loc = &data.ao_loc();
         let ngrids = coord.len();
         let ncomp = evaluator.ncomp();
         let nao = ao_loc[sh1] - ao_loc[sh0];
@@ -102,7 +117,7 @@ impl CInt {
             None => out_vec.as_mut().unwrap(),
         };
         if out.len() < out_size {
-            cint_raise!(InvalidValue, "Output vector size {} is smaller than required size {out_size}", out.len())?;
+            cint_raise!(InvalidValue, "Output vector size {} is smaller than required size {out_size} of shape {out_shape:?}", out.len())?;
         }
 
         // handle non0tab and check its sanity

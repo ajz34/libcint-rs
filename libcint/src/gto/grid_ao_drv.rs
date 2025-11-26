@@ -514,7 +514,7 @@ pub fn gto_eval_loop(
         let ao = unsafe { cast_mut_slice(ao) };
         let coord = &coord[igrid..igrid + bgrid];
         let cache = unsafe { cast_mut_slice(&thread_cache[thread_id]) };
-        let non0tab_slice = non0tab.map(|non0tab| &non0tab[ish0 * nblk..ish1 * nblk]);
+        let non0tab_slice = non0tab.map(|non0tab| &non0tab[(ish0 - sh0) * nblk..(ish1 - sh0) * nblk]);
         gto_eval_iter(mol, evaluator, ao, coord, fac, [ish0, ish1], &ao_loc, non0tab_slice, fill_zero, cache, nao, ngrid, iao, igrid);
     });
 
