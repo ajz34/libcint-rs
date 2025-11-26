@@ -436,17 +436,19 @@ pub fn gto_eval_loop<const CART: bool>(
     atm: &[[c_int; ATM_SLOTS as usize]],
     bas: &[[c_int; BAS_SLOTS as usize]],
     env: &[f64],
-) {
+) -> Result<(), CIntError> {
     let ncomp = evaluator.ncomp();
     let [sh0, sh1] = shls_slice;
     let nao = ao_loc[sh1] - ao_loc[sh0];
     let ngrid = coord.len();
-    assert!(ao.len() >= ncomp * nao * ngrid);
+    if ao.len() < ncomp * nao * ngrid {
+        cint_raise!(RuntimeError, "ao length is smaller than required size")?;
+    }
 
     let nblk = ngrid.div_ceil(BLKSIZE);
     let nbas = sh1 - sh0;
-    if let Some(non0tab) = non0tab {
-        assert!(non0tab.len() == nbas * nblk);
+    if non0tab.is_some_and(|non0tab| non0tab.len() != nbas * nblk) {
+        cint_raise!(InvalidValue, "non0tab length not equal required size")?;
     }
 
     // split shells by atoms
@@ -504,6 +506,8 @@ pub fn gto_eval_loop<const CART: bool>(
             env,
         );
     });
+
+    Ok(())
 }
 
 #[test]
