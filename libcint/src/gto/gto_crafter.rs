@@ -8,16 +8,16 @@ pub struct GtoArgs<'l, F: num::Num> {
 
     pub coord: &'l [[f64; 3]],
 
-    #[builder(setter(into), default = None)]
+    #[builder(default, setter(strip_option))]
     pub shls_slice: Option<[usize; 2]>,
 
-    #[builder(setter(into), default = None)]
+    #[builder(default, setter(strip_option))]
     pub non0tab: Option<&'l [u8]>,
 
-    #[builder(setter(into), default = None)]
+    #[builder(default, setter(strip_option))]
     pub cutoff: Option<f64>,
 
-    #[builder(setter(into), default = None)]
+    #[builder(default, setter(strip_option))]
     pub nbins: Option<u8>,
 
     #[builder(default = true)]
@@ -26,7 +26,7 @@ pub struct GtoArgs<'l, F: num::Num> {
     #[builder(default = F::one())]
     pub fac: F,
 
-    #[builder(setter(into), default = None)]
+    #[builder(default, setter(strip_option))]
     pub out: Option<&'l mut [F]>,
 }
 
