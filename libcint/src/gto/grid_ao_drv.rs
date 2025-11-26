@@ -22,7 +22,7 @@ pub trait GtoEvalAPI: Send + Sync {
         &self,
         // arguments
         gto: &mut [f64blk],
-        exps: &[f64blk],
+        ebuf: &[f64blk],
         coord: &[f64blk; 3],
         alpha: &[f64],
         coeff: &[f64],
@@ -79,7 +79,7 @@ pub fn gto_copy_grids(
     let [nao, ngrid] = ao_shape;
     let [iao, igrid] = ao_offset;
 
-    if igrid + BLKSIZE < ngrid {
+    if igrid + BLKSIZE <= ngrid {
         for a in 0..ncomp {
             for mu in 0..nao_to_set {
                 let ptr = a * nao * ngrid + (iao + mu) * ngrid + igrid;
@@ -355,12 +355,12 @@ pub fn gto_eval_iter(
         let coord = &grid2atm[atm_id - atm0];
         let iao = iao + ao_loc[bas_id] - ao_loc[sh0];
         let fac1 = fac * cint_common_fac_sp(l as c_int);
-        let ndeg = match cint_type {
+        let nang = match cint_type {
             Spheric => CInt::len_sph(l as c_int),
             Cartesian => CInt::len_cart(l as c_int),
             Spinor => unreachable!("spinor not supported"),
         };
-        let nao_to_set = nctr * ndeg;
+        let nao_to_set = nctr * nang;
 
         if non0tab.is_some_and(|non0tab| non0tab[(bas_id - sh0) * nblk + igrid / BLKSIZE] == 0) {
             if fill_zero {

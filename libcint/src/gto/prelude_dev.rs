@@ -1,5 +1,6 @@
 pub use crate::gto::deriv_0::*;
 pub use crate::gto::deriv_1::*;
+pub use crate::gto::deriv_2::*;
 pub use crate::gto::deriv_util::*;
 pub use crate::gto::grid_ao_drv::*;
 
@@ -14,6 +15,7 @@ pub const SIMDD: usize = 8;
 pub const BLKSIMD: usize = BLKSIZE / SIMDD;
 pub const NBINS: u8 = 100;
 pub const CUTOFF: f64 = 1e-15;
+pub const GTOZERO: f64 = 1e-30;
 
 pub const X: usize = 0;
 pub const Y: usize = 1;

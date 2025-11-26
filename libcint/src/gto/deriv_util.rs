@@ -10,8 +10,10 @@ use num::Num;
 
 #[repr(align(64))]
 #[derive(Clone, Debug, Copy)]
-#[allow(non_camel_case_types)]
 pub struct FpSimd<T: Copy>(pub [T; SIMDD]);
+
+#[allow(non_camel_case_types)]
+pub type f64simd = FpSimd<f64>;
 
 impl<T: Copy> Index<usize> for FpSimd<T> {
     type Output = T;
@@ -147,6 +149,31 @@ where
             self[6].mul_add(b[6], c[6]),
             self[7].mul_add(b[7], c[7]),
         ])
+    }
+
+    pub fn fma_from(&mut self, b: FpSimd<T>, c: FpSimd<T>) {
+        *self = FpSimd([
+            b[0].mul_add(c[0], self[0]),
+            b[1].mul_add(c[1], self[1]),
+            b[2].mul_add(c[2], self[2]),
+            b[3].mul_add(c[3], self[3]),
+            b[4].mul_add(c[4], self[4]),
+            b[5].mul_add(c[5], self[5]),
+            b[6].mul_add(c[6], self[6]),
+            b[7].mul_add(c[7], self[7]),
+        ])
+    }
+}
+
+impl f64simd {
+    #[inline(always)]
+    pub fn is_gto_zero(&self) -> bool {
+        for i in 0..SIMDD {
+            if self[i].abs() > GTOZERO {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -358,27 +385,18 @@ pub fn gto_nabla1(
     }
 }
 
-pub fn gto_nabla1_simd(
-    fx1: &mut [FpSimd<f64>],
-    fy1: &mut [FpSimd<f64>],
-    fz1: &mut [FpSimd<f64>],
-    fx0: &[FpSimd<f64>],
-    fy0: &[FpSimd<f64>],
-    fz0: &[FpSimd<f64>],
-    l: usize,
-    alpha: f64,
-) {
+pub fn gto_nabla1_simd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, alpha: f64) {
     let a2 = FpSimd::<f64>::splat(-2.0 * alpha);
     // first derivative
-    fx1[0] = a2 * fx0[1];
-    fy1[0] = a2 * fy0[1];
-    fz1[0] = a2 * fz0[1];
+    f1[0][X] = a2 * f0[1][X];
+    f1[0][Y] = a2 * f0[1][Y];
+    f1[0][Z] = a2 * f0[1][Z];
     // recursive derivatives
     for i in 1..=l {
         let i_f64 = FpSimd::<f64>::splat(i as f64);
-        fx1[i] = i_f64 * fx0[i - 1] + a2 * fx0[i + 1];
-        fy1[i] = i_f64 * fy0[i - 1] + a2 * fy0[i + 1];
-        fz1[i] = i_f64 * fz0[i - 1] + a2 * fz0[i + 1];
+        f1[i][X] = i_f64 * f0[i - 1][X] + a2 * f0[i + 1][X];
+        f1[i][Y] = i_f64 * f0[i - 1][Y] + a2 * f0[i + 1][Y];
+        f1[i][Z] = i_f64 * f0[i - 1][Z] + a2 * f0[i + 1][Z];
     }
 }
 
