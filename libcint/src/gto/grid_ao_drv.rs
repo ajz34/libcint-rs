@@ -31,6 +31,29 @@ pub trait GtoEvalAPI: Send + Sync {
     );
 }
 
+pub fn make_ao_loc(bas: &[[c_int; BAS_SLOTS as usize]], cint_type: CIntType) -> Vec<usize> {
+    const NCTR_OF: usize = crate::ffi::cint_ffi::NCTR_OF as usize;
+    const ANG_OF: usize = crate::ffi::cint_ffi::ANG_OF as usize;
+    const KAPPA_OF: usize = crate::ffi::cint_ffi::KAPPA_OF as usize;
+    let nbas = bas.len();
+    let mut ao_loc = Vec::with_capacity(nbas + 1);
+    ao_loc.push(0);
+    for ish in 0..nbas {
+        let nctr = bas[ish][NCTR_OF] as usize;
+        let l = bas[ish][ANG_OF];
+        let k = bas[ish][KAPPA_OF];
+        let nang = match cint_type {
+            Spheric => CInt::len_sph(l),
+            Cartesian => CInt::len_cart(l),
+            Spinor => CInt::len_spinor(l, k),
+        };
+        let nao_inc = nctr * nang;
+        let last = *ao_loc.last().unwrap();
+        ao_loc.push(last + nao_inc);
+    }
+    ao_loc
+}
+
 pub fn gto_nabla1(
     fx1: &mut [f64blk],
     fy1: &mut [f64blk],
@@ -332,7 +355,8 @@ pub fn gto_screen_index(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn gto_eval_iter<const CART: bool>(
+pub fn gto_eval_iter(
+    mol: &CInt,
     evaluator: &dyn GtoEvalAPI,
     // arguments
     ao: &mut [f64], // (ncomp, nao, ngrid)
@@ -350,10 +374,6 @@ pub fn gto_eval_iter<const CART: bool>(
     // offsets
     iao: usize,
     igrid: usize,
-    // cint data
-    atm: &[[c_int; ATM_SLOTS as usize]],
-    bas: &[[c_int; BAS_SLOTS as usize]],
-    env: &[f64],
 ) {
     const ATOM_OF: usize = crate::ffi::cint_ffi::ATOM_OF as usize;
     const NPRIM_OF: usize = crate::ffi::cint_ffi::NPRIM_OF as usize;
@@ -361,6 +381,11 @@ pub fn gto_eval_iter<const CART: bool>(
     const ANG_OF: usize = crate::ffi::cint_ffi::ANG_OF as usize;
     const PTR_EXP: usize = crate::ffi::cint_ffi::PTR_EXP as usize;
     const PTR_COEFF: usize = crate::ffi::cint_ffi::PTR_COEFF as usize;
+
+    let atm = &mol.atm;
+    let bas = &mol.bas;
+    let env = &mol.env;
+    let cint_type = mol.cint_type;
 
     let ncomp = evaluator.ncomp();
     let nctr_cart_max = gto_nctr_cart_max(shls_slice, bas);
@@ -397,13 +422,17 @@ pub fn gto_eval_iter<const CART: bool>(
 
         if non0tab.is_some_and(|non0tab| non0tab[(bas_id - sh0) * nblk + igrid / BLKSIZE] == 0) {
             if fill_zero {
-                let ndeg = if CART { (l + 1) * (l + 2) / 2 } else { 2 * l + 1 };
+                let ndeg = match cint_type {
+                    Spheric => CInt::len_sph(l as c_int),
+                    Cartesian => CInt::len_cart(l as c_int),
+                    Spinor => unreachable!("spinor not supported"),
+                };
                 gto_set_zero(ao, [ncomp, nao, ngrid], [iao, igrid], nctr * ndeg);
             }
             continue;
         }
 
-        if CART || l <= 1 {
+        if cint_type == Cartesian || l <= 1 {
             evaluator.gto_exp(eprim, coord, alpha, coeff, fac1, nprim, nctr);
             evaluator.gto_shell_eval(gto_cart, eprim, coord, l, nctr);
             gto_copy_grids::<true>(gto_cart, ao, l, nctr, ncomp, nao, ngrid, iao, igrid);
@@ -424,21 +453,20 @@ pub fn gto_eval_iter<const CART: bool>(
     }
 }
 
-pub fn gto_eval_loop<const CART: bool>(
+pub fn gto_eval_loop(
+    mol: &CInt,
     evaluator: &dyn GtoEvalAPI,
     ao: &mut [f64], // (ncomp, nao, ngrid)
     coord: &[[f64; 3]],
     fac: f64,
     shls_slice: [usize; 2],
-    ao_loc: &[usize],
     non0tab: Option<&[u8]>,
     fill_zero: bool,
-    atm: &[[c_int; ATM_SLOTS as usize]],
-    bas: &[[c_int; BAS_SLOTS as usize]],
-    env: &[f64],
 ) -> Result<(), CIntError> {
     let ncomp = evaluator.ncomp();
+    let bas = &mol.bas;
     let [sh0, sh1] = shls_slice;
+    let ao_loc = mol.ao_loc();
     let nao = ao_loc[sh1] - ao_loc[sh0];
     let ngrid = coord.len();
     if ao.len() < ncomp * nao * ngrid {
@@ -487,24 +515,7 @@ pub fn gto_eval_loop<const CART: bool>(
         let coord = &coord[igrid..igrid + bgrid];
         let cache = unsafe { cast_mut_slice(&thread_cache[thread_id]) };
         let non0tab_slice = non0tab.map(|non0tab| &non0tab[ish0 * nblk..ish1 * nblk]);
-        gto_eval_iter::<CART>(
-            evaluator,
-            ao,
-            coord,
-            fac,
-            [ish0, ish1],
-            ao_loc,
-            non0tab_slice,
-            fill_zero,
-            cache,
-            nao,
-            ngrid,
-            iao,
-            igrid,
-            atm,
-            bas,
-            env,
-        );
+        gto_eval_iter(mol, evaluator, ao, coord, fac, [ish0, ish1], &ao_loc, non0tab_slice, fill_zero, cache, nao, ngrid, iao, igrid);
     });
 
     Ok(())

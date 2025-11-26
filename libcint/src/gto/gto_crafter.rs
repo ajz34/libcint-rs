@@ -121,36 +121,8 @@ impl CInt {
         };
         let non0tab = non0tab.or(non0tab_with_cutoff.as_deref());
 
-        match data.cint_type {
-            Spheric => gto_eval_loop::<false>(
-                evaluator.as_ref(),
-                out,
-                coord,
-                fac,
-                shls_slice,
-                ao_loc,
-                non0tab,
-                fill_zero,
-                &data.atm,
-                &data.bas,
-                &data.env,
-            )?,
-            Cartesian => gto_eval_loop::<true>(
-                evaluator.as_ref(),
-                out,
-                coord,
-                fac,
-                shls_slice,
-                ao_loc,
-                non0tab,
-                fill_zero,
-                &data.atm,
-                &data.bas,
-                &data.env,
-            )?,
-            _ => unreachable!("should have been handled above"),
-        }
-
+        // go to low-level evaluation function
+        gto_eval_loop(&data, evaluator.as_ref(), out, coord, fac, shls_slice, non0tab, fill_zero)?;
         Ok(CIntOutput { out: out_vec, shape: out_shape })
     }
 
