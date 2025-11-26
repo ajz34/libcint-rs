@@ -51,10 +51,11 @@ pub fn get_gto_eval_name_f(eval_name: &str) -> Option<(Box<dyn GtoEvalAPI>, Opti
     }
 
     match name_list.len() {
-        0 => Some((Box::new(GTOEvalDeriv0), cint_type)),
+        0 => Some((Box::new(GtoEvalDeriv0), cint_type)),
         1 => match name_list[0] {
-            "deriv0" => Some((Box::new(GTOEvalDeriv0), cint_type)),
-            "deriv1" => Some((Box::new(GTOEvalDeriv1), cint_type)),
+            "deriv0" => Some((Box::new(GtoEvalDeriv0), cint_type)),
+            "deriv1" => Some((Box::new(GtoEvalDeriv1), cint_type)),
+            "deriv2" => Some((Box::new(GtoEvalDeriv2), cint_type)),
             _ => None,
         },
         _ => None,

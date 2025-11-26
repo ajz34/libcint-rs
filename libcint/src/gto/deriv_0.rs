@@ -228,19 +228,19 @@ pub fn gto_shell_eval_grid_cart(
                 }
             }
             for k in 0..nctr {
-                gto_l_iter(l).enumerate().for_each(|(icart, (lx, ly, lz))| {
+                for (icart, (lx, ly, lz)) in gto_l_iter(l).enumerate() {
                     for g in 0..BLKSIMD {
                         *gto[ncart * k + icart].get_simd_mut(g) =
                             exps[k].get_simd(g) * pows[lx][X].get_simd(g) * pows[ly][Y].get_simd(g) * pows[lz][Z].get_simd(g);
                     }
-                })
+                }
             }
         },
     }
 }
 
-pub struct GTOEvalDeriv0;
-impl GtoEvalAPI for GTOEvalDeriv0 {
+pub struct GtoEvalDeriv0;
+impl GtoEvalAPI for GtoEvalDeriv0 {
     fn ne1(&self) -> usize {
         1
     }
@@ -288,7 +288,7 @@ fn playground_cart() {
     let mut ao = vec![0.0f64; nao * ngrid];
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
 
-    gto_eval_loop(&mol, &GTOEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
+    gto_eval_loop(&mol, &GtoEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
 
     println!("ao[  0..10]: {:?}", &ao[0..10]);
     println!("ao[  0..10]: {:?}", &ao[50..60]);
@@ -305,7 +305,7 @@ fn playground_sph() {
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
     println!("ao_loc: {:?}", mol.ao_loc());
 
-    gto_eval_loop(&mol, &GTOEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
+    gto_eval_loop(&mol, &GtoEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
 
     for i in 0..40 {
         println!("ao[{}]: {:?}", i, &ao[i * ngrid..i * ngrid + 10]);
@@ -322,7 +322,7 @@ fn test_c10h22_cart() {
     let nao = mol.nao();
     let mut ao = vec![0.0f64; nao * ngrid];
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
-    gto_eval_loop(&mol, &GTOEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
+    gto_eval_loop(&mol, &GtoEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
     let fp_ao = cint_fp(&ao);
     println!("fp_ao = {:}", fp_ao);
     println!("ao[  0..10]: {:?}", &ao[0..10]);
@@ -335,7 +335,7 @@ fn test_c10h22_cart() {
     let mut ao = vec![0.0f64; nao * ngrid];
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
     let time = std::time::Instant::now();
-    gto_eval_loop(&mol, &GTOEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
+    gto_eval_loop(&mol, &GtoEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
     let elapsed = time.elapsed();
     println!("time: {:.3} s", elapsed.as_secs_f64());
     let fp_ao = cint_fp(&ao);
@@ -350,7 +350,7 @@ fn test_c10h22_sph() {
     println!("nao: {:}", nao);
     let mut ao = vec![0.0f64; nao * ngrid];
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
-    gto_eval_loop(&mol, &GTOEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
+    gto_eval_loop(&mol, &GtoEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
     let fp_ao = cint_fp(&ao);
     println!("fp_ao = {:}", fp_ao);
     println!("ao[  0..10]: {:?}", &ao[0..10]);
@@ -363,7 +363,7 @@ fn test_c10h22_sph() {
     let mut ao = vec![0.0f64; nao * ngrid];
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
     let time = std::time::Instant::now();
-    gto_eval_loop(&mol, &GTOEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
+    gto_eval_loop(&mol, &GtoEvalDeriv0, &mut ao, &coord, 1.0, [0, mol.nbas()], None, true).unwrap();
     let elapsed = time.elapsed();
     println!("time: {:.3} s", elapsed.as_secs_f64());
     let fp_ao = cint_fp(&ao);
