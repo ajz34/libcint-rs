@@ -375,7 +375,7 @@ pub fn gto_eval_iter(
     let bgrid = (ngrid - igrid).min(BLKSIZE);
     let nblk = ngrid.div_ceil(BLKSIZE);
 
-    let grid2atm = unsafe { grid2atm.as_chunks_unchecked_mut::<3>() };
+    let grid2atm = unsafe { as_chunks_unchecked_mut::<3, _>(grid2atm) };
     gto_fill_grid2atm(grid2atm, coord, bgrid, &atm[atm0..atm1], env);
     for bas_id in sh0..sh1 {
         let nprim = bas[bas_id][NPRIM_OF] as usize;
@@ -482,7 +482,7 @@ pub fn gto_eval_spinor_iter(
     let bgrid = (ngrid - igrid).min(BLKSIZE);
     let nblk = ngrid.div_ceil(BLKSIZE);
 
-    let grid2atm = unsafe { grid2atm.as_chunks_unchecked_mut::<3>() };
+    let grid2atm = unsafe { as_chunks_unchecked_mut::<3, _>(grid2atm) };
     gto_fill_grid2atm(grid2atm, coord, bgrid, &atm[atm0..atm1], env);
     for bas_id in sh0..sh1 {
         let nprim = bas[bas_id][NPRIM_OF] as usize;

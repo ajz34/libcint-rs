@@ -42,7 +42,7 @@ impl<T: Num + Copy, const N: usize> FpSimd<T, N> {
     #[inline(always)]
     #[allow(clippy::uninit_assumed_init)]
     #[allow(invalid_value)]
-    pub const unsafe fn uninit() -> Self {
+    pub unsafe fn uninit() -> Self {
         core::mem::MaybeUninit::uninit().assume_init()
     }
 
@@ -52,7 +52,7 @@ impl<T: Num + Copy, const N: usize> FpSimd<T, N> {
     }
 
     #[inline(always)]
-    pub const fn fill(&mut self, val: T) {
+    pub fn fill(&mut self, val: T) {
         self.0 = [val; N];
     }
 
@@ -220,7 +220,7 @@ impl<T: Copy> Blk<T> {
     #[inline(always)]
     #[allow(clippy::uninit_assumed_init)]
     #[allow(invalid_value)]
-    pub const unsafe fn uninit() -> Self {
+    pub unsafe fn uninit() -> Self {
         Blk(MaybeUninit::uninit().assume_init())
     }
 
@@ -230,11 +230,9 @@ impl<T: Copy> Blk<T> {
     }
 
     #[inline(always)]
-    pub const fn fill(&mut self, val: T) {
-        let mut i = 0;
-        while i < BLKSIZE {
+    pub fn fill(&mut self, val: T) {
+        for i in 0..BLKSIZE {
             self.0[i] = val;
-            i += 1;
         }
     }
 
@@ -242,12 +240,8 @@ impl<T: Copy> Blk<T> {
     ///
     /// The caller must ensure that `src` has at least `BLKSIZE` elements.
     #[inline(always)]
-    pub const unsafe fn read_ensure(&mut self, src: &[T]) {
-        let mut i = 0;
-        while i < BLKSIZE {
-            self.0[i] = src[i];
-            i += 1;
-        }
+    pub unsafe fn read_ensure(&mut self, src: &[T]) {
+        self.0.copy_from_slice(&src[0..BLKSIZE]);
     }
 
     #[inline]
@@ -264,12 +258,8 @@ impl<T: Copy> Blk<T> {
     ///
     /// The caller must ensure that `dst` has at least `BLKSIZE` elements.
     #[inline(always)]
-    pub const unsafe fn write_ensure(&self, dst: &mut [T]) {
-        let mut i = 0;
-        while i < BLKSIZE {
-            dst[i] = self.0[i];
-            i += 1;
-        }
+    pub unsafe fn write_ensure(&self, dst: &mut [T]) {
+        dst.copy_from_slice(&self.0);
     }
 
     #[inline]
@@ -290,7 +280,7 @@ impl<T: Copy> Blk<T> {
     }
 
     #[inline(always)]
-    pub const fn as_simdd_slice_mut(&mut self) -> &mut [FpSimd<T, SIMDD>; BLKSIMDD] {
+    pub fn as_simdd_slice_mut(&mut self) -> &mut [FpSimd<T, SIMDD>; BLKSIMDD] {
         unsafe { transmute(&mut self.0) }
     }
 
@@ -301,7 +291,7 @@ impl<T: Copy> Blk<T> {
     }
 
     #[inline(always)]
-    pub const fn get_simdd_mut(&mut self, index: usize) -> &mut FpSimd<T, SIMDD> {
+    pub fn get_simdd_mut(&mut self, index: usize) -> &mut FpSimd<T, SIMDD> {
         let slice = self.as_simdd_slice_mut();
         &mut slice[index]
     }

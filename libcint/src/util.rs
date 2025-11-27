@@ -201,6 +201,20 @@ pub(crate) unsafe fn cast_mut_slice<T>(slc: &[T]) -> &mut [T] {
     unsafe { std::slice::from_raw_parts_mut(ptr, len) }
 }
 
+/// Splits the slice into a slice of `N`-element arrays, assuming that there's
+/// no remainder.
+///
+/// This is the same to [`core::slice::as_chunks_unchecked_mut`](https://doc.rust-lang.org/std/primitive.slice.html#method.as_chunks_unchecked_mut),
+/// but only stable at 1.88.0.
+///
+/// # Safety
+///
+/// The caller must ensure that `slc` length is a multiple of `N`.
+pub unsafe fn as_chunks_unchecked_mut<const N: usize, T>(slc: &mut [T]) -> &mut [[T; N]] {
+    let new_len = slc.len() / N;
+    core::slice::from_raw_parts_mut(slc.as_mut_ptr().cast(), new_len)
+}
+
 /* #endregion */
 
 /* #region indices computation (col-major) */
