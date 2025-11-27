@@ -6,5 +6,8 @@ pub mod deriv_4;
 pub mod deriv_ig;
 pub mod deriv_ip;
 pub mod deriv_ipig;
+pub mod deriv_ipipsp;
 pub mod deriv_ipr;
 pub mod deriv_iprc;
+pub mod deriv_ipsp;
+pub mod deriv_sp;

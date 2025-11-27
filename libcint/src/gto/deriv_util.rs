@@ -1,6 +1,5 @@
 use crate::gto::prelude_dev::*;
-use num::traits::MulAdd;
-use num::traits::NumAssignOps;
+use num::traits::{MulAdd, NumAssignOps};
 use num::Num;
 
 /* #region simple f64x8 */
@@ -130,6 +129,14 @@ impl<T: NumAssignOps + Copy> Trait for FpSimd<T, SIMDD> {
         self[5].trait_fn(rhs[5]);
         self[6].trait_fn(rhs[6]);
         self[7].trait_fn(rhs[7]);
+    }
+}
+
+impl<T: Neg<Output = T> + Copy> Neg for FpSimd<T, SIMDD> {
+    type Output = Self;
+    #[inline(always)]
+    fn neg(self) -> Self::Output {
+        FpSimd([-self[0], -self[1], -self[2], -self[3], -self[4], -self[5], -self[6], -self[7]])
     }
 }
 
