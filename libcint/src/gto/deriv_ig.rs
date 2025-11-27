@@ -18,7 +18,7 @@ pub fn gto_shell_eval_grid_cart_ig(
     let [nctr, nprim] = shl_shape;
     let ncart = (l + 1) * (l + 2) / 2;
     let nao_to_set = nctr * ncart;
-    let c = [-center[X], -center[Y], -center[Z]];
+    let c = [f64simd::splat(-center[X]), f64simd::splat(-center[Y]), f64simd::splat(-center[Z])];
     let mut f0 = [[f64simd::zero(); 3]; ANG_MAX + 2];
     let mut f1 = [[f64simd::zero(); 3]; ANG_MAX + 2];
     let mut s = [f64simd::zero(); 3];

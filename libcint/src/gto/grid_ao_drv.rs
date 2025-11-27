@@ -7,6 +7,7 @@ pub trait GtoEvalAPI: Send + Sync {
     fn ncomp(&self) -> usize {
         self.ne1() * self.ntensor()
     }
+    fn init(&mut self, _mol: &CInt) {}
     fn gto_exp(
         &self,
         // arguments
