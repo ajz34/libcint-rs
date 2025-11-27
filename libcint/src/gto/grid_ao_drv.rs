@@ -31,6 +31,21 @@ pub trait GtoEvalAPI: Send + Sync {
         // dimensions
         shl_shape: [usize; 2],
     );
+    /// # Safety
+    ///
+    /// This function should be libcint internal functions, and uses
+    /// raw-pointers.
+    unsafe fn cint_c2s_ket_spinor(
+        &self,
+        gspa: *mut Complex<f64>,
+        gspb: *mut Complex<f64>,
+        gcart: *const f64,
+        lds: c_int,
+        ldc: c_int,
+        nctr: c_int,
+        kappa: c_int,
+        l: c_int,
+    );
 }
 
 pub fn make_ao_loc(bas: &[[c_int; BAS_SLOTS as usize]], cint_type: CIntType) -> Vec<usize> {
@@ -56,22 +71,22 @@ pub fn make_ao_loc(bas: &[[c_int; BAS_SLOTS as usize]], cint_type: CIntType) -> 
     ao_loc
 }
 
-pub fn gto_set_zero(ao: &mut [f64], ncomp: usize, ao_shape: [usize; 2], ao_offset: [usize; 2], nao_to_set: usize) {
+pub fn gto_set_zero<T: num::Zero + Copy>(ao: &mut [T], ncomp: usize, ao_shape: [usize; 2], ao_offset: [usize; 2], nao_to_set: usize) {
     let [nao, ngrid] = ao_shape;
     let [iao, igrid] = ao_offset;
     for a in 0..ncomp {
         for mu in iao..iao + nao_to_set {
             let ptr = a * nao * ngrid + mu * ngrid + igrid;
             let bgrid = (ngrid - igrid).min(BLKSIZE);
-            ao[ptr..ptr + bgrid].fill(0.0);
+            ao[ptr..ptr + bgrid].fill(T::zero());
         }
     }
 }
 
-pub fn gto_copy_grids(
+pub fn gto_copy_grids<T: Copy>(
     // arguments
-    gto: &[f64blk],
-    ao: &mut [f64],
+    gto: &[Blk<T>],
+    ao: &mut [T],
     nao_to_set: usize,
     ncomp: usize,
     ao_shape: [usize; 2],

@@ -119,6 +119,19 @@ impl GtoEvalAPI for GtoEvalDerivIpSp {
     ) {
         gto_shell_eval_grid_cart_ipsp(gto, ebuf, coord, alpha, coeff, l, shl_shape);
     }
+    unsafe fn cint_c2s_ket_spinor(
+        &self,
+        gspa: *mut Complex<f64>,
+        gspb: *mut Complex<f64>,
+        gcart: *const f64,
+        lds: c_int,
+        ldc: c_int,
+        nctr: c_int,
+        kappa: c_int,
+        l: c_int,
+    ) {
+        crate::ffi::cint_ffi::CINTc2s_iket_spinor_si1(gspa as _, gspb as _, gcart as _, lds, ldc, nctr, kappa, l);
+    }
 }
 
 #[test]
