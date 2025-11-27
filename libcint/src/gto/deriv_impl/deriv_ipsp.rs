@@ -130,7 +130,7 @@ impl GtoEvalAPI for GtoEvalDerivIpSp {
         kappa: c_int,
         l: c_int,
     ) {
-        crate::ffi::cint_ffi::CINTc2s_iket_spinor_si1(gspa as _, gspb as _, gcart as _, lds, ldc, nctr, kappa, l);
+        crate::ffi::cint_ffi::CINTc2s_ket_spinor_si1(gspa as _, gspb as _, gcart as _, lds, ldc, nctr, kappa, l);
     }
 }
 

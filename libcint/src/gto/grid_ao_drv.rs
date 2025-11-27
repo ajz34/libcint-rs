@@ -199,10 +199,27 @@ pub fn gto_nctr_cart_max(shls_slice: [usize; 2], bas: &[[c_int; BAS_SLOTS as usi
     let [sh0, sh1] = shls_slice;
     (sh0..sh1)
         .map(|ish| {
-            let l = bas[ish][ANG_OF] as usize;
+            let l = bas[ish][ANG_OF];
             let nctr = bas[ish][NCTR_OF] as usize;
-            let ncart = (l + 1) * (l + 2) / 2;
+            let ncart = CInt::len_cart(l);
             nctr * ncart
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+pub fn gto_nctr_spinor_max(shls_slice: [usize; 2], bas: &[[c_int; BAS_SLOTS as usize]]) -> usize {
+    const ANG_OF: usize = crate::ffi::cint_ffi::ANG_OF as usize;
+    const NCTR_OF: usize = crate::ffi::cint_ffi::NCTR_OF as usize;
+    const KAPPA_OF: usize = crate::ffi::cint_ffi::KAPPA_OF as usize;
+    let [sh0, sh1] = shls_slice;
+    (sh0..sh1)
+        .map(|ish| {
+            let l = bas[ish][ANG_OF];
+            let nctr = bas[ish][NCTR_OF] as usize;
+            let kappa = bas[ish][KAPPA_OF];
+            let nspinor = CInt::len_spinor(l, kappa);
+            nctr * nspinor
         })
         .max()
         .unwrap_or(0)
@@ -408,6 +425,117 @@ pub fn gto_eval_iter(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn gto_eval_spinor_iter(
+    mol: &CInt,
+    evaluator: &dyn GtoEvalAPI,
+    // arguments
+    ao: &mut [Complex<f64>], // (2, ntensor, nao, ngrid)
+    coord: &[[f64; 3]],
+    fac: f64,
+    shls_slice: [usize; 2],
+    ao_loc: &[usize],
+    non0tab: Option<&[u8]>,
+    fill_zero: bool,
+    // buffer
+    buf_f64: &mut [f64blk],
+    buf_c64: &mut [c64blk],
+    // dimensions info
+    ao_shape: [usize; 2],
+    ao_offset: [usize; 2],
+) {
+    const ATOM_OF: usize = crate::ffi::cint_ffi::ATOM_OF as usize;
+    const NPRIM_OF: usize = crate::ffi::cint_ffi::NPRIM_OF as usize;
+    const NCTR_OF: usize = crate::ffi::cint_ffi::NCTR_OF as usize;
+    const ANG_OF: usize = crate::ffi::cint_ffi::ANG_OF as usize;
+    const PTR_EXP: usize = crate::ffi::cint_ffi::PTR_EXP as usize;
+    const PTR_COEFF: usize = crate::ffi::cint_ffi::PTR_COEFF as usize;
+    const PTR_COORD: usize = crate::ffi::cint_ffi::PTR_COORD as usize;
+    const KAPPA_OF: usize = crate::ffi::cint_ffi::KAPPA_OF as usize;
+
+    let atm = &mol.atm;
+    let bas = &mol.bas;
+    let env = &mol.env;
+
+    let [nao, ngrid] = ao_shape;
+    let [iao, igrid] = ao_offset;
+    let ne1 = evaluator.ne1();
+    let ntensor = evaluator.ntensor();
+    let ncomp = evaluator.ncomp();
+    let nctr_cart_max = gto_nctr_cart_max(shls_slice, bas);
+    let nctr_spinor_max = gto_nctr_spinor_max(shls_slice, bas);
+    let nctr_max = gto_nctr_max(shls_slice, bas);
+    let nprim_max = gto_nprim_max(shls_slice, bas);
+
+    let (aoa, aob) = ao.split_at_mut(ntensor * nao * ngrid);
+
+    let [sh0, sh1] = shls_slice;
+    let [atm0, atm1] = [bas[sh0][ATOM_OF] as usize, bas[sh1 - 1][ATOM_OF] as usize + 1];
+    let atm_count = atm1 - atm0;
+    let nbuf_grid2atm = atm_count * 3;
+    let nbuf_ebuf = 2 * nctr_max.max(nprim_max);
+    let nbuf_gto = ncomp * nctr_cart_max;
+    let (grid2atm, buf_f64) = buf_f64.split_at_mut(nbuf_grid2atm);
+    let (ebuf, buf_f64) = buf_f64.split_at_mut(nbuf_ebuf);
+    let (gto_cart, _) = buf_f64.split_at_mut(nbuf_gto);
+    let (gto_sp_a, gto_sp_b) = buf_c64.split_at_mut(ntensor * nctr_spinor_max);
+    let bgrid = (ngrid - igrid).min(BLKSIZE);
+    let nblk = ngrid.div_ceil(BLKSIZE);
+
+    let grid2atm = unsafe { grid2atm.as_chunks_unchecked_mut::<3>() };
+    gto_fill_grid2atm(grid2atm, coord, bgrid, &atm[atm0..atm1], env);
+    for bas_id in sh0..sh1 {
+        let nprim = bas[bas_id][NPRIM_OF] as usize;
+        let nctr = bas[bas_id][NCTR_OF] as usize;
+        let l = bas[bas_id][ANG_OF] as usize;
+        let p_exp = bas[bas_id][PTR_EXP] as usize;
+        let p_coeff = bas[bas_id][PTR_COEFF] as usize;
+        let atm_id = bas[bas_id][ATOM_OF] as usize;
+        let alpha = &env[p_exp..p_exp + nprim];
+        let coeff = &env[p_coeff..p_coeff + nprim * nctr];
+        let coord = &grid2atm[atm_id - atm0];
+        let center = env[atm[atm_id][PTR_COORD] as usize..][..3].try_into().unwrap();
+        let iao = iao + ao_loc[bas_id] - ao_loc[sh0];
+        let fac1 = fac * cint_common_fac_sp(l as c_int);
+        let kappa = bas[bas_id][KAPPA_OF];
+        let ncart = CInt::len_cart(l as c_int);
+        let nspinor = CInt::len_spinor(l as c_int, kappa);
+        let nao_to_set = nctr * nspinor;
+
+        if non0tab.is_some_and(|non0tab| non0tab[(bas_id - sh0) * nblk + igrid / BLKSIZE] == 0) {
+            if fill_zero {
+                gto_set_zero(aoa, ntensor, ao_shape, [iao, igrid], nao_to_set);
+                gto_set_zero(aob, ntensor, ao_shape, [iao, igrid], nao_to_set);
+            }
+            continue;
+        }
+
+        evaluator.gto_exp(ebuf, coord, alpha, coeff, fac1, [nctr, nprim]);
+        evaluator.gto_shell_eval(gto_cart, ebuf, coord, alpha, coeff, l, center, [nctr, nprim]);
+        for a in 0..ntensor {
+            for k in 0..nctr {
+                let ptr_a = &gto_sp_a[a * nctr * nspinor + k * nspinor..] as *const _ as *mut Complex<f64>;
+                let ptr_b = &gto_sp_b[a * nctr * nspinor + k * nspinor..] as *const _ as *mut Complex<f64>;
+                let ptr_cart = &gto_cart[a * ne1 * nctr * ncart + k * ne1 * ncart..] as *const _ as *mut f64;
+                unsafe {
+                    evaluator.cint_c2s_ket_spinor(
+                        ptr_a,
+                        ptr_b,
+                        ptr_cart,
+                        BLKSIZE as c_int,
+                        BLKSIZE as c_int,
+                        nctr as c_int,
+                        kappa as c_int,
+                        l as c_int,
+                    )
+                };
+            }
+        }
+        gto_copy_grids(gto_sp_a, aoa, nao_to_set, ntensor, ao_shape, [iao, igrid]);
+        gto_copy_grids(gto_sp_b, aob, nao_to_set, ntensor, ao_shape, [iao, igrid]);
+    }
+}
+
 pub fn gto_eval_loop(
     mol: &CInt,
     evaluator: &dyn GtoEvalAPI,
@@ -478,6 +606,92 @@ pub fn gto_eval_loop(
     Ok(())
 }
 
+pub fn gto_eval_spinor_loop(
+    mol: &CInt,
+    evaluator: &dyn GtoEvalAPI,
+    ao: &mut [Complex<f64>], // (2, ntensor, nao, ngrid)
+    coord: &[[f64; 3]],
+    fac: f64,
+    shls_slice: [usize; 2],
+    non0tab: Option<&[u8]>,
+    fill_zero: bool,
+) -> Result<(), CIntError> {
+    let ncomp = evaluator.ncomp();
+    let ntensor = evaluator.ntensor();
+    let bas = &mol.bas;
+    let [sh0, sh1] = shls_slice;
+    let ao_loc = mol.make_loc_with_type(Spinor);
+    let nao = ao_loc[sh1] - ao_loc[sh0];
+    let ngrid = coord.len();
+    if ao.len() < 2 * ntensor * nao * ngrid {
+        cint_raise!(RuntimeError, "ao length is smaller than required size")?;
+    }
+
+    let nblk = ngrid.div_ceil(BLKSIZE);
+    let nbas = sh1 - sh0;
+    if non0tab.is_some_and(|non0tab| non0tab.len() != nbas * nblk) {
+        cint_raise!(InvalidValue, "non0tab length not equal required size")?;
+    }
+
+    // split shells by atoms
+    let shloc = gto_shloc_by_atom(shls_slice, bas);
+    let nshblk = shloc.len() - 1; // usually number of atoms
+
+    // split grids to blocks
+    let nblk = ngrid.div_ceil(BLKSIZE);
+
+    // grid2atm: usually 3, since we always split shells by atoms
+    let nctr_cart_max = gto_nctr_cart_max(shls_slice, bas);
+    let nctr_spinor_max = gto_nctr_spinor_max(shls_slice, bas);
+    let nctr_max = gto_nctr_max(shls_slice, bas);
+    let nprim_max = gto_nprim_max(shls_slice, bas);
+    let nbuf_grid2atm = 3;
+    let nbuf_eprim = 2 * nctr_max.max(nprim_max);
+    let nbuf_gto = ncomp * nctr_cart_max;
+    let ncache_f64 = nbuf_eprim + nbuf_gto + nbuf_grid2atm;
+    let ncache_c64 = 2 * ntensor * nctr_spinor_max;
+    let nthreads = rayon::current_num_threads();
+    let thread_cache_f64 = (0..nthreads).map(|_| unsafe { vec![f64blk::uninit(); ncache_f64] }).collect_vec();
+    let thread_cache_c64 = (0..nthreads).map(|_| unsafe { vec![c64blk::uninit(); ncache_c64] }).collect_vec();
+
+    (0..nblk * nshblk).into_par_iter().for_each(|niter| {
+        let ishblk = niter / nblk;
+        let iblk = niter % nblk;
+        let thread_id = rayon::current_thread_index().unwrap_or(0);
+
+        let ish0 = shloc[ishblk];
+        let ish1 = shloc[ishblk + 1];
+        let igrid = iblk * BLKSIZE;
+        let iao = ao_loc[ish0] - ao_loc[sh0];
+        let bgrid = (ngrid - igrid).min(BLKSIZE);
+
+        let ao = unsafe { cast_mut_slice(ao) };
+        let coord = &coord[igrid..igrid + bgrid];
+        let cache_f64 = unsafe { cast_mut_slice(&thread_cache_f64[thread_id]) };
+        let cache_c64 = unsafe { cast_mut_slice(&thread_cache_c64[thread_id]) };
+        let non0tab_slice = non0tab.map(|non0tab| &non0tab[(ish0 - sh0) * nblk..(ish1 - sh0) * nblk]);
+        let ao_shape = [nao, ngrid];
+        let ao_offset = [iao, igrid];
+        gto_eval_spinor_iter(
+            mol,
+            evaluator,
+            ao,
+            coord,
+            fac,
+            [ish0, ish1],
+            &ao_loc,
+            non0tab_slice,
+            fill_zero,
+            cache_f64,
+            cache_c64,
+            ao_shape,
+            ao_offset,
+        );
+    });
+
+    Ok(())
+}
+
 #[test]
 fn test_gto_screen_index() {
     let cint_data = init_c10h22_def2_qzvp();
@@ -496,4 +710,21 @@ fn test_gto_screen_index() {
     assert_eq!([nbas, nblk], [464, 37]);
     let non0tab_f64 = non0tab.iter().map(|&x| x as f64).collect_vec();
     assert!((cint_fp(&non0tab_f64) - 220.1771347194273).abs() < 1e-10);
+}
+
+#[test]
+fn test_gto_spinor() {
+    use num::Zero;
+    let cint_data = init_c10h22_def2_qzvp();
+    let ngrid = 2048;
+    let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
+    let shls_slice = [0, cint_data.nbas()];
+    let ao_loc = cint_data.make_loc_with_type(Spinor);
+    let nao = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]];
+    let evaluator = GtoEvalDeriv0;
+    let ntensor = evaluator.ntensor();
+    let mut ao = vec![Complex::<f64>::zero(); 2 * ntensor * nao * ngrid];
+    gto_eval_spinor_loop(&cint_data, &evaluator, &mut ao, &coord, 1.0, shls_slice, None, true).unwrap();
+    println!("ao[0..10]: {:?}", &ao[0..10]);
+    println!("fp(ao): {}", cint_fp(&ao));
 }
