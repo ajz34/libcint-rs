@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod test {
     use libcint::{gto::gto_crafter::get_gto_eval_name_f, prelude::*};
+    use num::Complex;
     use rstest::rstest;
 
     #[rstest]
@@ -60,5 +61,37 @@ mod test {
         let out_fp = cint_fp(&out);
         assert_eq!(result.shape, ref_shape.as_ref());
         assert!((out_fp - ref_fp).abs() < 1e-10 || (out_fp / ref_fp - 1.0).abs() < 1e-7);
+    }
+
+    #[rstest]
+    #[case("GTOval_spinor"                        ,    -125.69056292477536,    -993.648317458363  , [2048, 2928,  1,  2])]
+    #[case("GTOval_spinor_deriv1"                 ,    -550.601092411041  ,     372.2702812731907 , [2048, 2928,  4,  2])]
+    #[case("GTOval_spinor_deriv2"                 ,   -1018.4141009661886 ,   -1747.377520581361  , [2048, 2928, 10,  2])]
+    #[case("GTOval_spinor_deriv3"                 ,   -6868.453294385325  ,      39.34436040140736, [2048, 2928, 20,  2])]
+    #[case("GTOval_spinor_deriv4"                 ,   -17119.668571065467 ,   -4260.1550424077595 , [2048, 2928, 35,  2])]
+    #[case("GTOval_spinor_ip"                     ,     1164.5992226651474,   -2165.5425060625184 , [2048, 2928,  3,  2])]
+    #[case("GTOval_spinor_ig"                     ,      537.221323651945 ,   -1539.282115487602  , [2048, 2928,  3,  2])]
+    #[case("GTOval_spinor_ipig"                   ,      335.2086997959833,    3726.8878032087882 , [2048, 2928,  9,  2])]
+    #[case("GTOval_spinor_ipr"                    ,    -3162.527253858847 ,    1177.7605640921986 , [2048, 2928,  9,  2])]
+    #[case("GTOval_spinor_iprc"                   ,      753.689035698545 ,   -1395.6027721906285 , [2048, 2928,  9,  2])]
+    #[case("GTOval_spinor_sp"                     ,     -276.2710005825974,    -689.2353028137179 , [2048, 2928,  1,  2])]
+    #[case("GTOval_spinor_ipsp"                   ,     2829.8957257389334,   -5169.514008491763  , [2048, 2928,  3,  2])]
+    #[case("GTOval_spinor_ipipsp"                 ,     3318.597980963531 ,  -14499.595354496942  , [2048, 2928,  9,  2])]
+    fn test_usual_case_spinor(
+        #[case] eval_name: &str,
+        #[case] ref_fp_re: f64,
+        #[case] ref_fp_im: f64,
+        #[case] ref_shape: impl AsRef<[usize]>,
+    ) {
+        // this will test usual case (naive `eval_gto` call)
+        let mol = init_c10h22_def2_qzvp();
+        let ngrid = 2048;
+        let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
+        let (out, shape) = mol.eval_gto_spinor(eval_name, &coord).into();
+        let out_fp = cint_fp(&out);
+        assert_eq!(shape, ref_shape.as_ref());
+        println!("out_fp = {}", out_fp);
+        let ref_fp = Complex::<f64>::new(ref_fp_re, ref_fp_im);
+        assert!((out_fp - ref_fp).norm() < 1e-10 || (out_fp / ref_fp - 1.0).norm() < 1e-7);
     }
 }

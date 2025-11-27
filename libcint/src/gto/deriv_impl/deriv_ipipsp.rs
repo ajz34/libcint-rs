@@ -82,7 +82,7 @@ pub fn gto_shell_eval_grid_cart_ipipsp(
                 s[Y][Y][Z] = e * f0[lx][X] * f6[ly][Y] * f1[lz][Z];
                 s[Y][Z][X] = e * f1[lx][X] * f4[ly][Y] * f2[lz][Z];
                 s[Y][Z][Y] = e * f0[lx][X] * f5[ly][Y] * f2[lz][Z];
-                s[Z][Z][Z] = e * f0[lx][X] * f4[ly][Y] * f3[lz][Z];
+                s[Y][Z][Z] = e * f0[lx][X] * f4[ly][Y] * f3[lz][Z];
                 s[Z][X][X] = e * f3[lx][X] * f0[ly][Y] * f4[lz][Z];
                 s[Z][X][Y] = e * f2[lx][X] * f1[ly][Y] * f4[lz][Z];
                 s[Z][X][Z] = e * f2[lx][X] * f0[ly][Y] * f5[lz][Z];
@@ -180,7 +180,7 @@ impl GtoEvalAPI for GtoEvalDerivIpIpSp {
         kappa: c_int,
         l: c_int,
     ) {
-        crate::ffi::cint_ffi::CINTc2s_iket_spinor_si1(gspa as _, gspb as _, gcart as _, lds, ldc, nctr, kappa, l);
+        crate::ffi::cint_ffi::CINTc2s_ket_spinor_si1(gspa as _, gspb as _, gcart as _, lds, ldc, nctr, kappa, l);
     }
 }
 
