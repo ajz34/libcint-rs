@@ -194,6 +194,8 @@ pub struct Blk<T: Copy>(pub [T; BLKSIZE]);
 
 #[allow(non_camel_case_types)]
 pub type f64blk = Blk<f64>;
+#[allow(non_camel_case_types)]
+pub type c64blk = Blk<Complex<f64>>;
 
 impl<T: Copy> Index<usize> for Blk<T> {
     type Output = T;

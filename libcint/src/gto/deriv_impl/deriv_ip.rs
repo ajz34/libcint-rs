@@ -257,4 +257,17 @@ impl GtoEvalAPI for GtoEvalDerivIp {
         let [nctr, _nprim] = shl_shape;
         gto_shell_eval_grid_cart_ip(gto, exps, coord, l, nctr);
     }
+    unsafe fn cint_c2s_ket_spinor(
+        &self,
+        gspa: *mut Complex<f64>,
+        gspb: *mut Complex<f64>,
+        gcart: *const f64,
+        lds: c_int,
+        ldc: c_int,
+        nctr: c_int,
+        kappa: c_int,
+        l: c_int,
+    ) {
+        crate::ffi::cint_ffi::CINTc2s_ket_spinor_sf1(gspa as _, gspb as _, gcart as _, lds, ldc, nctr, kappa, l);
+    }
 }
