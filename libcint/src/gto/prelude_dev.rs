@@ -1,13 +1,13 @@
-pub use crate::gto::deriv_0::*;
-pub use crate::gto::deriv_1::*;
-pub use crate::gto::deriv_2::*;
-pub use crate::gto::deriv_3::*;
-pub use crate::gto::deriv_4::*;
-pub use crate::gto::deriv_ig::*;
-pub use crate::gto::deriv_ip::*;
-pub use crate::gto::deriv_ipig::*;
-pub use crate::gto::deriv_ipr::*;
-pub use crate::gto::deriv_iprc::*;
+pub use crate::gto::deriv_impl::deriv_0::*;
+pub use crate::gto::deriv_impl::deriv_1::*;
+pub use crate::gto::deriv_impl::deriv_2::*;
+pub use crate::gto::deriv_impl::deriv_3::*;
+pub use crate::gto::deriv_impl::deriv_4::*;
+pub use crate::gto::deriv_impl::deriv_ig::*;
+pub use crate::gto::deriv_impl::deriv_ip::*;
+pub use crate::gto::deriv_impl::deriv_ipig::*;
+pub use crate::gto::deriv_impl::deriv_ipr::*;
+pub use crate::gto::deriv_impl::deriv_iprc::*;
 
 pub use crate::gto::deriv_util::*;
 pub use crate::gto::grid_ao_drv::*;
