@@ -60,6 +60,9 @@ pub fn get_gto_eval_name_f(eval_name: &str) -> Option<(Box<dyn GtoEvalAPI>, Opti
             "deriv4" => Some((Box::new(GtoEvalDeriv4), cint_type)),
             "ip" => Some((Box::new(GtoEvalDerivIp), cint_type)),
             "ig" => Some((Box::new(GtoEvalDerivIg), cint_type)),
+            "ipig" => Some((Box::new(GtoEvalDerivIpIg), cint_type)),
+            "ipr" => Some((Box::new(GtoEvalDerivIpR), cint_type)),
+            "iprc" => Some((Box::new(GtoEvalDerivIpRc::default()), cint_type)),
             _ => None,
         },
         _ => None,
@@ -84,10 +87,11 @@ impl CInt {
         let GtoArgs { eval_name, coord, shls_slice, non0tab, cutoff, nbins, mut fill_zero, fac, out } = args;
 
         // check name, sph/cart, set evaluator
-        let (evaluator, cint_type) = data.get_gto_eval_name_f(eval_name)?;
+        let (mut evaluator, cint_type) = data.get_gto_eval_name_f(eval_name)?;
         if let Some(cint_type) = cint_type {
             data.set_cint_type(cint_type);
         }
+        evaluator.init(&data);
 
         // handle output and check its sanity
 

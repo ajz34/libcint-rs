@@ -16,6 +16,9 @@ mod test {
     #[case("GTOval_cart_deriv4"                ,   33427.10951556449   , [2048, 1774, 35])]
     #[case("GTOval_ip_sph"                     ,     331.80038695474656, [2048, 1464,  3])]
     #[case("GTOval_ig_sph"                     ,    -751.1976925410391 , [2048, 1464,  3])]
+    #[case("GTOval_ipig_sph"                   ,   -3052.9189303084386 , [2048, 1464,  9])]
+    #[case("GTOval_ipr_sph"                    ,      54.16700105790881, [2048, 1464,  9])]
+    #[case("GTOval_iprc_sph"                   ,    -901.1885030079377 , [2048, 1464,  9])]
     fn test_usual_case(#[case] eval_name: &str, #[case] ref_fp: f64, #[case] ref_shape: impl AsRef<[usize]>) {
         // this will test usual case (naive `eval_gto` call)
         let mol = init_c10h22_def2_qzvp();

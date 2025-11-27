@@ -358,33 +358,6 @@ pub fn gto_l_iter(l: usize) -> Box<dyn Iterator<Item = (usize, usize, usize)>> {
     }
 }
 
-pub fn gto_nabla1(
-    fx1: &mut [f64blk],
-    fy1: &mut [f64blk],
-    fz1: &mut [f64blk],
-    fx0: &[f64blk],
-    fy0: &[f64blk],
-    fz0: &[f64blk],
-    l: usize,
-    alpha: f64,
-) {
-    let a2 = -2.0 * alpha;
-    // first derivative
-    for n in 0..BLKSIZE {
-        fx1[0][n] = a2 * fx0[1][n];
-        fy1[0][n] = a2 * fy0[1][n];
-        fz1[0][n] = a2 * fz0[1][n];
-    }
-    // recursive derivatives
-    for i in 1..=l {
-        for n in 0..BLKSIZE {
-            fx1[i][n] = i as f64 * fx0[i - 1][n] + a2 * fx0[i + 1][n];
-            fy1[i][n] = i as f64 * fy0[i - 1][n] + a2 * fy0[i + 1][n];
-            fz1[i][n] = i as f64 * fz0[i - 1][n] + a2 * fz0[i + 1][n];
-        }
-    }
-}
-
 pub fn gto_nabla1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, alpha: f64) {
     let a2 = FpSimd::<f64>::splat(-2.0 * alpha);
     // first derivative
@@ -400,30 +373,22 @@ pub fn gto_nabla1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, 
     }
 }
 
-pub fn gto_x1(
-    fx1: &mut [f64blk],
-    fy1: &mut [f64blk],
-    fz1: &mut [f64blk],
-    fx0: &[f64blk],
-    fy0: &[f64blk],
-    fz0: &[f64blk],
-    l: usize,
-    ri: [f64; 3],
-) {
+pub fn gto_x1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, ri: [f64; 3]) {
+    let ri_x = f64simd::splat(ri[X]);
+    let ri_y = f64simd::splat(ri[Y]);
+    let ri_z = f64simd::splat(ri[Z]);
     for i in 0..=l {
-        for n in 0..BLKSIZE {
-            fx1[i][n] = ri[0] * fx0[i][n] + fx0[i + 1][n];
-            fy1[i][n] = ri[1] * fy0[i][n] + fy0[i + 1][n];
-            fz1[i][n] = ri[2] * fz0[i][n] + fz0[i + 1][n];
-        }
+        f1[i][X] = f0[i][X].add_mul(ri_x, f0[i + 1][X]);
+        f1[i][Y] = f0[i][Y].add_mul(ri_y, f0[i + 1][Y]);
+        f1[i][Z] = f0[i][Z].add_mul(ri_z, f0[i + 1][Z]);
     }
 }
 
-pub fn gto_x1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, ri: [f64; 3]) {
+pub fn gto_r_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize) {
     for i in 0..=l {
-        f1[i][X] = f0[i][X].add_mul(f64simd::splat(ri[X]), f0[i + 1][X]);
-        f1[i][Y] = f0[i][Y].add_mul(f64simd::splat(ri[Y]), f0[i + 1][Y]);
-        f1[i][Z] = f0[i][Z].add_mul(f64simd::splat(ri[Z]), f0[i + 1][Z]);
+        f1[i][X] = f0[i + 1][X];
+        f1[i][Y] = f0[i + 1][Y];
+        f1[i][Z] = f0[i + 1][Z];
     }
 }
 
