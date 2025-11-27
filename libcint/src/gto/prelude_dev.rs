@@ -6,8 +6,11 @@ pub use crate::gto::deriv_impl::deriv_4::*;
 pub use crate::gto::deriv_impl::deriv_ig::*;
 pub use crate::gto::deriv_impl::deriv_ip::*;
 pub use crate::gto::deriv_impl::deriv_ipig::*;
+pub use crate::gto::deriv_impl::deriv_ipipsp::*;
 pub use crate::gto::deriv_impl::deriv_ipr::*;
 pub use crate::gto::deriv_impl::deriv_iprc::*;
+pub use crate::gto::deriv_impl::deriv_ipsp::*;
+pub use crate::gto::deriv_impl::deriv_sp::*;
 
 pub use crate::gto::deriv_util::*;
 pub use crate::gto::grid_ao_drv::*;

@@ -1,5 +1,4 @@
 use crate::gto::prelude_dev::*;
-use rayon::prelude::*;
 
 pub trait GtoEvalAPI: Send + Sync {
     fn ne1(&self) -> usize;
