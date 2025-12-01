@@ -99,13 +99,13 @@ pub fn gto_contract_exp0(
     }
 }
 
-/// Evaluate GTO shell in Cartesian basis at grids, at arbitary angular momentum
-/// $l$.
+/// Evaluate GTO shell in Cartesian basis at grids, at a single shell with given
+/// angular momentum $l$.
 ///
 /// # Formula
 ///
 /// This functions starts from contracted GTO exponents (without polynomial
-/// part):
+/// part), see also function [`gto_contract_exp0`]:
 ///
 /// $$
 /// \phi_{kg}^{l = 0} = \sum_p C_{k p} | \bm 0, \alpha_p, \bm r_g \rangle
@@ -123,44 +123,12 @@ pub fn gto_contract_exp0(
 /// \end{align*}
 /// $$
 ///
-/// Notes on index $\mu$:
-/// - This index represents the cartesian atomic orbital basis. The size of
-///   $\mu$ is the multiplication of $n_\mathrm{cart} = (l + 1) (l + 2) / 2$,
-///   and $n_\mathrm{ctr}$ (the number of contracted functions in the shell).
-/// - $\mu_x$, $\mu_y$, $\mu_z$ are the cartesian exponents of the basis
-///   function, satisfying $\mu_x + \mu_y + \mu_z = l$. Note that for a shell of
-///   basis, the angular momentum $l$ is fixed for all contracted functions.
-/// - The ordering of $(\mu_x, \mu_y, \mu_z)$ follows the convention in PySCF,
-///   i.e., the most rapidly changing index is $\mu_z$, then $\mu_y$, and
-///   finally $\mu_x$.
-/// - $\mu_k$ is the index of contracted function.
-///
-/// For example of angular momentum $l=2$ (d shell) with $n_\mathrm{ctr} = 2$,
-/// the ordering of $\mu$ is:
-///
-/// | $\mu$ | $(\mu_x, \mu_y, \mu_z)$ | $\mu_k$ || $\mu$ | $(\mu_x, \mu_y, \mu_z)$ | $\mu_k$ |
-/// |--|--|--|--|--|--|--|
-/// |  0 | (2, 0, 0) | 0 ||  6 | (2, 0, 0) | 1 |
-/// |  1 | (1, 1, 0) | 0 ||  7 | (1, 1, 0) | 1 |
-/// |  2 | (1, 0, 1) | 0 ||  8 | (1, 0, 1) | 1 |
-/// |  3 | (0, 2, 0) | 0 ||  9 | (0, 2, 0) | 1 |
-/// |  4 | (0, 1, 1) | 0 || 10 | (0, 1, 1) | 1 |
-/// |  5 | (0, 0, 2) | 0 || 11 | (0, 0, 2) | 1 |
-///
-/// # Indices Table
-///
-/// | index | size | notes |
-/// |--|--|--|
-/// | $\mu$ | `ncart * nctr` | cartesian GTO basis function |
-/// | $k$ | `nctr` | GTO contraction |
-/// | $g$ | [`BLKSIZE`] | grid block in iterations |
-///
 /// # Argument Table
 ///
 /// | variable | formula | dimension | shape | notes |
 /// |--|--|--|--|--|
 /// | `gto` | $\phi_{\mu g}$ | $(\mu, g)$ | `(ncart * nctr, ngrid)` | GTO value by grid block |
-/// | `exps` | $\phi_{kg}^{l = 0}$ | $(k, g)$ | `(nctr, BLKSIZE)` | early-contracted GTO exponents <br>(given by function [`gto_contract_exp0`]) |
+/// | `exps` | $\phi_{kg}^{l = 0}$ | $(k, g)$ | `(nctr, BLKSIZE)` | early-contracted GTO exponents<br>(given by function [`gto_contract_exp0`]) |
 /// | `coord` | $(x_g, y_g, z_g)$ | $(3, g)$ | `(3, BLKSIZE)` | coordinates of grids (taking GTO's center as origin) |
 /// | `l` | $l$ | | scalar | angular momentum of the shell |
 ///
@@ -272,6 +240,11 @@ pub fn gto_shell_eval_grid_cart(
     }
 }
 
+/// GTO evaluation with zero derivative on grids.
+///
+/// This struct uses the following low-level functions:
+/// - [`gto_contract_exp0`]
+/// - [`gto_shell_eval_grid_cart`]
 pub struct GtoEvalDeriv0;
 impl GtoEvalAPI for GtoEvalDeriv0 {
     fn ne1(&self) -> usize {

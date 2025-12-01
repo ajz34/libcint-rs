@@ -1,14 +1,16 @@
 use crate::gto::prelude_dev::*;
 
-pub fn gto_shell_eval_grid_cart_ip(
-    // arguments
-    gto: &mut [f64blk],
-    exps: &[f64blk],
-    coord: &[f64blk; 3],
-    l: usize,
-    // dimensions
-    nctr: usize,
-) {
+/// Evaluate GTO values with operator $\nabla$ at a single shell.
+///
+/// # See also
+///
+/// This is very similar to function [`gto_shell_eval_grid_cart`], except that
+/// this function also includes zeroth order term.
+///
+/// # PySCF equivalent
+///
+/// `libcgto.so`: `int GTOshell_eval_grid_cart_ip`
+pub fn gto_shell_eval_grid_cart_ip(gto: &mut [f64blk], exps: &[f64blk], coord: &[f64blk; 3], l: usize, nctr: usize) {
     const ANG_MAX: usize = crate::ffi::cint_ffi::ANG_MAX as usize;
 
     const D1_X: usize = 0;
@@ -218,6 +220,17 @@ pub fn gto_shell_eval_grid_cart_ip(
     }
 }
 
+/// GTO with operator $\nabla$.
+///
+/// There are 3 components in total:
+///
+/// $$
+/// (\partial_x, \partial_y, \partial_z)
+/// $$
+///
+/// This struct uses the following low-level functions:
+/// - [`gto_contract_exp1`]
+/// - [`gto_shell_eval_grid_cart_ip`]
 pub struct GtoEvalDerivIp;
 impl GtoEvalAPI for GtoEvalDerivIp {
     fn ne1(&self) -> usize {

@@ -112,15 +112,69 @@ pub fn gto_contract_exp1(
     }
 }
 
-pub fn gto_shell_eval_grid_cart_deriv1(
-    // arguments
-    gto: &mut [f64blk],
-    exps: &[f64blk],
-    coord: &[f64blk; 3],
-    l: usize,
-    // dimensions
-    nctr: usize,
-) {
+/// Evaluate GTO values and their first derivatives at grids, at a single shell
+/// with given angular momentum $l$.
+///
+/// # Formula
+///
+/// This function starts from contracted GTO exponents and its variant (without
+/// polynomial part), see also function [`gto_contract_exp1`]:
+///
+/// $$
+/// \begin{align*}
+/// \phi_{kg}^{l = 0} &= \sum_p C_{k p} | \bm 0, \alpha_p, \bm r_g \rangle
+/// \\\\
+/// \tilde \phi_{k g}^{l = 0} &= \sum_p (- 2 \alpha_p) C_{k p} \exp(-\alpha_p
+/// r_g^2)
+/// \end{align*}
+/// $$
+///
+/// The zeroth order GTO value is easily evaluated, also see
+/// [`gto_shell_eval_grid_cart`]:
+///
+/// $$
+/// \phi_{\mu g} = x_g^{l_x} y_g^{l_y} z_g^{l_z} \times \phi_{kg}^{l = 0}
+/// $$
+///
+/// However, for the first derivative, for arbitary angular momentum $l$, we
+/// have to apply recursion relations. For example of derivative w.r.t. $x$:
+///
+/// $$
+/// \frac{\partial}{\partial x} \phi_{\mu g} = x_g \times x_g^{l_x} y_g^{l_y}
+/// z_g^{l_z} \times \tilde \phi_{k g}^{l = 0} + l_x x_g^{l_x - 1} y_g^{l_y}
+/// z_g^{l_z} \times \phi_{k g}^{l = 0}
+/// $$
+///
+/// In the above formula, if power is less than zero, the corresponding term is
+/// neglected.
+///
+/// In the source code, we use `pows` to represent the polynomial part
+/// $[x_g^{l_x}, y_g^{l_y}, z_g^{l_z}]$, and `pows_1less` to represent the part
+/// with one less power. We use `e` to represent $\phi_{k g}^{l = 0}$ and `e_2a`
+/// to represent $\tilde \phi_{k g}^{l = 0}$.
+///
+/// # Argument Table
+///
+/// | variable | formula | dimension | shape | notes |
+/// |--|--|--|--|--|
+/// | `gto` | $\phi_{\mu g}^{\mathbb A}$ | $(\mathbb A, \mu, g)$ | `(ncomp, ncart * nctr, ngrid)` | GTO value by grid block |
+/// | `exps` | $[\phi_{kg}^{l = 0}, \tilde \phi_{kg}^{l = 0}]$ | two $(k, g)$ tensors | `(2 * nctr, BLKSIZE)` | early-contracted GTO exponents and derivative<br>(given by function [`gto_contract_exp1`]) |
+/// | `coord` | $(x_g, y_g, z_g)$ | $(3, g)$ | `(3, BLKSIZE)` | coordinates of grids (taking GTO's center as origin) |
+/// | `l` | $l$ | | scalar | angular momentum of the shell |
+///
+/// # See also
+///
+/// This function is a low-level function to implement the
+/// [`GtoEvalAPI::gto_shell_eval`] trait method with first derivative.
+///
+/// This function should be used together with [`gto_contract_exp1`].
+///
+/// This function is very similar to [`gto_shell_eval_grid_cart_ip`].
+///
+/// # PySCF equivalent
+///
+/// `libcgto.so`: `int GTOshell_eval_grid_cart_deriv1`
+pub fn gto_shell_eval_grid_cart_deriv1(gto: &mut [f64blk], exps: &[f64blk], coord: &[f64blk; 3], l: usize, nctr: usize) {
     const ANG_MAX: usize = crate::ffi::cint_ffi::ANG_MAX as usize;
 
     const D1_0: usize = 0;
@@ -356,6 +410,17 @@ pub fn gto_shell_eval_grid_cart_deriv1(
     }
 }
 
+/// GTO with operator $(1, \nabla)$.
+///
+/// There are 4 components in total:
+///
+/// $$
+/// (1, \partial_x, \partial_y, \partial_z)
+/// $$
+///
+/// This struct uses the following low-level functions:
+/// - [`gto_contract_exp1`]
+/// - [`gto_shell_eval_grid_cart_deriv1`]
 pub struct GtoEvalDeriv1;
 impl GtoEvalAPI for GtoEvalDeriv1 {
     fn ne1(&self) -> usize {

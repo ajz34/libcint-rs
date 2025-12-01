@@ -41,9 +41,26 @@
 ## Notes on contraction coefficients $C_{k p}$
 
   - $k$ is the contraction index. The size of $k$ is usually 1 (e.g., Pople, Ahlrichs), but may also be larger than 1 (e.g., Dunning, Jensen).
-  - For example of Jensen basis set pc-0, carbon atom, the $s$ shell. There is a 
+  - For example of Jensen basis set pc-0. An $s$ shell of carbon in Gaussian94 format is
+    ```log
+    S    3   1.00
+          0.446510D+03           0.197880D-01
+          0.674620D+02           0.145340D+00
+          0.150670D+02           0.185290D+00
+    S    3   1.00
+          0.674620D+02          -0.999100D-02
+          0.150670D+02           0.285190D+00
+          0.393880D+01           0.566870D+00
     ```
-    ```
+    This can actually be considered as only one shell, with two contracted functions (i.e. $n_\mathrm{ctr} = 2$ at index $k$), each contracted function having four primitive functions (i.e. $n_\mathrm{prim} = 4$ at index $p$). The un-normalized contraction coefficients $\tilde C_{k p}$ and corresponding exponents $\alpha_p$ are:
+
+    |                                     | $p = 0$         | $p = 1$         | $p = 2$         | $p = 3$         |
+    |-------------------------------------|----------------:|----------------:|----------------:|----------------:|
+    | coefficient $\tilde C_{k=0, p}$     | 0.019788        |  0.145340       | 0.185290        | 0.000000        |
+    | coefficient $\tilde C_{k=1, p}$     | 0.000000        | -0.009991       | 0.285190        | 0.566870        |
+    | exponent    $\alpha_p$              | 446.510         | 67.4620         | 15.0670         | 3.93880         |
+
+    Please note that for libcint, the coefficient $\tilde C_{kp}$ does not include normalization factor, and you need to merge the normalization factor into the coefficient $C_{k p}$ to struct field `env` of [`CInt`] manually.
 
 ## Notes on relation of atomic orbital index $\mu$ and contracted GTO index $k$
 
