@@ -1,5 +1,71 @@
 use crate::gto::prelude_dev::*;
 
+/// Compute **early-contracted** first-derivative of exponental part of GTO
+/// without angular momentum and normalization in SIMD blocks of a shell.
+///
+/// # Formula
+///
+/// This function evaluates only the exponent part (without polynomial part) of
+/// GTO, which is also the same to the $l = 0$ case.
+///
+/// Given $l = 0$, we've already know (see also [`gto_contract_exp0`]) the GTO
+/// value of contracted function $k$ at grid point $g$ is
+///
+/// $$
+/// \phi_{k g}^{l = 0} = \sum_{p} C_{k p} \exp(-\alpha_p r_g^2)
+/// $$
+///
+/// Then the first derivative w.r.t. coordinate $x$ is
+///
+/// $$
+/// \frac{\partial}{\partial x} \phi_{k g}^{l = 0} = x \sum_p (- 2 \alpha_p)
+/// C_{k p} \exp(-\alpha_p r_g^2)
+/// $$
+///
+/// where $r_g^2 = x_g^2 + y_g^2 + z_g^2$. We do not evaluate the polynomial
+/// part here (where they are handled by functions
+/// [`gto_shell_eval_grid_cart_deriv1`] and [`gto_shell_eval_grid_cart_ip`]). So
+/// we will only concern the part of
+///
+/// $$
+/// \tilde \phi_{k g}^{l = 0} := \sum_p (- 2 \alpha_p) C_{k p} \exp(-\alpha_p
+/// r_g^2)
+/// $$
+///
+/// This function also allows to include an additional factor `fac`.
+///
+/// # Indices Table
+///
+/// | index | size | notes |
+/// |--|--|--|
+/// | $k$ | `nctr` | contracted AO |
+/// | $p$ | `nprim` | primitive AO |
+/// | $g$ | [`BLKSIZE`] | grids |
+///
+/// # Argument Table
+///
+/// | variable | formula | dimension | shape | notes |
+/// |--|--|--|--|--|
+/// | `ectr` | $[\phi_{kg}^{l = 0}, \tilde \phi_{k g}^{l = 0}]$ | $(2 k, g)$ | `(2 * nctr, BLKSIZE)` | contracted exponential part of GTO |
+/// | `coord` | $(x_g, y_g, z_g)$ | $(3, g)$ | `(3, BLKSIZE)` | coordinates of grids (taking AO's center as origin) |
+/// | `alpha` | $\alpha_p$ | $(p,)$ | `nprim` | exponents of primitive AO |
+/// | `coeff` | $C_{kp}$ | $(k, p)$ | `(nctr, BLKSIZE)` | cGTO contraction coefficients |
+/// | `fac` | $\mathrm{fac}$ | | scalar | Additional factor (also see [`cint_common_fac_sp`]) |
+///
+/// # See also
+///
+/// This function is a low-level function to implement the
+/// [`GtoEvalAPI::gto_exp`] trait method.
+///
+/// Also see [`gto_contract_exp0`] for handling non-derivative of
+/// early-contracted GTO exponents.
+///
+/// This function should be used together with
+/// [`gto_shell_eval_grid_cart_deriv1`] or [`gto_shell_eval_grid_cart_ip`].
+///
+/// # PySCF equivalent
+///
+/// `libcgto.so`: `int GTOcontract_exp1`
 pub fn gto_contract_exp1(
     // arguments
     ectr: &mut [f64blk],

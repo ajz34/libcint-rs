@@ -7,10 +7,23 @@ use num::Num;
 // TODO: use fearless_simd or pulp, they are more heavy but more complete SIMD
 // abstraction crates
 
+/// (dev) GTO internal SIMD type.
+///
+/// In most cases, we use f64x8 as the SIMD type, which corresponds to AVX-512.
+///
+/// This type implements basic arithmetic operations and some utility functions,
+/// such as arithmetics, fmadd, map, splat, etc.
+///
+/// Please note this is only a simple implementation. This does not cover any
+/// target of protable SIMD propose ([#86656](https://github.com/rust-lang/rust/issues/86656)).
+///
+/// To fully utilize SIMD capabilities, you need to compile by `RUSTFLAGS="-C
+/// target-cpu=native"` or similar flags.
 #[repr(align(64))]
 #[derive(Clone, Debug, Copy)]
 pub struct FpSimd<T: Copy, const N: usize = SIMDD>(pub [T; N]);
 
+/// Type alias for f64x8 SIMD type [`FpSimd<f64, 8>`].
 #[allow(non_camel_case_types)]
 pub type f64simd = FpSimd<f64, SIMDD>;
 
@@ -30,11 +43,14 @@ impl<T: Copy, const N: usize> IndexMut<usize> for FpSimd<T, N> {
 }
 
 impl<T: Num + Copy, const N: usize> FpSimd<T, N> {
+    /// Returns a SIMD object with all lanes set to zero.
     #[inline(always)]
     pub fn zero() -> Self {
         FpSimd([T::zero(); N])
     }
 
+    /// Returns an uninitialized SIMD object.
+    ///
     /// # Safety
     ///
     /// This function returns an uninitialized object. The caller must ensure
@@ -46,16 +62,20 @@ impl<T: Num + Copy, const N: usize> FpSimd<T, N> {
         core::mem::MaybeUninit::uninit().assume_init()
     }
 
+    /// Returns a SIMD object with all lanes set to `val`.
     #[inline(always)]
     pub const fn splat(val: T) -> Self {
         FpSimd([val; N])
     }
 
+    /// Sets all lanes to `val`.
     #[inline(always)]
     pub fn fill(&mut self, val: T) {
         self.0 = [val; N];
     }
 
+    /// Applies function `f` to each lane and returns a new SIMD object.
+    #[inline]
     pub fn map<F>(&self, f: F) -> Self
     where
         F: Fn(T) -> T,
@@ -144,8 +164,11 @@ impl<T> FpSimd<T, SIMDD>
 where
     T: MulAdd<Output = T> + Copy,
 {
+    /// Performs fused multiply-add: `self * b + c`.
+    ///
+    /// This is similar function to [`MulAdd::mul_add`].
     #[inline(always)]
-    pub fn add_mul(self, b: FpSimd<T, SIMDD>, c: FpSimd<T, SIMDD>) -> FpSimd<T, SIMDD> {
+    pub fn mul_add(self, b: FpSimd<T, SIMDD>, c: FpSimd<T, SIMDD>) -> FpSimd<T, SIMDD> {
         FpSimd([
             self[0].mul_add(b[0], c[0]),
             self[1].mul_add(b[1], c[1]),
@@ -158,6 +181,11 @@ where
         ])
     }
 
+    /// Performs fused multiply-add: `self = self + b * c`.
+    ///
+    /// Note that the order of multiplication and addition is different from
+    /// [`FpSimd::mul_add`].
+    #[inline(always)]
     pub fn fma_from(&mut self, b: FpSimd<T, SIMDD>, c: FpSimd<T, SIMDD>) {
         *self = FpSimd([
             b[0].mul_add(c[0], self[0]),
@@ -173,6 +201,7 @@ where
 }
 
 impl f64simd {
+    /// Checks if all lanes are smaller than the GTO zero cutoff [`GTOZERO`].
     #[inline(always)]
     pub fn is_gto_zero(&self) -> bool {
         for i in 0..SIMDD {
@@ -188,6 +217,20 @@ impl f64simd {
 
 /* #region Blk<T> */
 
+/// (dev) GTO internal block type.
+///
+/// This type represents a block of [`BLKSIZE`] elements of type `T`, aligned to
+/// 64 bytes (AVX-512 alignment).
+///
+/// This type is a basic building block for GTO grid evaluations. Grids will be
+/// always batched by [`BLKSIZE`].
+///
+/// This [`BLKSIZE`] value (56) should be multiple of [`SIMDD`] (8). Currently
+/// this value is fixed to 56, in that for the most-used deriv1 case, the
+/// processed grids per function call is $(n_\mathrm{comp}, n_\mathrm{ctr}
+/// \times n_\mathrm{cart}(l), n_\mathrm{grids})$ will usually be up to (4, 15,
+/// 56) or 26.3 KB, which fits in L1d cache (32 KB in most micro-architectures)
+/// together with other data.
 #[repr(align(64))]
 #[derive(Clone, Debug, Copy)]
 pub struct Blk<T: Copy>(pub [T; BLKSIZE]);
@@ -213,6 +256,8 @@ impl<T: Copy> IndexMut<usize> for Blk<T> {
 }
 
 impl<T: Copy> Blk<T> {
+    /// Returns an uninitialized bulk.
+    ///
     /// # Safety
     ///
     /// This function returns an uninitialized `BlkF64`. The caller must ensure
@@ -224,11 +269,13 @@ impl<T: Copy> Blk<T> {
         Blk(MaybeUninit::uninit().assume_init())
     }
 
+    /// Returns a block with all elements set to `val`.
     #[inline(always)]
     pub const fn splat(val: T) -> Self {
         Blk([val; BLKSIZE])
     }
 
+    /// Sets all elements to `val`.
     #[inline(always)]
     pub fn fill(&mut self, val: T) {
         for i in 0..BLKSIZE {
@@ -236,6 +283,9 @@ impl<T: Copy> Blk<T> {
         }
     }
 
+    /// Reads data from `src` slice into the block, ensuring [`BLKSIZE`]
+    /// elements.
+    ///
     /// # Safety
     ///
     /// The caller must ensure that `src` has at least `BLKSIZE` elements.
@@ -244,6 +294,8 @@ impl<T: Copy> Blk<T> {
         self.0.copy_from_slice(&src[0..BLKSIZE]);
     }
 
+    /// Reads data from `src` slice into the block, at most [`BLKSIZE`]
+    /// elements.
     #[inline]
     pub fn read(&mut self, src: &[T]) {
         let len_slc = if src.len() < BLKSIZE { src.len() } else { BLKSIZE };
@@ -254,6 +306,9 @@ impl<T: Copy> Blk<T> {
         }
     }
 
+    /// Writes data from the block into `dst` slice, ensuring [`BLKSIZE`]
+    /// elements.
+    ///
     /// # Safety
     ///
     /// The caller must ensure that `dst` has at least `BLKSIZE` elements.
@@ -262,6 +317,8 @@ impl<T: Copy> Blk<T> {
         dst.copy_from_slice(&self.0);
     }
 
+    /// Writes data from the block into `dst` slice, at most [`BLKSIZE`]
+    /// elements.
     #[inline]
     pub fn write(&self, dst: &mut [T]) {
         let len_slc = if dst.len() < BLKSIZE { dst.len() } else { BLKSIZE };
@@ -274,22 +331,27 @@ impl<T: Copy> Blk<T> {
 }
 
 impl<T: Copy> Blk<T> {
+    /// Returns a slice of SIMD (double float) blocks view of this block.
     #[inline(always)]
     pub const fn as_simdd_slice(&self) -> &[FpSimd<T, SIMDD>; BLKSIMDD] {
         unsafe { transmute(&self.0) }
     }
 
+    /// Returns a mutable slice of SIMD (double float) blocks view of this
+    /// block.
     #[inline(always)]
     pub fn as_simdd_slice_mut(&mut self) -> &mut [FpSimd<T, SIMDD>; BLKSIMDD] {
         unsafe { transmute(&mut self.0) }
     }
 
+    /// Gets the SIMD (double float) block at `index`.
     #[inline(always)]
     pub const fn get_simdd(&self, index: usize) -> FpSimd<T, SIMDD> {
         let slice = self.as_simdd_slice();
         slice[index]
     }
 
+    /// Gets a mutable reference to the SIMD (double float) block at `index`.
     #[inline(always)]
     pub fn get_simdd_mut(&mut self, index: usize) -> &mut FpSimd<T, SIMDD> {
         let slice = self.as_simdd_slice_mut();
@@ -299,6 +361,13 @@ impl<T: Copy> Blk<T> {
 
 /* #endregion */
 
+/// Returns an iterator over ($l_x$, $l_y$, $l_z$) tuples for given angular
+/// momentum `l`.
+///
+/// Iteration order: $l_x$ varies fastest, then $l_y$, then $l_z$.
+///
+/// This function supports up to `l = 5` (g) with pre-defined tuples for
+/// efficiency.
 pub fn gto_l_iter(l: usize) -> Box<dyn Iterator<Item = (usize, usize, usize)>> {
     match l {
         0 => Box::new(std::iter::once((0, 0, 0))),
@@ -357,6 +426,59 @@ pub fn gto_l_iter(l: usize) -> Box<dyn Iterator<Item = (usize, usize, usize)>> {
     }
 }
 
+/// Computes first derivatives of polynomial part of GTO in SIMD blocks.
+///
+/// # Formula of Gaussian
+///
+/// As an example, cartesian gaussian's derivative to $x$ is computed by:
+///
+/// $$
+/// \frac{\partial}{\partial x} | l_x, l_y, l_z, \alpha, \bm r \rangle = l_x |
+/// l_x, l_y, l_z, \alpha, \bm r \rangle - 2 \alpha | l_x + 1, l_y, l_z, \alpha,
+/// \bm r \rangle
+/// $$
+///
+/// where the recursion starts from:
+///
+/// $$
+/// \frac{\partial}{\partial x} | 0, l_y, l_z, \alpha, \bm r \rangle = - 2
+/// \alpha | 1, l_y, l_z, \alpha, \bm r \rangle
+/// $$
+///
+/// The same applies to $y$ and $z$ directions.
+///
+/// See [`gto`](crate::gto) module documentation for notation details.
+///
+/// # Formula of recursion relations of polynomial part
+///
+/// This function evaluates the polynomial part of cartesian GTO (the whole $|
+/// \bm l, \alpha, \bm r \rangle$ without $\exp(- \alpha r^2)$). The recursion
+/// correlation of this polynomial (along each coordinate component) is given
+/// by:
+///
+/// $$
+/// \begin{alignat*}{5}
+/// F_0^{(1)} &= -2 \alpha F_1^{(0)} &\quad& (\text{initial}) \\\\
+/// F_l^{(1)} &= l F_{l-1}^{(0)} - 2 \alpha F_{l+1}^{(0)} &\quad& (l \geq 1)
+/// \end{alignat*}
+/// $$
+///
+/// Please note that we are evaluating the polynomial part at each grid point.
+/// So in the program, we are actually handling $F_{l, g}^{(0)}$ and $F_{l,
+/// g}^{(1)}$ as two-dimension tensors.
+///
+/// # Argument Table
+///
+/// | variable | formula | dimension | shape | notes |
+/// |--|--|--|--|--|
+/// | `f1` | $[F_{l_x, g}^{(1)}, F_{l_y, g}^{(1)}, F_{l_z, g}^{(1)}]$ | $(l + 1, t, g)$ | `(l + 1, 3, BLKSIMDD)` | output buffer for first derivatives |
+/// | `f0` | $[F_{l_x, g}^{(0)}, F_{l_y, g}^{(0)}, F_{l_z, g}^{(0)}]$ | $(l + 2, t, g)$ | `(l + 2, 3, BLKSIMDD)` | input buffer for function values |
+/// | `l` | $l$ | | scalar | angular momentum of current GTO shell |
+/// | `alpha` | $\alpha$ | | scalar | exponent value of current GTO shell |
+///
+/// # PySCF equivalent
+///
+/// `libcgto.so`: `void GTOnabla1`
 pub fn gto_nabla1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, alpha: f64) {
     let a2 = FpSimd::<f64>::splat(-2.0 * alpha);
     // first derivative
@@ -372,17 +494,107 @@ pub fn gto_nabla1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, 
     }
 }
 
+/// Computes elementwise product of polynomial part of GTO with 3-component
+/// vector $\bm R$ in SIMD blocks.
+///
+/// # Formula of Gaussian
+///
+/// This usually evaluates the grid-point coordinate, which is composition of
+/// electronic coordinate (centered by atom) $\bm r$ and the atomic center
+/// position $\bm R$:
+///
+/// $$
+/// (\bm r + \bm R) | l_x, l_y, l_z, \alpha, \bm r \rangle
+/// $$
+///
+/// Take the example of $x$ component:
+///
+/// $$
+/// \begin{align*}
+/// (x + R_x) | l_x, l_y, l_z, \alpha, \bm r \rangle
+/// &= x | l_x, l_y, l_z, \alpha, \bm r \rangle + R_x | l_x, l_y,
+/// l_z, \alpha, \bm r \rangle
+/// \\\\
+/// &= R_x | l_x, l_y, l_z, \alpha, \bm r \rangle + | l_x + 1, l_y,
+/// l_z, \alpha, \bm r \rangle \end{align*}
+/// $$
+///
+/// The same applies to $y$ and $z$ directions.
+///
+/// See [`gto`](crate::gto) module documentation for notation details.
+///
+/// # Formula of recursion relations of polynomial part
+///
+/// This function evaluates the polynomial part of cartesian GTO (the whole $|
+/// \bm l, \alpha, \bm r \rangle$ without $\exp(- \alpha r^2)$). The recursion
+/// correlation of this polynomial (along each coordinate component) is given
+/// by:
+///
+/// $$
+/// F_{l_t}^\texttt{1} = R_t F_{l_t}^\texttt{0} +
+/// F_{l_t+1}^\texttt{0} $$
+///
+/// # Argument Table
+///
+/// | variable | formula | dimension | shape | notes |
+/// |--|--|--|--|--|
+/// | `f1` | $[F_{l_x, g}^\texttt{1}, F_{l_y, g}^\texttt{1}, F_{l_z, g}^\texttt{1}]$ | $(l + 1, t, g)$ | `(l + 1, 3, BLKSIMDD)` | output buffer for first derivatives |
+/// | `f0` | $[F_{l_x, g}^\texttt{0}, F_{l_y, g}^\texttt{0}, F_{l_z, g}^\texttt{0}]$ | $(l + 2, t, g)$ | `(l + 2, 3, BLKSIMDD)` | input buffer for function values |
+/// | `l` | $l$ | | scalar | angular momentum of current GTO shell |
+/// | `ri` | $\bm R$ | $(t)$ | `(3)` | center position of current GTO shell |
+///
+/// # PySCF equivalent
+///
+/// `libcgto.so`: `void GTOx1`
 pub fn gto_x1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, ri: [f64; 3]) {
     let ri_x = f64simd::splat(ri[X]);
     let ri_y = f64simd::splat(ri[Y]);
     let ri_z = f64simd::splat(ri[Z]);
     for i in 0..=l {
-        f1[i][X] = f0[i][X].add_mul(ri_x, f0[i + 1][X]);
-        f1[i][Y] = f0[i][Y].add_mul(ri_y, f0[i + 1][Y]);
-        f1[i][Z] = f0[i][Z].add_mul(ri_z, f0[i + 1][Z]);
+        f1[i][X] = f0[i][X].mul_add(ri_x, f0[i + 1][X]);
+        f1[i][Y] = f0[i][Y].mul_add(ri_y, f0[i + 1][Y]);
+        f1[i][Z] = f0[i][Z].mul_add(ri_z, f0[i + 1][Z]);
     }
 }
 
+/// Computes polynomial part of GTO multiplied by electronic coordinate $\bm r$
+/// in SIMD blocks.
+///
+/// # Formula of Gaussian
+///
+/// As an example, cartesian gaussian's multiplication by $x$ is computed by:
+///
+/// $$
+/// x | l_x, l_y, l_z, \alpha, \bm r \rangle = | l_x + 1, l_y, l_z, \alpha,
+/// \bm r \rangle
+/// $$
+///
+/// The same applies to $y$ and $z$ directions.
+///
+/// See [`gto`](crate::gto) module documentation for notation details.
+///
+/// # Formula of recursion relations of polynomial part
+///
+/// This function evaluates the polynomial part of cartesian GTO (the whole $|
+/// \bm l, \alpha, \bm r \rangle$ without $\exp(- \alpha r^2)$). The recursion
+/// correlation of this polynomial (along each coordinate component) is given
+/// by:
+///
+/// $$
+/// F_l^\texttt{1} = F_{l+1}^\texttt{0}
+/// $$
+///
+/// # Argument Table
+///
+/// | variable | formula | dimension | shape | notes |
+/// |--|--|--|--|--|
+/// | `f1` | $[F_{l_x, g}^\texttt{1}, F_{l_y, g}^\texttt{1}, F_{l_z, g}^\texttt{1}]$ | $(l + 1, t, g)$ | `(l + 1, 3, BLKSIMDD)` | output buffer for first derivatives |
+/// | `f0` | $[F_{l_x, g}^\texttt{0}, F_{l_y, g}^\texttt{0}, F_{l_z, g}^\texttt{0}]$ | $(l + 2, t, g)$ | `(l + 2, 3, BLKSIMDD)` | input buffer for function values |
+/// | `l` | $l$ | | scalar | angular momentum of current GTO shell |
+///
+/// # PySCF equivalent
+///
+/// `grid_ao_drv.h`: macro `GTO_R_I`
 pub fn gto_r_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize) {
     for i in 0..=l {
         f1[i][X] = f0[i + 1][X];
@@ -391,15 +603,39 @@ pub fn gto_r_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize) {
     }
 }
 
-pub fn gto_prim_exp(
-    // arguments
-    eprim: &mut [f64blk],
-    coord: &[f64blk; 3],
-    alpha: &[f64],
-    fac: f64,
-    // dimensions
-    nprim: usize,
-) {
+/// Computes GTO exponents without angular momentum and normalization in SIMD
+/// blocks of a shell.
+///
+/// # Formula
+///
+/// This function evaluates only the exponent part (without polynomial part) of
+/// GTO.
+///
+/// $$
+/// | \bm 0, \alpha, \bm r \rangle = \exp(- \alpha r^2)
+/// $$
+///
+/// where $r^2 = x^2 + y^2 + z^2$.
+///
+/// # Argument Table
+///
+/// | variable | formula | dimension | shape | notes |
+/// |--|--|--|--|--|
+/// | `eprim` | $\vert \bm 0, \alpha_p, \bm r_g \rangle$ | $(p, g)$ | `(nprim, BLKSIZE)` | output buffer for GTO exponents |
+/// | `coord` | $\bm r_g$ | $(t, g)$ | `(3, BLKSIZE)` | grid coordinates |
+/// | `alpha` | $\alpha_p$ | $(p)$ | `(nprim)` | exponent values for primitives |
+/// | `fac` | | | scalar | prefactor for GTO exponents |
+/// | `nprim` | | | dim-size | number of primitives (index of $p$) |
+///
+/// # See also
+///
+/// This function is a low-level function to implement the
+/// [`GtoEvalAPI::gto_exp`] trait method.
+///
+/// # PySCF equivalent
+///
+/// `libcgto.so`: `int GTOprim_exp`
+pub fn gto_prim_exp(eprim: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], fac: f64, nprim: usize) {
     let mut rr = unsafe { f64blk::uninit() };
     for i in 0..BLKSIZE {
         rr[i] = coord[0][i] * coord[0][i] + coord[1][i] * coord[1][i] + coord[2][i] * coord[2][i];

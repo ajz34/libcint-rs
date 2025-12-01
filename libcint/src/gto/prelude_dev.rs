@@ -15,17 +15,46 @@ pub use crate::gto::deriv_impl::deriv_sp::*;
 pub use crate::gto::deriv_util::*;
 pub use crate::gto::grid_ao_drv::*;
 
-pub use crate::cint_ffi::*;
-pub use crate::prelude::*;
-pub use core::ffi::c_int;
-pub use core::mem::transmute;
-pub use core::mem::MaybeUninit;
+pub(crate) use crate::cint_ffi::*;
+pub(crate) use crate::prelude::*;
+pub(crate) use core::ffi::c_int;
+pub(crate) use core::mem::transmute;
+pub(crate) use core::mem::MaybeUninit;
 
-pub const BLKSIZE: usize = 56;
+/// Number of SIMD lanes for double precision (SIMD for double).
+///
+/// It should be 8 for AVX-512.
+///
+/// For other architectures, it is better to be 4 (AVX2) or 2 (SSE2), but
+/// currently we fix it to 8. So other architectures will still be optimized by
+/// SIMD, it can be somehow sub-optimal due to insufficient instructions in
+/// registers.
 pub const SIMDD: usize = 8;
+
+/// Block size for grid AO evaluation.
+///
+/// This value (56) should be multiple of [`SIMDD`] (8). Currently this value is
+/// fixed to 56, in that for the most-used deriv1 case, the processed grids per
+/// function call is $(n_\mathrm{comp}, n_\mathrm{ctr} \times
+/// n_\mathrm{cart}(l), n_\mathrm{grids})$ will usually be up to (4, 15, 56) or
+/// 26.3 KB, which fits in L1d cache (32 KB in most micro-architectures)
+/// together with other data.
+pub const BLKSIZE: usize = 56;
+
+/// Number of SIMD blocks in a block.
+///
+/// This value will be 7 for the current settings, and will be used in loops
+/// over blocks.
 pub const BLKSIMDD: usize = BLKSIZE / SIMDD;
+
+/// Number of histogram bins for GTO screening [`gto_screen_index`].
 pub const NBINS: u8 = 100;
-pub const CUTOFF: f64 = 1e-15;
+
+/// Cutoff value for GTO screening [`gto_screen_index`].
+pub const CUTOFF: f64 = 1e-22;
+
+/// Cutoff value to consider a GTO exponents as zero in implementations of trait
+/// function [`GtoEvalAPI::gto_shell_eval`].
 pub const GTOZERO: f64 = 1e-30;
 
 pub const X: usize = 0;
@@ -60,7 +89,8 @@ pub const ZZZ: usize = 9;
 /// - $l = 1$ (p): $\sqrt{\frac{3}{4\pi}}$
 /// - otherwise: 1
 ///
-/// libcint C function: `CINTcommon_fac_sp`.
+/// libcint C function: `CINTcommon_fac_sp`. This function is not included in
+/// the public C API of libcint, so we re-implement it in Rust here.
 pub fn cint_common_fac_sp(l: c_int) -> f64 {
     match l {
         0 => 0.282094791773878143, // sqrt(1 / (4 * pi))

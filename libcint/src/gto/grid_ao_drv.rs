@@ -1,21 +1,46 @@
 use crate::gto::prelude_dev::*;
 
+/// Trait for GTO evaluator on grids.
 pub trait GtoEvalAPI: Send + Sync {
+    /// Number of complex components.
+    ///
+    /// This is usually 1 for real-valued GTOs, and 4 for spinor GTOs.
+    /// For non-spinor grid evaluation, this value will be multiplied by
+    /// [`ntensor`](GtoEvalAPI::ntensor) to get the total number of components.
     fn ne1(&self) -> usize;
+
+    /// Number of tensor components.
+    ///
+    /// For example, for first derivatives ($i \nabla$ or `ip`), this value is
+    /// 3.
+    ///
+    /// For non-spinor grid evaluation, this value will be multiplied by
+    /// [`ne1`](GtoEvalAPI::ne1) to get the total number of components. For
+    /// spinor grid evaluation, this value denotes the total number of
+    /// components.
     fn ntensor(&self) -> usize;
+
+    /// Total number of components for real-valued GTOs on grids.
     fn ncomp(&self) -> usize {
         self.ne1() * self.ntensor()
     }
+
+    /// Initialize evaluator with molecule data.
+    /// 
+    /// This is usually a no-op for most evaluators, but can be used to store
+    /// molecule data if necessary (such as gauge origin).
     fn init(&mut self, _mol: &CInt) {}
+
+    /// Evaluate GTO exponentials on grids.
+    /// 
+    /// This function usually 
     fn gto_exp(
         &self,
-        // arguments
         ebuf: &mut [f64blk],
         coord: &[f64blk; 3],
         alpha: &[f64],
         coeff: &[f64],
         fac: f64,
-        // dimensions
         shl_shape: [usize; 2],
     );
     fn gto_shell_eval(

@@ -1,44 +1,63 @@
 use crate::gto::prelude_dev::*;
 
-/// Compute contracted GTO value, zeroth order.
-///
-/// This function only handles batch of grids with fixed size [`BLKSIZE`], to be
-/// better SIMD optimized.
-///
-/// This only handles $l = 0$ orbitals.
+/// Compute **early-contracted** exponental part of GTO without angular momentum
+/// and normalization in SIMD blocks of a shell.
 ///
 /// # Formula
 ///
-/// $$ $$
+/// This function evaluates only the exponent part (without polynomial part) of
+/// GTO, which is also the same to the $l = 0$ case.
+///
+/// Given $l = 0$, the GTO value of contracted function $k$ at grid point $g$ is
 ///
 /// $$
-/// \begin{align*}
-/// \mathscr G_k (\bm r_g) &= \mathrm{fac} \times \sum_p C_{kp} \mathscr G_p
-/// (\bm r_g)
-/// \\\\
-/// \mathscr G_p (\bm r_g) &= \exp(- \alpha_p r_g^2)
-/// \\\\
-/// r_g^2 &= x_g^2 + y_g^2 + z_g^2
-/// \end{align*}
+/// \phi_{k g}^{l = 0} = \phi_k^{l = 0} (\bm r_g) = \sum_p C_{k p} | \bm 0,
+/// \alpha_p, \bm r_g \rangle = \sum_p C_{k p} \exp(- \alpha_p r_g^2)
 /// $$
+///
+/// where $r_g^2 = x_g^2 + y_g^2 + z_g^2$.
+///
+/// This function only handles $l = 0$ case. For even higher angular momenta
+/// $\bm l = (l_x, l_y, l_z)$, the contracted GTO can be evaluated by
+/// multiplying the polynomial part (also see [`gto_shell_eval_grid_cart`]):
+///
+/// $$
+/// \phi_{k g} = x_g^{l_x} y_g^{l_y} z_g^{l_z} \times \phi_{k g}^{l = 0}
+/// $$
+///
+/// This function also allows to include an additional factor `fac`.
 ///
 /// # Indices Table
 ///
 /// | index | size | notes |
 /// |--|--|--|
-/// | $k$ | `nctr` | contracted AO |
-/// | $p$ | `nprim` | primitive AO |
-/// | $g$ | [`BLKSIZE`] | grids |
+/// | $k$ | `nctr` | GTO contraction |
+/// | $p$ | `nprim` | primitive GTO |
+/// | $g$ | [`BLKSIZE`] | grid block in iterations |
 ///
 /// # Argument Table
 ///
 /// | variable | formula | dimension | shape | notes |
 /// |--|--|--|--|--|
-/// | `ectr` | $\phi_k (r_g)$ | $(k, g)$ | `(nctr, BLKSIZE)` | GTO value of contracted AO |
-/// | `coord` | $(x_g, y_g, z_g)$ | $(3, g)$ | `(3, BLKSIZE)` | coordinates of grids (taking AO's center as origin) |
-/// | `alpha` | $\alpha_p$ | $(p,)$ | `nprim` | exponents of primitive AO |
+/// | `ectr` | $\phi_{kg}^{l = 0}$ | $(k, g)$ | `(nctr, BLKSIZE)` | contracted exponential part of GTO |
+/// | `coord` | $(x_g, y_g, z_g)$ | $(3, g)$ | `(3, BLKSIZE)` | coordinates of grids (taking GTO's center as origin) |
+/// | `alpha` | $\alpha_p$ | $(p,)$ | `nprim` | exponents of primitive GTO |
 /// | `coeff` | $C_{kp}$ | $(k, p)$ | `(nctr, BLKSIZE)` | cGTO contraction coefficients |
-/// | `fac` | $\mathrm{fac}$ | scalar | | Additional factor (also see [`cint_common_fac_sp`]) |
+/// | `fac` | $\mathrm{fac}$ | | scalar | Additional factor (also see [`cint_common_fac_sp`]) |
+///
+/// # See also
+///
+/// This function is a low-level function to implement the
+/// [`GtoEvalAPI::gto_exp`] trait method.
+///
+/// Also see [`gto_contract_exp1`] for handling first derivative of
+/// early-contracted GTO exponents.
+///
+/// This function should be used together with [`gto_shell_eval_grid_cart`].
+///
+/// # PySCF equivalent
+///
+/// `libcgto.so`: `int GTOcontract_exp0`
 pub fn gto_contract_exp0(
     // arguments
     ectr: &mut [f64blk],
@@ -85,9 +104,23 @@ pub fn gto_contract_exp0(
 ///
 /// # Formula
 ///
+/// This functions starts from contracted GTO exponents (without polynomial
+/// part):
+///
 /// $$
-/// \phi_\mu (\bm r_g) = x_g^{\mu_x} y_g^{\mu_y} z_g^{\mu_z} \times
-/// \mathscr G_{\mu_k} (\bm r_g)
+/// \phi_{kg}^{l = 0} = \sum_p C_{k p} | \bm 0, \alpha_p, \bm r_g \rangle
+/// $$
+///
+/// The full GTO value is evaluated by multiplying the polynomial part:
+///
+/// $$
+/// \begin{align*}
+/// \phi_{\mu g} &= \phi_\mu (\bm r_g) = \sum_p C_{k p} | \bm l, \alpha_p, \bm
+/// r_g \rangle = \sum_p C_{k p} x^{l_x} y^{l_y} z^{l_z} | \bm 0, \alpha_p, \bm
+/// r_g \rangle
+/// \\\\
+/// &= x_g^{l_x} y_g^{l_y} z_g^{l_z} \times \phi_{kg}^{l = 0}
+/// \end{align*}
 /// $$
 ///
 /// Notes on index $\mu$:
@@ -118,29 +151,29 @@ pub fn gto_contract_exp0(
 ///
 /// | index | size | notes |
 /// |--|--|--|
-/// | $\mu$ | `ncart * nctr` | cartesian AO basis function |
-/// | $\mu_k$ | `nctr` | contracted AO function |
-/// | $g$ | `bgrid` | grids, usually equal but may be smaller than [`BLKSIZE`] |
+/// | $\mu$ | `ncart * nctr` | cartesian GTO basis function |
+/// | $k$ | `nctr` | GTO contraction |
+/// | $g$ | [`BLKSIZE`] | grid block in iterations |
 ///
 /// # Argument Table
 ///
 /// | variable | formula | dimension | shape | notes |
 /// |--|--|--|--|--|
-/// | `gto` | $\phi_\mu (\bm r_g)$ | $(\mathbb{A}, \mu, g)$ | `(1, nao, ngrid)` | GTO value of cartesian AO basis |
-/// | `exps` | $\mathscr G_{\mu_k} (\bm r_g)$ | $(\mu_k, g)$ | `(nctr, BLKSIZE)` | cGTO value (given by function [`gto_contract_exp0`]) |
-/// | `coord` | $(x_g, y_g, z_g)$ | $(3, g)$ | `(3, BLKSIZE)` | coordinates of grids (taking AO's center as origin) |
-/// | `l` | $l$ | scalar | | angular momentum of the shell |
+/// | `gto` | $\phi_{\mu g}$ | $(\mu, g)$ | `(ncart * nctr, ngrid)` | GTO value by grid block |
+/// | `exps` | $\phi_{kg}^{l = 0}$ | $(k, g)$ | `(nctr, BLKSIZE)` | early-contracted GTO exponents <br>(given by function [`gto_contract_exp0`]) |
+/// | `coord` | $(x_g, y_g, z_g)$ | $(3, g)$ | `(3, BLKSIZE)` | coordinates of grids (taking GTO's center as origin) |
+/// | `l` | $l$ | | scalar | angular momentum of the shell |
 ///
-/// Note of `gto`:
-/// - The first dimension `\mathbb{A}` is for properties, currently always 1
-///   since we are evaluating only the basis value, not its derivatives.
+/// # See also
 ///
-/// # Offset Table
+/// This function is a low-level function to implement the
+/// [`GtoEvalAPI::gto_shell_eval`] trait method.
 ///
-/// | variable | notes |
-/// |--|--|
-/// | `iao` | starting index $\mu$ of the shell in `gto` |
-/// | `igrid` | starting index $g$ of the grids in `gto` |
+/// This function should be used together with [`gto_contract_exp0`].
+///
+/// # PySCF equivalent
+///
+/// `libcgto.so`: `int GTOshell_eval_grid_cart`
 pub fn gto_shell_eval_grid_cart(
     // arguments
     gto: &mut [f64blk],
