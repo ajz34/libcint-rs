@@ -26,23 +26,15 @@ pub trait GtoEvalAPI: Send + Sync {
     }
 
     /// Initialize evaluator with molecule data.
-    /// 
+    ///
     /// This is usually a no-op for most evaluators, but can be used to store
     /// molecule data if necessary (such as gauge origin).
     fn init(&mut self, _mol: &CInt) {}
 
     /// Evaluate GTO exponentials on grids.
-    /// 
-    /// This function usually 
-    fn gto_exp(
-        &self,
-        ebuf: &mut [f64blk],
-        coord: &[f64blk; 3],
-        alpha: &[f64],
-        coeff: &[f64],
-        fac: f64,
-        shl_shape: [usize; 2],
-    );
+    ///
+    /// This function usually
+    fn gto_exp(&self, ebuf: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], coeff: &[f64], fac: f64, shl_shape: [usize; 2]);
     fn gto_shell_eval(
         &self,
         // arguments
@@ -538,23 +530,21 @@ pub fn gto_eval_spinor_iter(
         evaluator.gto_exp(ebuf, coord, alpha, coeff, fac1, [nctr, nprim]);
         evaluator.gto_shell_eval(gto_cart, ebuf, coord, alpha, coeff, l, center, [nctr, nprim]);
         for a in 0..ntensor {
-            for k in 0..nctr {
-                let ptr_a = &gto_sp_a[a * nctr * nspinor + k * nspinor..] as *const _ as *mut Complex<f64>;
-                let ptr_b = &gto_sp_b[a * nctr * nspinor + k * nspinor..] as *const _ as *mut Complex<f64>;
-                let ptr_cart = &gto_cart[a * ne1 * nctr * ncart + k * ne1 * ncart..] as *const _ as *mut f64;
-                unsafe {
-                    evaluator.cint_c2s_ket_spinor(
-                        ptr_a,
-                        ptr_b,
-                        ptr_cart,
-                        BLKSIZE as c_int,
-                        BLKSIZE as c_int,
-                        nctr as c_int,
-                        kappa as c_int,
-                        l as c_int,
-                    )
-                };
-            }
+            let ptr_a = &gto_sp_a[a * nctr * nspinor..] as *const _ as *mut Complex<f64>;
+            let ptr_b = &gto_sp_b[a * nctr * nspinor..] as *const _ as *mut Complex<f64>;
+            let ptr_cart = &gto_cart[a * nctr * ne1 * ncart..] as *const _ as *mut f64;
+            unsafe {
+                evaluator.cint_c2s_ket_spinor(
+                    ptr_a,
+                    ptr_b,
+                    ptr_cart,
+                    BLKSIZE as c_int,
+                    BLKSIZE as c_int,
+                    nctr as c_int,
+                    kappa as c_int,
+                    l as c_int,
+                )
+            };
         }
         gto_copy_grids(gto_sp_a, aoa, nao_to_set, ntensor, ao_shape, [iao, igrid]);
         gto_copy_grids(gto_sp_b, aob, nao_to_set, ntensor, ao_shape, [iao, igrid]);
