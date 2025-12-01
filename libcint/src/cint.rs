@@ -217,7 +217,7 @@ pub struct CIntOutput<F> {
 #[derive(Builder, Debug)]
 #[builder(pattern = "owned", build_fn(error = "CIntError"))]
 pub struct IntegrateArgs<'l, F> {
-    /// Integrator name, such as "int1e_ovlp", "int2e", etc.
+    /// Integrator name, such as `"int1e_ovlp"`, `"int2e"`, etc.
     #[builder(setter(into))]
     pub intor: &'l str,
 
@@ -259,7 +259,7 @@ pub struct IntegrateArgs<'l, F> {
 #[derive(Builder, Debug)]
 #[builder(pattern = "owned", build_fn(error = "CIntError"))]
 pub struct IntorCrossArgs<'l, F> {
-    /// Integrator name, such as "int1e_ovlp", "int2e", etc.
+    /// Integrator name, such as `"int1e_ovlp"`, `"int2e"`, etc.
     #[builder(setter(into))]
     pub intor: &'l str,
 

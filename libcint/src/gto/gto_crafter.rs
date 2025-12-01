@@ -1,31 +1,78 @@
 use crate::prelude::*;
 
+/// GTO evaluation arguments for [`CInt::eval_gto_with_args`] and
+/// [`CInt::eval_gto_with_args_spinor`].
+///
+/// Builder of this struct can be retrieved by [`CInt::gto_args_builder`] and
+/// [`CInt::gto_args_builder_spinor`].
 #[derive(Builder, Debug)]
 #[builder(pattern = "owned", build_fn(error = "CIntError"))]
 pub struct GtoArgs<'l, F> {
+    /// Evaluator name, such as `"GTOval_sph_deriv1"`, `"GTOval_cart_ipig"`,
+    /// etc.
     #[builder(setter(into))]
     pub eval_name: &'l str,
 
+    /// Coordinates of grids, shape `(ngrid, 3)`.
+    ///
+    /// If you have `&[f64]` array instead of `&[[f64; 3]]`, you can use
+    /// `core::slice::as_chunks` to convert it (rustc 1.88.0+).
     pub coord: &'l [[f64; 3]],
 
+    /// Slice of shells to evaluate, such as `[0, 5]` to evaluate shells 0 to 4.
+    ///
+    /// Default is `None`, which means all shells will be evaluated.
     #[builder(default, setter(into))]
     pub shls_slice: Option<[usize; 2]>,
 
+    /// Non-zero table for screening, shape `(nbas, nblk)`, where
+    /// $n_\mathrm{blk} = \lceil \frac{n_\mathrm{grid}}{\texttt{BLKSIZE}}
+    /// \rceil$.
+    ///
+    /// Default is `None`, and will be determined by value of struct field
+    /// `cutoff`.
     #[builder(default, setter(strip_option))]
     pub non0tab: Option<&'l [u8]>,
 
+    /// Cutoff for screening and generating `non0tab`.
+    ///
+    /// Default to [`CUTOFF`] or 1e-22.
     #[builder(default = Some(CUTOFF), setter(into))]
     pub cutoff: Option<f64>,
 
+    /// Number of bins for screening.
+    ///
+    /// Default to [`NBINS`] or 100.
     #[builder(default, setter(into))]
     pub nbins: Option<u8>,
 
+    /// Whether to fill the output array with zero during GTO value evaluation.
+    ///
+    /// Default to `true`.
+    ///
+    /// Please note that if the user does not provide output array, then we will
+    /// always use something similar to [`alloc_zeroed`] (rust's internal trait
+    /// function) to fast allocate a zeroed buffer, and will not fill zero
+    /// during GTO value evaluation.
+    ///
+    /// [`alloc_zeroed`]: core::alloc::GlobalAlloc::alloc_zeroed
     #[builder(default = true)]
     pub fill_zero: bool,
 
+    /// Scaling factor for GTO values.
+    ///
+    /// Default to 1.0.
     #[builder(default = 1.0)]
     pub fac: f64,
 
+    /// Output array for GTO values, shape `(ngrid, nao, ncomp)` in column-major
+    /// order.
+    ///
+    /// If not provided, the output array will be allocated internally. The
+    /// allocation should call something similar to [`alloc_zeroed`] (rust's
+    /// internal trait function).
+    ///
+    /// [`alloc_zeroed`]: core::alloc::GlobalAlloc::alloc_zeroed
     #[builder(default, setter(strip_option))]
     pub out: Option<&'l mut [F]>,
 }
