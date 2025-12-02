@@ -634,14 +634,14 @@ impl CInt {
     /// [`integrate_spinor`](Self::integrate_spinor), which output is
     /// [`Complex<f64>`].
     ///
-    /// </div>
-    ///
     /// ```should_panic
     /// # use libcint::prelude::*;
     /// # let cint_data = init_h2o_def2_tzvp();
     /// let (out, shape) = cint_data.integrate("int1e_ovlp_spinor", None, None).into();
     /// // panics: Expected float type size 16 bytes, but got 8 bytes.
     /// ```
+    ///
+    /// </div>
     ///
     /// # See also
     ///
@@ -696,14 +696,14 @@ impl CInt {
     /// and cartesian integral should be called by
     /// [`integrate`](Self::integrate), which output is `f64`.
     ///
-    /// </div>
-    ///
     /// ```should_panic
     /// # use libcint::prelude::*;
     /// # let cint_data = init_h2o_def2_tzvp();
     /// let (out, shape) = cint_data.integrate_spinor("int1e_ovlp_sph", None, None).into();
     /// // panics: Expected float type size 8 bytes, but got 16 bytes.
     /// ```
+    ///
+    /// </div>
     ///
     /// # See also
     ///
@@ -843,7 +843,7 @@ impl CInt {
         CInt::integrate_cross_with_args_inner(args)
     }
 
-    /// Integrate with multiple molecules (for spinor type.) **in
+    /// Integrate with multiple molecules (for spinor type) **in
     /// column-major**.
     ///
     /// # See also
@@ -859,7 +859,7 @@ impl CInt {
         CInt::integrate_cross_spinor_f(intor, mols, aosym, shls_slice).cint_unwrap()
     }
 
-    /// Integrate with multiple molecules (for spinor type.) **in
+    /// Integrate with multiple molecules (for spinor type) **in
     /// column-major**.
     ///
     /// This function is fallible.

@@ -77,6 +77,13 @@ pub struct GtoArgs<'l, F> {
     pub out: Option<&'l mut [F]>,
 }
 
+/// Get GTO evaluator by name.
+///
+/// # Returns
+///
+/// - [`Box<dyn GtoEvalAPI>`](GtoEvalAPI): The GTO evaluator instance.
+/// - [`Option<CIntType>`](CIntType): The CIntType (Spheric/Cartesian/Spinor) if
+///   specified in the name, None if not specified.
 pub fn get_gto_eval_name_f(eval_name: &str) -> Option<(Box<dyn GtoEvalAPI>, Option<CIntType>)> {
     let name = eval_name.to_lowercase().replace(['_', '-'], " ");
     let mut name_list = name.split_whitespace().collect_vec();
@@ -120,20 +127,93 @@ pub fn get_gto_eval_name_f(eval_name: &str) -> Option<(Box<dyn GtoEvalAPI>, Opti
 }
 
 impl CInt {
+    /// Get GTO evaluator by name.
+    ///
+    /// This function is fallible.
+    ///
+    /// # See also
+    ///
+    /// - [`get_gto_eval_name`](CInt::get_gto_eval_name) for non-fallible
+    ///   counterpart.
     pub fn get_gto_eval_name_f(&self, eval_name: &str) -> Result<(Box<dyn GtoEvalAPI>, Option<CIntType>), CIntError> {
         get_gto_eval_name_f(eval_name).ok_or(cint_error!(IntegratorNotFound, "{eval_name}"))
     }
 
+    /// Get GTO evaluator by name.
+    ///
+    /// # Returns
+    ///
+    /// - [`Box<dyn GtoEvalAPI>`](GtoEvalAPI): The GTO evaluator instance.
+    /// - [`Option<CIntType>`](CIntType): The CIntType
+    ///   (Spheric/Cartesian/Spinor) if specified in the name, None if not
+    ///   specified.
+    ///
+    /// # See also
+    ///
+    /// - [`get_gto_eval_name_f`](CInt::get_gto_eval_name_f) for fallible
+    ///   counterpart.
     pub fn get_gto_eval_name(&self, eval_name: &str) -> (Box<dyn GtoEvalAPI>, Option<CIntType>) {
         self.get_gto_eval_name_f(eval_name).cint_unwrap()
+    }
+
+    /// Get GTO screening tabulation index (`non0tab`) on grids.
+    ///
+    /// This will generate a screening table with shape `(nbas, nblk)`, where
+    /// $n_\mathrm{blk} = \lceil \frac{n_\mathrm{grid}}{\texttt{BLKSIZE}}
+    /// \rceil$. [`BLKSIZE`] is a predefined constant 56.
+    ///
+    /// The screening table represents whether each (basis shell, grid block) is
+    /// significant enough to be evaluated. If the tabulated value is zero, then
+    /// the corresponding (basis shell, grid block) pair can be skipped during
+    /// GTO evaluation, within the `cutoff` threadhold that the API user
+    /// provided.
+    ///
+    /// # PySCF equivalent
+    ///
+    /// `pyscf.gto.eval_gto.make_screen_index`; please note that `blksize`
+    /// argument is not configurable for rust's version, which is defined as a
+    /// const [`BLKSIZE`].
+    ///
+    /// # Arguments
+    ///
+    /// - `coords`: Coordinates of grids, shape `(ngrid, 3)`.
+    /// - `shls_slice`: Slice of shells to evaluate. If None, evaluate all
+    ///   shells in the molecule.
+    /// - `nbins`: Number of bins for screening. Default to [`NBINS`] or 100.
+    /// - `cutoff`: Cutoff (GTO exponent without derivatives) for screening.
+    ///   Default to [`CUTOFF`] or 1e-22.
+    pub fn gto_screen_index(
+        &self,
+        coords: &[[f64; 3]],
+        shls_slice: Option<[usize; 2]>,
+        nbins: Option<u8>,
+        cutoff: Option<f64>,
+    ) -> CIntOutput<u8> {
+        let shls_slice = shls_slice.unwrap_or([0, self.nbas()]);
+        let (out, shape) = gto_screen_index(coords, shls_slice, nbins, cutoff, &self.atm, &self.bas, &self.env);
+        CIntOutput { out: Some(out), shape: shape.into() }
     }
 }
 
 impl CInt {
+    /// Create a builder for GTO evaluation arguments for
+    /// [`CInt::eval_gto_with_args`].
+    ///
+    /// # See also
+    ///
+    /// - [`CInt::eval_gto_with_args`] for usage of the built arguments.
+    /// - [`GtoArgsBuilder`] for the builder struct.
+    /// - [`CInt::gto_args_builder_spinor`] for spinor version.
     pub fn gto_args_builder(&self) -> GtoArgsBuilder<'_, f64> {
         GtoArgsBuilder::default()
     }
 
+    /// Evaluate GTO values on grids with given arguments.
+    ///
+    /// # See also
+    ///
+    /// - [`eval_gto_with_args`](CInt::eval_gto_with_args) for non-fallible
+    ///   counterpart.
     pub fn eval_gto_with_args_f(&self, args: GtoArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
         let mut data = self.clone();
         let GtoArgs { eval_name, coord, shls_slice, non0tab, cutoff, nbins, mut fill_zero, fac, out } = args;
@@ -205,24 +285,212 @@ impl CInt {
         Ok(CIntOutput { out: out_vec, shape: out_shape })
     }
 
+    /// Evaluate GTO values on grids with given arguments.
+    ///
+    /// For simple usage and more documentation, please refer to associated
+    /// function [`eval_gto`](CInt::eval_gto).
+    ///
+    /// # PySCF equivalent
+    ///
+    /// `mol.eval_ao` with full arguments. Please note that `comp` and `ao_loc`
+    /// arguments in PySCF is not covered in rust's version, since they are
+    /// probably redundant.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    ///
+    /// // generate a grid of 2048 points
+    /// let ngrid = 2048;
+    /// let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
+    /// let args = cint_data.gto_args_builder()
+    ///     .eval_name("deriv1_sph")
+    ///     .coord(&coord)
+    ///     .cutoff(1e-15)    
+    ///     .build()
+    ///     .unwrap();
+    /// let (out, shape) = cint_data.eval_gto_with_args(args).into();
+    /// assert_eq!(shape, vec![2048, 43, 4]); // (ngrid, nao, ncomp)
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`eval_gto_with_args_f`](CInt::eval_gto_with_args_f) for fallible
+    ///   counterpart.
+    /// - [`GtoArgs`] for the arguments struct.
+    /// - [`gto_args_builder`](CInt::gto_args_builder) for the builder of
+    ///   arguments.
+    /// - [`eval_gto`](CInt::eval_gto) for simpler usage.
     pub fn eval_gto_with_args(&self, args: GtoArgs<f64>) -> CIntOutput<f64> {
         self.eval_gto_with_args_f(args).cint_unwrap()
     }
 
+    /// Evaluate GTO values on grids.
+    ///
+    /// This function is fallible.
+    ///
+    /// # See also
+    ///
+    /// - [`eval_gto`](CInt::eval_gto) for non-fallible counterpart.
     pub fn eval_gto_f(&self, eval_name: &str, coord: &[[f64; 3]]) -> Result<CIntOutput<f64>, CIntError> {
         self.eval_gto_with_args_f(GtoArgsBuilder::default().eval_name(eval_name).coord(coord).build()?)
     }
 
+    /// Evaluate GTO values on grids.
+    ///
+    /// <div class="warning">
+    ///
+    /// **This function follows column-major convention.**
+    ///
+    /// For GTO value evaluation on grids, we do not provide another function
+    /// for row-major convention, different to the case of [`integrate`] and
+    /// [`integrate_row_major`] for electronic integrals.
+    ///
+    /// We always put the grids to be the most contiguous dimension, then the
+    /// atomic orbitals (basis), then the components. For spinors, the spin
+    /// dimension is the least contiguous dimension.
+    ///
+    /// We recommend the users who wish to have row-major output, only revert
+    /// the list of `shape` (struct field of [`CIntOutput`]) after getting the
+    /// output. We do not recommend API user of this function to perform
+    /// explicit memory layout transposition; this will slow down your
+    /// program: both in unnecessary memory bandwidth consumption, and cache
+    /// efficiency reduction in DFT numerical integration.
+    ///
+    /// [`integrate`]: CInt::integrate
+    /// [`integrate_row_major`]: CInt::integrate_row_major
+    ///
+    /// </div>
+    ///
+    /// # PySCF equivalent
+    ///
+    /// `mol.eval_ao(eval_name, coords)`
+    ///
+    /// # Arguments
+    ///
+    /// - `eval_name`: Evaluator name, such as `"GTOval_sph_deriv1"`.
+    /// - `coord`: Coordinates of grids, shape `(ngrid, 3)`.
+    ///
+    /// # Notes on argument `eval_name`
+    ///
+    /// The `eval_name` can contain the following parts:
+    /// - Component or operator: `"deriv0"`, `"deriv1"`, `"deriv2"`, `"deriv3"`,
+    ///   `"ip"`, `"ig"`, etc.
+    /// - Shell type: `"sph"` or `"cart"`. This affects the number of basis
+    ///   functions per shell. If not specified, the type will be determined by
+    ///   the current `cint_type` (struct field) of the [`CInt`] instance. This
+    ///   function does not support `"spinor"` type; please use
+    ///   [`eval_gto_spinor`] instead.
+    /// - Prefix: `"GTO"` or `"GTOval"`. This is for PySCF naming convention
+    ///   compatibility, not necessary.
+    ///
+    /// See also [`get_gto_eval_name_f`] for the actual implementation.
+    ///
+    /// [`eval_gto_spinor`]: CInt::eval_gto_spinor
+    ///
+    /// # Output
+    ///
+    /// Returns a [`CIntOutput<f64>`] for the evaluated GTO values, which
+    /// contains
+    /// - `out` (`Vec<f64>`): The output buffer for GTO values.
+    /// - `shape` (`Vec<usize>`): The shape of output array in column-major
+    ///   order `(ngrid, nao, ncomp)`.
+    ///
+    /// # Example
+    ///
+    /// The following example uses a pre-defined water molecule with def2-TZVP
+    /// basis set.
+    ///
+    /// The construction of [`CInt`] is not performed in this crate,
+    /// but should be provided by user. We refer to function
+    /// [`init_h2o_def2_tzvp`] for how to define a [`CInt`] instance.
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    ///
+    /// // generate a grid of 2048 points
+    /// let ngrid = 2048;
+    /// let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
+    /// let (out, shape) = cint_data.eval_gto("GTOval_sph_deriv1", &coord).into();
+    /// assert_eq!(shape, vec![2048, 43, 4]); // (ngrid, nao, ncomp)
+    /// ```
+    ///
+    /// # Supported evaluators
+    ///
+    /// | Component     | $n_\mathrm{comp}$ | Description |
+    /// |---------------|-------------------|-------------|
+    /// | `deriv0`      | 1                | GTO values |
+    /// | `deriv1`      | 4                | GTO values and derivatives to 1st order (useful for GGA/meta-GGA Fock matrix formulation) |
+    /// | `deriv2`      | 10               | GTO values and derivatives to 2nd order |
+    /// | `deriv3`      | 20               | GTO values and derivatives to 3rd order |
+    /// | `deriv4`      | 35               | GTO values and derivatives to 4th order |
+    /// | `ip`          | 3                | derivative operator $\nabla$, or equivalently momemtum operator $\hat p$ scaled by imaginary unit $i$ |
+    /// | `ig`          | 3                | GIAO operator at 1st order $\hat U_\mathrm{g}$ |
+    /// | `ipig`        | 9                | Combined operator of `ip` and `ig` |
+    /// | `ipr`         | 3                | derivative operator $\nabla$ multiplied by electronic position (taking atomic center as origin) |
+    /// | `iprc`        | 3                | derivative operator $\nabla$ multiplied by electronic position (use certain common origin specified by [`set_common_origin`]) |
+    /// | `sp`          | 1 × 4            | spinor sigma operator |
+    /// | `ipsp`        | 3 × 4            | combined operator of `ip` and `sp` |
+    /// | `ipipsp`      | 9 × 4            | combined operator of `ip`, `ip`, and `sp` |
+    ///
+    /// Note that for `sp` (sigma) related operators, for example `ipsp`, the
+    /// component for non-spinor GTO is 3 × 4 or 12, but will be 3 for spinor
+    /// GTO.
+    ///
+    /// [`set_common_origin`]: CInt::set_common_origin
+    ///
+    /// <div class="warning">
+    ///
+    /// **This function cannot handle spinor GTO evaluation**
+    ///
+    /// Due to rust's strict type system, it is very difficult to handle both
+    /// spinor and spheric/cartesian GTO evaluation in the same function. So
+    /// spinor GTO evaluation should be called by
+    /// [`eval_gto_spinor`](Self::eval_gto_spinor), which output is
+    /// [`Complex<f64>`].
+    ///
+    /// ```should_panic
+    /// # use libcint::prelude::*;
+    /// # let cint_data = init_h2o_def2_tzvp();
+    /// # let coord: Vec<[f64; 3]> = (0..2048).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
+    /// let (out, shape) = cint_data.eval_gto("GTOval_spinor_deriv2", &coord).into();
+    /// // InvalidValue: Spinor type is not supported
+    /// ```
+    ///
+    /// </div>
+    ///
+    /// # See also
+    ///
+    /// - [`eval_gto_f`](CInt::eval_gto_f) for fallible counterpart.
+    /// - [`eval_gto_spinor`](CInt::eval_gto_spinor) for spinor GTO evaluation.
+    /// - [`eval_gto_with_args`](CInt::eval_gto_with_args) for more advanced
+    ///   usage (full arguments that this crate supports).
     pub fn eval_gto(&self, eval_name: &str, coord: &[[f64; 3]]) -> CIntOutput<f64> {
         self.eval_gto_f(eval_name, coord).cint_unwrap()
     }
 }
 
 impl CInt {
+    /// Create a builder for GTO evaluation arguments for spinor GTO evaluation.
+    ///
+    /// # See also
+    ///
+    /// - [`CInt::eval_gto_with_args_spinor`] for usage of the built arguments.
+    /// - [`GtoArgsBuilder`] for the builder struct.
+    /// - [`CInt::gto_args_builder`] for non-spinor version.
     pub fn gto_args_builder_spinor(&self) -> GtoArgsBuilder<'_, Complex<f64>> {
         GtoArgsBuilder::default()
     }
 
+    /// Evaluate spinor GTO values on grids with given arguments.
+    ///
+    /// # See also
+    ///
+    /// - [`eval_gto_with_args_spinor`](CInt::eval_gto_with_args_spinor) for
+    ///   non-fallible counterpart.
     pub fn eval_gto_with_args_spinor_f(&self, args: GtoArgs<Complex<f64>>) -> Result<CIntOutput<Complex<f64>>, CIntError> {
         let mut data = self.clone();
         let GtoArgs { eval_name, coord, shls_slice, non0tab, cutoff, nbins, mut fill_zero, fac, out } = args;
@@ -295,14 +563,62 @@ impl CInt {
         Ok(CIntOutput { out: out_vec, shape: out_shape })
     }
 
+    /// Evaluate spinor GTO values on grids with given arguments.
+    ///
+    /// # See also
+    ///
+    /// - [`eval_gto_with_args_spinor_f`](CInt::eval_gto_with_args_spinor_f) for
+    ///   fallible counterpart.
+    /// - [`GtoArgs`] for the arguments struct.
+    /// - [`gto_args_builder_spinor`](CInt::gto_args_builder_spinor) for the
+    ///   builder of arguments.
+    /// - [`eval_gto_spinor`](CInt::eval_gto_spinor) for simpler usage.
+    /// - [`eval_gto_with_args`](CInt::eval_gto_with_args) for non-spinor
+    ///   version.
     pub fn eval_gto_with_args_spinor(&self, args: GtoArgs<Complex<f64>>) -> CIntOutput<Complex<f64>> {
         self.eval_gto_with_args_spinor_f(args).cint_unwrap()
     }
 
+    /// Evaluate spinor GTO values on grids.
+    ///
+    /// This function is fallible.
+    ///
+    /// # See also
+    ///
+    /// - [`eval_gto_spinor`](CInt::eval_gto_spinor) for non-fallible
+    ///   counterpart.
     pub fn eval_gto_spinor_f(&self, eval_name: &str, coord: &[[f64; 3]]) -> Result<CIntOutput<Complex<f64>>, CIntError> {
         self.eval_gto_with_args_spinor_f(GtoArgsBuilder::default().eval_name(eval_name).coord(coord).build()?)
     }
 
+    /// Evaluate spinor GTO values on grids.
+    ///
+    /// For non-spinor GTO evaluation, please use [`eval_gto`](CInt::eval_gto).
+    ///
+    /// This function will return complex-valued GTO values, with shape `(ngrid,
+    /// nao, ncomp, 2)` in column-major order, where the last dimension of
+    /// size 2 represents the two spinor components (spin-up and spin-down).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// let cint_data = init_h2o_def2_tzvp();
+    /// let ngrid = 2048;
+    /// let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
+    /// let (out, shape) = cint_data.eval_gto_spinor("GTOval_spinor_deriv1", &coord).into();
+    /// assert_eq!(shape, vec![2048, 86, 4, 2]); // (ngrid, nao, ncomp, 2)
+    /// let (out, shape) = cint_data.eval_gto_spinor("GTOval_spinor_ipsp", &coord).into();
+    /// assert_eq!(shape, vec![2048, 86, 3, 2]); // (ngrid, nao, ncomp, 2)
+    /// ```
+    ///
+    /// # See also
+    ///
+    /// - [`eval_gto_spinor_f`](CInt::eval_gto_spinor_f) for fallible
+    ///   counterpart.
+    /// - [`eval_gto`](CInt::eval_gto) for non-spinor GTO evaluation.
+    /// - [`eval_gto_with_args_spinor`](CInt::eval_gto_with_args_spinor) for
+    ///   more advanced usage (full arguments that this crate supports).
     pub fn eval_gto_spinor(&self, eval_name: &str, coord: &[[f64; 3]]) -> CIntOutput<Complex<f64>> {
         self.eval_gto_spinor_f(eval_name, coord).cint_unwrap()
     }

@@ -31,10 +31,17 @@ pub trait GtoEvalAPI: Send + Sync {
     /// molecule data if necessary (such as gauge origin).
     fn init(&mut self, _mol: &CInt) {}
 
-    /// Evaluate GTO exponentials on grids.
+    /// Evaluate GTO exponentials or its early-contraction on grids.
     ///
-    /// This function usually
+    /// Implementators can be
+    /// - [`gto_prim_exp`]
+    /// - [`gto_contract_exp0`]
+    /// - [`gto_contract_exp1`]
     fn gto_exp(&self, ebuf: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], coeff: &[f64], fac: f64, shl_shape: [usize; 2]);
+
+    /// Evaluate GTO shell values on grids.
+    ///
+    /// Each operator will have its own implementation of this function.
     fn gto_shell_eval(
         &self,
         // arguments
@@ -48,6 +55,14 @@ pub trait GtoEvalAPI: Send + Sync {
         // dimensions
         shl_shape: [usize; 2],
     );
+
+    /// Transform cartesian GTO values to spinor GTO values on grids.
+    ///
+    /// Implementators can be
+    /// - [`CINTc2s_ket_spinor_sf1`](crate::ffi::cint_ffi::CINTc2s_ket_spinor_sf1)
+    /// - [`CINTc2s_iket_spinor_sf1`](crate::ffi::cint_ffi::CINTc2s_iket_spinor_sf1)
+    /// - [`CINTc2s_ket_spinor_si1`](crate::ffi::cint_ffi::CINTc2s_ket_spinor_si1)
+    ///
     /// # Safety
     ///
     /// This function should be libcint internal functions, and uses
