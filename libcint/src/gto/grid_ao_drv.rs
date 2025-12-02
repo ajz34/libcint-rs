@@ -59,9 +59,9 @@ pub trait GtoEvalAPI: Send + Sync {
     /// Transform cartesian GTO values to spinor GTO values on grids.
     ///
     /// Implementators can be
-    /// - [`CINTc2s_ket_spinor_sf1`](crate::ffi::cint_ffi::CINTc2s_ket_spinor_sf1)
-    /// - [`CINTc2s_iket_spinor_sf1`](crate::ffi::cint_ffi::CINTc2s_iket_spinor_sf1)
-    /// - [`CINTc2s_ket_spinor_si1`](crate::ffi::cint_ffi::CINTc2s_ket_spinor_si1)
+    /// - [`CINTc2s_ket_spinor_sf1`]
+    /// - [`CINTc2s_iket_spinor_sf1`]
+    /// - [`CINTc2s_ket_spinor_si1`]
     ///
     /// # Safety
     ///
