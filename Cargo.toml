@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.6"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.82.0"
 repository = "https://github.com/ajz34/libcint-rs"
@@ -15,8 +15,8 @@ categories = ["science"]
 license = "Apache-2.0"
 
 [workspace.dependencies]
-libcint = { path = "./libcint", version = "0.1.6" }
-libcint-src = { path = "./libcint-src", version = "0.1.6" }
+libcint = { path = "./libcint", version = "0.2.0" }
+libcint-src = { path = "./libcint-src", version = "0.2.0" }
 
 [profile.dev]
 opt-level = 2
