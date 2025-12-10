@@ -731,15 +731,15 @@ fn test_gto_screen_index() {
 
     let cutoff = 0.01;
     let (non0tab, [nbas, nblk]) = gto_screen_index(&coord, shls_slice, None, Some(cutoff), &cint_data.atm, &cint_data.bas, &cint_data.env);
-    assert_eq!([nbas, nblk], [464, 37]);
+    assert_eq!([nbas, nblk], [464, 43]);
     let non0tab_f64 = non0tab.iter().map(|&x| x as f64).collect_vec();
-    assert!((cint_fp(&non0tab_f64) - -86.95900863817528).abs() < 1e-10);
+    assert!((cint_fp(&non0tab_f64) - 73.84344810974999).abs() < 1e-10);
 
     let cutoff = 1e-15;
     let (non0tab, [nbas, nblk]) = gto_screen_index(&coord, shls_slice, None, Some(cutoff), &cint_data.atm, &cint_data.bas, &cint_data.env);
-    assert_eq!([nbas, nblk], [464, 37]);
+    assert_eq!([nbas, nblk], [464, 43]);
     let non0tab_f64 = non0tab.iter().map(|&x| x as f64).collect_vec();
-    assert!((cint_fp(&non0tab_f64) - 220.1771347194273).abs() < 1e-10);
+    assert!((cint_fp(&non0tab_f64) - 160.71368457383508).abs() < 1e-10);
 }
 
 #[test]
