@@ -160,7 +160,7 @@ impl CInt {
     ///
     /// This will generate a screening table with shape `(nbas, nblk)`, where
     /// $n_\mathrm{blk} = \lceil \frac{n_\mathrm{grid}}{\texttt{BLKSIZE}}
-    /// \rceil$. [`BLKSIZE`] is a predefined constant 56.
+    /// \rceil$. [`BLKSIZE`] is a predefined constant 48.
     ///
     /// The screening table represents whether each (basis shell, grid block) is
     /// significant enough to be evaluated. If the tabulated value is zero, then

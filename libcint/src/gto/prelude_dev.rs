@@ -33,13 +33,15 @@ pub const SIMDD: usize = 8;
 
 /// Block size for grid AO evaluation.
 ///
-/// This value (56) should be multiple of [`SIMDD`] (8). Currently this value is
-/// fixed to 56, in that for the most-used deriv1 case, the processed grids per
-/// function call is $(n_\mathrm{comp}, n_\mathrm{ctr} \times
-/// n_\mathrm{cart}(l), n_\mathrm{grids})$ will usually be up to (4, 15, 56) or
-/// 26.3 KB, which fits in L1d cache (32 KB in most micro-architectures)
+/// This [`BLKSIZE`] value (48) should be multiple of [`SIMDD`] (8). It should
+/// be better to be multiple of 16 because of microkernel in matmul usually
+/// requires 2 lanes of SIMD (for AVX-512, it is 16 f64). Currently this value
+/// is fixed to 48, in that for the most-used deriv1 case, the processed grids
+/// per function call is $(n_\mathrm{comp}, n_\mathrm{ctr} \times
+/// n_\mathrm{cart}(l), n_\mathrm{grids})$ will usually be up to (4, 15, 48) or
+/// 22.5 KB, which fits in L1d cache (32 KB in most micro-architectures)
 /// together with other data.
-pub const BLKSIZE: usize = 56;
+pub const BLKSIZE: usize = 48;
 
 /// Number of SIMD blocks in a block.
 ///
