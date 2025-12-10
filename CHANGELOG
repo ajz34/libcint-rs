@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.1 -- 2025-12-10
+
+API Breaking Change:
+
+- Change `BLKSIZE` from 56 to 48. This affects `CInt::get_integral_screen` and related `non0tab` functionalities. 48 refers to even-number of SIMD lanes (16 for AVX-512 f64). Multiple SIMD lanes are more friendly for microkernel implementation (register pressure).
+  - We probably reserve the future change to `BLKSIZE` value, but will first try to make it be configurable by template parameter.
+
 ## v0.2.0 -- 2025-12-02
 
 Major Enhancements:
