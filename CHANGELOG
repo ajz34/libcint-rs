@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.2 -- 2025-12-15
+
+Cargo feature addition:
+
+- `no_linkage`: Disable automatic linkage of `libcint` in `build.rs`. By default, this crate will not activate this feature and handle linkage properly. This feature is useful when you want to link `libcint` manually or use `libcint` in a different way (probably beneficial to conda, @jeanwsr). However, notice that ECP part will still be built anyway, which will require `libcint` to be linked properly by your self.
+
 ## v0.2.1 -- 2025-12-10
 
 API Breaking Change:
