@@ -34,6 +34,7 @@ with_4c1e = ["libcint-src/with_4c1e"]
 build_from_source = ["libcint-src/build_from_source"]
 static = ["libcint-src/static"]
 qcint = ["libcint-src/qcint"]
+no_linkage = ["libcint-src/no_linkage"]
 
 [package.metadata.docs.rs]
 features = ["default"]

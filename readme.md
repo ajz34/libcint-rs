@@ -67,7 +67,8 @@ If access to github is not available, you can use environment variable `CINT_SRC
 - `static`: Use static library for linking. This will require static link `libcint.a`, and dynamic link `libquadmath.so`.
 - `qcint`: Use [sunqm/qcint](https://github.com/sunqm/qcint) instead of [sunqm/libcint](https://github.com/sunqm/libcint). Some integrals will not be available if `qcint` does not supports that. This will also change URL source if cargo feature `build_from_source` specified.
 - `with_f12`: Whether F12 integrals (`int2e_stg`, `int2e_yp`, etc.) are supported.
-- `with_4c1e`: Whether 4c1e integrals (`int4c1e`, etc.) are supported. 
+- `with_4c1e`: Whether 4c1e integrals (`int4c1e`, etc.) are supported.
+- `no_linkage`: Disable automatic linkage of `libcint` in `build.rs`. By default, this crate will not activate this feature and handle linkage properly. This feature is useful when you want to link `libcint` manually or use `libcint` in a different way (probably beneficial to conda, @jeanwsr). However, notice that ECP part will still be built anyway, which will require `libcint` to be linked properly by your self.
 
 ### Shell environment variables
 

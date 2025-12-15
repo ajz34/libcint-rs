@@ -122,6 +122,7 @@ fn build_ecp() {
 
 fn main() {
     build_libcint();
+    #[cfg(not(feature = "no_linkage"))]
     link_cint();
     build_ecp();
 }
