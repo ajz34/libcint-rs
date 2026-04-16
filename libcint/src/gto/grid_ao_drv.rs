@@ -610,13 +610,12 @@ pub fn gto_eval_loop(
     let nbuf_eprim = 2 * nctr_max.max(nprim_max);
     let nbuf_gto = 2 * ncomp * nctr_cart_max;
     let ncache = nbuf_eprim + nbuf_gto + nbuf_grid2atm;
-    let nthreads = rayon::current_num_threads();
-    let thread_cache = (0..nthreads).map(|_| unsafe { vec![f64blk::uninit(); ncache] }).collect_vec();
+    let thread_init = || unsafe { vec![f64blk::uninit(); ncache] };
 
-    (0..nblk * nshblk).into_par_iter().for_each(|niter| {
+    let iter_par = (0..nblk * nshblk).into_par_iter().with_min_len(RAYON_PAR_MIN);
+    iter_par.for_each_init(thread_init, |cache, niter| {
         let ishblk = niter / nblk;
         let iblk = niter % nblk;
-        let thread_id = rayon::current_thread_index().unwrap_or(0);
 
         let ish0 = shloc[ishblk];
         let ish1 = shloc[ishblk + 1];
@@ -626,7 +625,6 @@ pub fn gto_eval_loop(
 
         let ao = unsafe { cast_mut_slice(ao) };
         let coord = &coord[igrid..igrid + bgrid];
-        let cache = unsafe { cast_mut_slice(&thread_cache[thread_id]) };
         let non0tab_slice = non0tab.map(|non0tab| &non0tab[(ish0 - sh0) * nblk..(ish1 - sh0) * nblk]);
         let ao_shape = [nao, ngrid];
         let ao_offset = [iao, igrid];
@@ -680,14 +678,16 @@ pub fn gto_eval_spinor_loop(
     let nbuf_gto = ncomp * nctr_cart_max;
     let ncache_f64 = nbuf_eprim + nbuf_gto + nbuf_grid2atm;
     let ncache_c64 = 2 * ntensor * nctr_spinor_max;
-    let nthreads = rayon::current_num_threads();
-    let thread_cache_f64 = (0..nthreads).map(|_| unsafe { vec![f64blk::uninit(); ncache_f64] }).collect_vec();
-    let thread_cache_c64 = (0..nthreads).map(|_| unsafe { vec![c64blk::uninit(); ncache_c64] }).collect_vec();
+    let thread_init = || {
+        let cache_f64 = unsafe { vec![f64blk::uninit(); ncache_f64] };
+        let cache_c64 = unsafe { vec![c64blk::uninit(); ncache_c64] };
+        (cache_f64, cache_c64)
+    };
 
-    (0..nblk * nshblk).into_par_iter().for_each(|niter| {
+    let iter_par = (0..nblk * nshblk).into_par_iter().with_min_len(RAYON_PAR_MIN);
+    iter_par.for_each_init(thread_init, |(cache_f64, cache_c64), niter| {
         let ishblk = niter / nblk;
         let iblk = niter % nblk;
-        let thread_id = rayon::current_thread_index().unwrap_or(0);
 
         let ish0 = shloc[ishblk];
         let ish1 = shloc[ishblk + 1];
@@ -697,8 +697,6 @@ pub fn gto_eval_spinor_loop(
 
         let ao = unsafe { cast_mut_slice(ao) };
         let coord = &coord[igrid..igrid + bgrid];
-        let cache_f64 = unsafe { cast_mut_slice(&thread_cache_f64[thread_id]) };
-        let cache_c64 = unsafe { cast_mut_slice(&thread_cache_c64[thread_id]) };
         let non0tab_slice = non0tab.map(|non0tab| &non0tab[(ish0 - sh0) * nblk..(ish1 - sh0) * nblk]);
         let ao_shape = [nao, ngrid];
         let ao_offset = [iao, igrid];
