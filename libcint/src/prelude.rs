@@ -9,6 +9,9 @@ pub use crate::util::ShlsSlice;
 // for doc testing
 pub use crate::test_mol::{cint_fingerprint, cint_fp, init_c10h22_def2_qzvp, init_h2o_def2_jk, init_h2o_def2_tzvp, init_sb2me4_cc_pvtz};
 
+/// The minimum number for a chunk to be processed in parallel by Rayon.
+pub const RAYON_PAR_MIN: usize = 32;
+
 // for developing
 pub(crate) use crate::cint::*;
 pub(crate) use crate::cint_result::CIntResultAPI;
