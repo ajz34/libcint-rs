@@ -95,8 +95,11 @@ impl CInt {
         // cache (thread local)
         let cache_size = self.max_cache_size_grids(integrator, shls_slice);
         let buffer_size = BLKSIZE * self.max_buffer_size(integrator, shls_slice);
-        let thread_cache = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) }).collect_vec();
-        let thread_buffer = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) }).collect_vec();
+        let thread_init = || {
+            let cache = unsafe { aligned_uninitialized_vec::<f64>(cache_size) };
+            let buf = unsafe { aligned_uninitialized_vec::<F>(buffer_size) };
+            (cache, buf)
+        };
 
         /* #endregion */
 
@@ -113,8 +116,9 @@ impl CInt {
 
         let iter_layout = [nidx_g, nidx_i, nidx_j].f();
         let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
+        let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
 
-        iter_indices.into_iter().for_each(|([idx_g, idx_i, idx_j], _)| {
+        iter_par.for_each_init(thread_init, |(cache, buf), ([idx_g, idx_i, idx_j], _)| {
             let shl_i = idx_i as c_int + shls_slice[I][0];
             let shl_j = idx_j as c_int + shls_slice[J][0];
             let cgto_loc_i = cgto_locs[I][idx_i];
@@ -125,11 +129,6 @@ impl CInt {
             let cgto_g = grid_locs[idx_g + 1] - cgto_loc_g;
 
             let shls = [shl_i, shl_j, cgto_loc_g as c_int, (cgto_loc_g + cgto_g) as c_int];
-
-            // prepare cache and buffer
-            let thread_idx = rayon::current_thread_index().unwrap_or(0);
-            let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
-            let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
             // call integral function
             unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
@@ -182,8 +181,11 @@ impl CInt {
         // cache (thread local)
         let cache_size = self.max_cache_size_grids(integrator, shls_slice);
         let buffer_size = BLKSIZE * self.max_buffer_size(integrator, shls_slice);
-        let thread_cache = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) }).collect_vec();
-        let thread_buffer = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) }).collect_vec();
+        let thread_init = || {
+            let cache = unsafe { aligned_uninitialized_vec::<f64>(cache_size) };
+            let buf = unsafe { aligned_uninitialized_vec::<F>(buffer_size) };
+            (cache, buf)
+        };
 
         /* #endregion */
 
@@ -200,8 +202,9 @@ impl CInt {
 
         let iter_layout = [nidx_g, nidx_i, nidx_j].c();
         let iter_indices = IndexedIterLayout::new(&iter_layout, RowMajor).unwrap();
+        let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
 
-        iter_indices.into_iter().for_each(|([idx_g, idx_i, idx_j], _)| {
+        iter_par.for_each_init(thread_init, |(cache, buf), ([idx_g, idx_i, idx_j], _)| {
             let shl_i = idx_i as c_int + shls_slice[I][0];
             let shl_j = idx_j as c_int + shls_slice[J][0];
             let cgto_loc_i = cgto_locs[I][idx_i];
@@ -212,11 +215,6 @@ impl CInt {
             let cgto_g = grid_locs[idx_g + 1] - cgto_loc_g;
 
             let shls = [shl_i, shl_j, cgto_loc_g as c_int, (cgto_loc_g + cgto_g) as c_int];
-
-            // prepare cache and buffer
-            let thread_idx = rayon::current_thread_index().unwrap_or(0);
-            let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
-            let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
             // call integral function
             unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };

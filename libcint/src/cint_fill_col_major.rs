@@ -57,8 +57,11 @@ impl CInt {
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
         let buffer_size = self.max_buffer_size(integrator, shls_slice);
-        let thread_cache = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) }).collect_vec();
-        let thread_buffer = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) }).collect_vec();
+        let thread_init = || {
+            let cache = unsafe { aligned_uninitialized_vec::<f64>(cache_size) };
+            let buf = unsafe { aligned_uninitialized_vec::<F>(buffer_size) };
+            (cache, buf)
+        };
 
         /* #endregion */
 
@@ -78,8 +81,9 @@ impl CInt {
 
                 let iter_layout = [nidx_i, nidx_j].f();
                 let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
+                let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
 
-                iter_indices.into_par_iter().for_each(|([idx_i, idx_j], _)| {
+                iter_par.for_each_init(thread_init, |(cache, buf), ([idx_i, idx_j], _)| {
                     // idx refers to the index of shell for iteration
                     // shl refers to the index of shell in the basis set (real shell index)
                     let shl_i = idx_i as c_int + shls_slice[I][0];
@@ -92,11 +96,6 @@ impl CInt {
                     let cgto_j = cgto_locs[J][idx_j + 1] - cgto_loc_j;
 
                     let shls = [shl_i, shl_j];
-
-                    // prepare cache and buffer
-                    let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
-                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
@@ -114,8 +113,9 @@ impl CInt {
                 let nidx_k = (shls_slice[K][1] - shls_slice[K][0]) as usize;
                 let iter_layout = [nidx_i, nidx_j, nidx_k].f();
                 let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
+                let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
 
-                iter_indices.into_par_iter().for_each(|([idx_i, idx_j, idx_k], _)| {
+                iter_par.for_each_init(thread_init, |(cache, buf), ([idx_i, idx_j, idx_k], _)| {
                     let shl_i = idx_i as c_int + shls_slice[I][0];
                     let shl_j = idx_j as c_int + shls_slice[J][0];
                     let shl_k = idx_k as c_int + shls_slice[K][0];
@@ -127,11 +127,6 @@ impl CInt {
                     let cgto_k = cgto_locs[K][idx_k + 1] - cgto_loc_k;
 
                     let shls = [shl_i, shl_j, shl_k];
-
-                    // prepare cache and buffer
-                    let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
-                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
@@ -150,8 +145,9 @@ impl CInt {
                 let nidx_l = (shls_slice[L][1] - shls_slice[L][0]) as usize;
                 let iter_layout = [nidx_i, nidx_j, nidx_k, nidx_l].f();
                 let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
+                let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
 
-                iter_indices.into_par_iter().for_each(|([idx_i, idx_j, idx_k, idx_l], _)| {
+                iter_par.for_each_init(thread_init, |(cache, buf), ([idx_i, idx_j, idx_k, idx_l], _)| {
                     let shl_i = idx_i as c_int + shls_slice[I][0];
                     let shl_j = idx_j as c_int + shls_slice[J][0];
                     let shl_k = idx_k as c_int + shls_slice[K][0];
@@ -166,11 +162,6 @@ impl CInt {
                     let cgto_l = cgto_locs[L][idx_l + 1] - cgto_loc_l;
 
                     let shls = [shl_i, shl_j, shl_k, shl_l];
-
-                    // prepare cache and buffer
-                    let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
-                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
@@ -223,8 +214,11 @@ impl CInt {
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
         let buffer_size = self.max_buffer_size(integrator, shls_slice);
-        let thread_cache = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) }).collect_vec();
-        let thread_buffer = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) }).collect_vec();
+        let thread_init = || {
+            let cache = unsafe { aligned_uninitialized_vec::<f64>(cache_size) };
+            let buf = unsafe { aligned_uninitialized_vec::<F>(buffer_size) };
+            (cache, buf)
+        };
 
         /* #endregion */
 
@@ -242,7 +236,9 @@ impl CInt {
             2 => {
                 let out_shape = [cgto_shape[0], n_comp];
 
-                (0..nidx_ij).into_par_iter().for_each(|idx_ij| {
+                let iter_par = (0..nidx_ij).into_par_iter().with_min_len(RAYON_PAR_MIN);
+
+                iter_par.for_each_init(thread_init, |(cache, buf), idx_ij| {
                     let [idx_i, idx_j] = unravel_s2_indices(idx_ij);
 
                     let shl_i = idx_i as c_int + shls_slice[I][0];
@@ -253,11 +249,6 @@ impl CInt {
                     let cgto_j = cgto_locs[J][idx_j + 1] - cgto_loc_j;
 
                     let shls = [shl_i, shl_j];
-
-                    // prepare cache and buffer
-                    let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
-                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
@@ -275,8 +266,9 @@ impl CInt {
                 let nidx_k = (shls_slice[K][1] - shls_slice[K][0]) as usize;
                 let iter_layout = [nidx_ij, nidx_k].f();
                 let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
+                let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
 
-                iter_indices.into_par_iter().with_max_len(16).for_each(|([idx_ij, idx_k], _)| {
+                iter_par.for_each_init(thread_init, |(cache, buf), ([idx_ij, idx_k], _)| {
                     let [idx_i, idx_j] = unravel_s2_indices(idx_ij);
 
                     let shl_i = idx_i as c_int + shls_slice[I][0];
@@ -290,11 +282,6 @@ impl CInt {
                     let cgto_k = cgto_locs[K][idx_k + 1] - cgto_loc_k;
 
                     let shls = [shl_i, shl_j, shl_k];
-
-                    // prepare cache and buffer
-                    let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
-                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
@@ -313,8 +300,9 @@ impl CInt {
                 let nidx_l = (shls_slice[L][1] - shls_slice[L][0]) as usize;
                 let iter_layout = [nidx_ij, nidx_k, nidx_l].f();
                 let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
+                let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
 
-                iter_indices.into_par_iter().for_each(|([idx_ij, idx_k, idx_l], _)| {
+                iter_par.for_each_init(thread_init, |(cache, buf), ([idx_ij, idx_k, idx_l], _)| {
                     let [idx_i, idx_j] = unravel_s2_indices(idx_ij);
 
                     let shl_i = idx_i as c_int + shls_slice[I][0];
@@ -331,11 +319,6 @@ impl CInt {
                     let cgto_l = cgto_locs[L][idx_l + 1] - cgto_loc_l;
 
                     let shls = [shl_i, shl_j, shl_k, shl_l];
-
-                    // prepare cache and buffer
-                    let thread_idx = rayon::current_thread_index().unwrap_or(0);
-                    let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
-                    let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
                     // call integral function
                     unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
@@ -388,8 +371,11 @@ impl CInt {
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
         let buffer_size = self.max_buffer_size(integrator, shls_slice);
-        let thread_cache = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) }).collect_vec();
-        let thread_buffer = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) }).collect_vec();
+        let thread_init = || {
+            let cache = unsafe { aligned_uninitialized_vec::<f64>(cache_size) };
+            let buf = unsafe { aligned_uninitialized_vec::<F>(buffer_size) };
+            (cache, buf)
+        };
 
         /* #endregion */
 
@@ -406,8 +392,9 @@ impl CInt {
         let nidx_kl = nidx_k * (nidx_k + 1) / 2;
         let iter_layout = [nidx_i, nidx_j, nidx_kl].f();
         let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
+        let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
 
-        iter_indices.into_par_iter().for_each(|([idx_i, idx_j, idx_kl], _)| {
+        iter_par.for_each_init(thread_init, |(cache, buf), ([idx_i, idx_j, idx_kl], _)| {
             let [idx_k, idx_l] = unravel_s2_indices(idx_kl);
 
             let shl_i = idx_i as c_int + shls_slice[I][0];
@@ -424,11 +411,6 @@ impl CInt {
             let cgto_l = cgto_locs[L][idx_l + 1] - cgto_loc_l;
 
             let shls = [shl_i, shl_j, shl_k, shl_l];
-
-            // prepare cache and buffer
-            let thread_idx = rayon::current_thread_index().unwrap_or(0);
-            let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
-            let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
             // call integral function
             unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
@@ -478,8 +460,11 @@ impl CInt {
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
         let buffer_size = self.max_buffer_size(integrator, shls_slice);
-        let thread_cache = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) }).collect_vec();
-        let thread_buffer = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) }).collect_vec();
+        let thread_init = || {
+            let cache = unsafe { aligned_uninitialized_vec::<f64>(cache_size) };
+            let buf = unsafe { aligned_uninitialized_vec::<F>(buffer_size) };
+            (cache, buf)
+        };
 
         /* #endregion */
 
@@ -496,8 +481,9 @@ impl CInt {
         let nidx_kl = nidx_k * (nidx_k + 1) / 2;
         let iter_layout = [nidx_ij, nidx_kl].f();
         let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
+        let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
 
-        iter_indices.into_par_iter().for_each(|([idx_ij, idx_kl], _)| {
+        iter_par.for_each_init(thread_init, |(cache, buf), ([idx_ij, idx_kl], _)| {
             let [idx_i, idx_j] = unravel_s2_indices(idx_ij);
             let [idx_k, idx_l] = unravel_s2_indices(idx_kl);
 
@@ -515,11 +501,6 @@ impl CInt {
             let cgto_l = cgto_locs[L][idx_l + 1] - cgto_loc_l;
 
             let shls = [shl_i, shl_j, shl_k, shl_l];
-
-            // prepare cache and buffer
-            let thread_idx = rayon::current_thread_index().unwrap_or(0);
-            let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
-            let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
             // call integral function
             unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
@@ -569,8 +550,11 @@ impl CInt {
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
         let buffer_size = self.max_buffer_size(integrator, shls_slice);
-        let thread_cache = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<f64>(cache_size) }).collect_vec();
-        let thread_buffer = (0..rayon::current_num_threads()).map(|_| unsafe { aligned_uninitialized_vec::<F>(buffer_size) }).collect_vec();
+        let thread_init = || {
+            let cache = unsafe { aligned_uninitialized_vec::<f64>(cache_size) };
+            let buf = unsafe { aligned_uninitialized_vec::<F>(buffer_size) };
+            (cache, buf)
+        };
 
         /* #endregion */
 
@@ -591,8 +575,9 @@ impl CInt {
         let nidx_kl = nidx_ij;
         let iter_layout = [nidx_ij, nidx_kl].f();
         let iter_indices = IndexedIterLayout::new(&iter_layout, ColMajor).unwrap();
+        let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
 
-        iter_indices.into_par_iter().for_each(|([idx_ij, idx_kl], _)| {
+        iter_par.for_each_init(thread_init, |(cache, buf), ([idx_ij, idx_kl], _)| {
             let [idx_i, idx_j] = unravel_s2_indices(idx_ij);
             let [idx_k, idx_l] = unravel_s2_indices(idx_kl);
             if idx_l < idx_j {
@@ -614,11 +599,6 @@ impl CInt {
             let cgto_l = cgto_locs[L][idx_l + 1] - cgto_loc_l;
 
             let shls = [shl_i, shl_j, shl_k, shl_l];
-
-            // prepare cache and buffer
-            let thread_idx = rayon::current_thread_index().unwrap_or(0);
-            let cache = unsafe { cast_mut_slice(&thread_cache[thread_idx]) };
-            let buf = unsafe { cast_mut_slice(&thread_buffer[thread_idx]) };
 
             // call integral function
             unsafe { self.integral_block(integrator, buf, &shls, &[], cint_opt, cache) };
