@@ -1,7 +1,8 @@
 use crate::gto::prelude_dev::*;
+use num::Zero;
 
 /// Trait for GTO evaluator on grids.
-pub trait GtoEvalAPI: Send + Sync {
+pub trait GtoEvalAPI<const NLANE: usize>: Send + Sync {
     /// Number of complex components.
     ///
     /// This is usually 1 for real-valued GTOs, and 4 for spinor GTOs.
@@ -37,7 +38,15 @@ pub trait GtoEvalAPI: Send + Sync {
     /// - [`gto_prim_exp`]
     /// - [`gto_contract_exp0`]
     /// - [`gto_contract_exp1`]
-    fn gto_exp(&self, ebuf: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], coeff: &[f64], fac: f64, shl_shape: [usize; 2]);
+    fn gto_exp(
+        &self,
+        ebuf: &mut [f64blk<NLANE>],
+        coord: &[f64blk<NLANE>; 3],
+        alpha: &[f64],
+        coeff: &[f64],
+        fac: f64,
+        shl_shape: [usize; 2],
+    );
 
     /// Evaluate GTO shell values on grids.
     ///
@@ -45,9 +54,9 @@ pub trait GtoEvalAPI: Send + Sync {
     fn gto_shell_eval(
         &self,
         // arguments
-        gto: &mut [f64blk],
-        ebuf: &[f64blk],
-        coord: &[f64blk; 3],
+        gto: &mut [f64blk<NLANE>],
+        ebuf: &[f64blk<NLANE>],
+        coord: &[f64blk<NLANE>; 3],
         alpha: &[f64],
         coeff: &[f64],
         l: usize,
@@ -103,21 +112,28 @@ pub fn make_ao_loc(bas: &[[c_int; BAS_SLOTS as usize]], cint_type: CIntType) -> 
     ao_loc
 }
 
-pub fn gto_set_zero<T: num::Zero + Copy>(ao: &mut [T], ncomp: usize, ao_shape: [usize; 2], ao_offset: [usize; 2], nao_to_set: usize) {
+pub fn gto_set_zero<T: Zero + Copy>(
+    ao: &mut [T],
+    ncomp: usize,
+    ao_shape: [usize; 2],
+    ao_offset: [usize; 2],
+    nao_to_set: usize,
+    blksize: usize,
+) {
     let [nao, ngrid] = ao_shape;
     let [iao, igrid] = ao_offset;
     for a in 0..ncomp {
         for mu in iao..iao + nao_to_set {
             let ptr = a * nao * ngrid + mu * ngrid + igrid;
-            let bgrid = (ngrid - igrid).min(BLKSIZE);
+            let bgrid = (ngrid - igrid).min(blksize);
             ao[ptr..ptr + bgrid].fill(T::zero());
         }
     }
 }
 
-pub fn gto_copy_grids<T: Copy>(
+pub fn gto_copy_grids<T: Zero + Copy, const NLANE: usize>(
     // arguments
-    gto: &[Blk<T>],
+    gto: &[Blk<T, NLANE>],
     ao: &mut [T],
     nao_to_set: usize,
     ncomp: usize,
@@ -126,12 +142,13 @@ pub fn gto_copy_grids<T: Copy>(
 ) {
     let [nao, ngrid] = ao_shape;
     let [iao, igrid] = ao_offset;
+    let blksize = NLANE * SIMDD;
 
-    if igrid + BLKSIZE <= ngrid {
+    if igrid + blksize <= ngrid {
         for a in 0..ncomp {
             for mu in 0..nao_to_set {
                 let ptr = a * nao * ngrid + (iao + mu) * ngrid + igrid;
-                let dst = &mut ao[ptr..ptr + BLKSIZE];
+                let dst = &mut ao[ptr..ptr + blksize];
                 let src = &gto[a * nao_to_set + mu];
                 unsafe { src.write_ensure(dst) }
             }
@@ -183,7 +200,7 @@ pub fn gto_shloc_by_atom(shls_slice: [usize; 2], bas: &[[c_int; BAS_SLOTS as usi
 /// | index | size | notes |
 /// |--|--|--|
 /// | $A$ | `natm` | atom index |
-/// | $g$ | `bgrid` | grids, usually equal but may be smaller than [`BLKSIZE`] |
+/// | $g$ | `bgrid` | grids, usually equal but may be smaller than `BLKSIZE` |
 ///
 /// # Argument Table
 ///
@@ -201,9 +218,9 @@ pub fn gto_shloc_by_atom(shls_slice: [usize; 2], bas: &[[c_int; BAS_SLOTS as usi
 /// | variable | notes |
 /// |--|--|
 /// | `igrid` | starting index $g$ of the grids in `coord` |
-pub fn gto_fill_grid2atm(
+pub fn gto_fill_grid2atm<const NLANE: usize>(
     // arguments
-    grid2atm: &mut [[f64blk; 3]],
+    grid2atm: &mut [[f64blk<NLANE>; 3]],
     coord: &[[f64; 3]],
     // dimensions
     bgrid: usize,
@@ -212,7 +229,8 @@ pub fn gto_fill_grid2atm(
     env: &[f64],
 ) {
     const PTR_COORD: usize = crate::ffi::cint_ffi::PTR_COORD as usize;
-    unsafe { core::hint::assert_unchecked(bgrid <= BLKSIZE) }
+    let blksize = NLANE * SIMDD;
+    unsafe { core::hint::assert_unchecked(bgrid <= blksize) }
 
     for iatm in 0..atm.len() {
         let coord_ptr = atm[iatm][PTR_COORD] as usize;
@@ -273,6 +291,7 @@ pub fn gto_screen_index(
     // arguments
     coords: &[[f64; 3]],
     shls_slice: [usize; 2],
+    blksize: usize,
     // configurations
     nbins: Option<u8>,
     cutoff: Option<f64>,
@@ -290,7 +309,7 @@ pub fn gto_screen_index(
     const PTR_COORD: usize = crate::ffi::cint_ffi::PTR_COORD as usize;
 
     let ngrid = coords.len();
-    let nblk = coords.len().div_ceil(BLKSIZE);
+    let nblk = coords.len().div_ceil(blksize);
     let nbins = nbins.unwrap_or(NBINS);
     let [sh0, sh1] = shls_slice;
     let nbas = sh1 - sh0;
@@ -328,8 +347,8 @@ pub fn gto_screen_index(
             (0.0, -log_coeff)
         };
         for iblk in 0..nblk {
-            let igrid = iblk * BLKSIZE;
-            let bgrid = (ngrid - igrid).min(BLKSIZE);
+            let igrid = iblk * blksize;
+            let bgrid = (ngrid - igrid).min(blksize);
             let mut rr_min = f64::MAX;
             for g in 0..bgrid {
                 let dx = coords[igrid + g][X] - r_atm[X];
@@ -357,9 +376,9 @@ pub fn gto_screen_index(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn gto_eval_iter(
+pub fn gto_eval_iter<const NLANE: usize>(
     mol: &CInt,
-    evaluator: &dyn GtoEvalAPI,
+    evaluator: &dyn GtoEvalAPI<NLANE>,
     // arguments
     ao: &mut [f64], // (ncomp, nao, ngrid)
     coord: &[[f64; 3]],
@@ -369,7 +388,7 @@ pub fn gto_eval_iter(
     non0tab: Option<&[u8]>,
     fill_zero: bool,
     // buffer
-    buf: &mut [f64blk],
+    buf: &mut [f64blk<NLANE>],
     // dimensions info
     ao_shape: [usize; 2],
     ao_offset: [usize; 2],
@@ -381,6 +400,8 @@ pub fn gto_eval_iter(
     const PTR_EXP: usize = crate::ffi::cint_ffi::PTR_EXP as usize;
     const PTR_COEFF: usize = crate::ffi::cint_ffi::PTR_COEFF as usize;
     const PTR_COORD: usize = crate::ffi::cint_ffi::PTR_COORD as usize;
+
+    let blksize = NLANE * SIMDD;
 
     let atm = &mol.atm;
     let bas = &mol.bas;
@@ -404,8 +425,8 @@ pub fn gto_eval_iter(
     let (ebuf, buf) = buf.split_at_mut(nbuf_ebuf);
     let (gto_cart, buf) = buf.split_at_mut(nbuf_gto);
     let (gto_sph, _) = buf.split_at_mut(nbuf_gto);
-    let bgrid = (ngrid - igrid).min(BLKSIZE);
-    let nblk = ngrid.div_ceil(BLKSIZE);
+    let bgrid = (ngrid - igrid).min(blksize);
+    let nblk = ngrid.div_ceil(blksize);
 
     let grid2atm = unsafe { as_chunks_unchecked_mut::<3, _>(grid2atm) };
     gto_fill_grid2atm(grid2atm, coord, bgrid, &atm[atm0..atm1], env);
@@ -429,9 +450,9 @@ pub fn gto_eval_iter(
         };
         let nao_to_set = nctr * nang;
 
-        if non0tab.is_some_and(|non0tab| non0tab[(bas_id - sh0) * nblk + igrid / BLKSIZE] == 0) {
+        if non0tab.is_some_and(|non0tab| non0tab[(bas_id - sh0) * nblk + igrid / blksize] == 0) {
             if fill_zero {
-                gto_set_zero(ao, ncomp, ao_shape, [iao, igrid], nao_to_set);
+                gto_set_zero(ao, ncomp, ao_shape, [iao, igrid], nao_to_set, blksize);
             }
             continue;
         }
@@ -449,7 +470,7 @@ pub fn gto_eval_iter(
                 for k in 0..nctr {
                     let ptr_sph = &gto_sph[a * nctr * nsph + k * nsph] as *const _ as *mut f64;
                     let ptr_cart = &gto_cart[a * nctr * ncart + k * ncart..] as *const _ as *mut f64;
-                    unsafe { CINTc2s_ket_sph1(ptr_sph, ptr_cart, BLKSIZE as c_int, BLKSIZE as c_int, l as c_int) };
+                    unsafe { CINTc2s_ket_sph1(ptr_sph, ptr_cart, blksize as c_int, blksize as c_int, l as c_int) };
                 }
             }
             gto_copy_grids(gto_sph, ao, nao_to_set, ncomp, ao_shape, [iao, igrid]);
@@ -458,9 +479,9 @@ pub fn gto_eval_iter(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn gto_eval_spinor_iter(
+pub fn gto_eval_spinor_iter<const NLANE: usize>(
     mol: &CInt,
-    evaluator: &dyn GtoEvalAPI,
+    evaluator: &dyn GtoEvalAPI<NLANE>,
     // arguments
     ao: &mut [Complex<f64>], // (2, ntensor, nao, ngrid)
     coord: &[[f64; 3]],
@@ -470,8 +491,8 @@ pub fn gto_eval_spinor_iter(
     non0tab: Option<&[u8]>,
     fill_zero: bool,
     // buffer
-    buf_f64: &mut [f64blk],
-    buf_c64: &mut [c64blk],
+    buf_f64: &mut [f64blk<NLANE>],
+    buf_c64: &mut [c64blk<NLANE>],
     // dimensions info
     ao_shape: [usize; 2],
     ao_offset: [usize; 2],
@@ -484,6 +505,8 @@ pub fn gto_eval_spinor_iter(
     const PTR_COEFF: usize = crate::ffi::cint_ffi::PTR_COEFF as usize;
     const PTR_COORD: usize = crate::ffi::cint_ffi::PTR_COORD as usize;
     const KAPPA_OF: usize = crate::ffi::cint_ffi::KAPPA_OF as usize;
+
+    let blksize = NLANE * SIMDD;
 
     let atm = &mol.atm;
     let bas = &mol.bas;
@@ -511,8 +534,8 @@ pub fn gto_eval_spinor_iter(
     let (ebuf, buf_f64) = buf_f64.split_at_mut(nbuf_ebuf);
     let (gto_cart, _) = buf_f64.split_at_mut(nbuf_gto);
     let (gto_sp_a, gto_sp_b) = buf_c64.split_at_mut(ntensor * nctr_spinor_max);
-    let bgrid = (ngrid - igrid).min(BLKSIZE);
-    let nblk = ngrid.div_ceil(BLKSIZE);
+    let bgrid = (ngrid - igrid).min(blksize);
+    let nblk = ngrid.div_ceil(blksize);
 
     let grid2atm = unsafe { as_chunks_unchecked_mut::<3, _>(grid2atm) };
     gto_fill_grid2atm(grid2atm, coord, bgrid, &atm[atm0..atm1], env);
@@ -534,10 +557,10 @@ pub fn gto_eval_spinor_iter(
         let nspinor = CInt::len_spinor(l as c_int, kappa);
         let nao_to_set = nctr * nspinor;
 
-        if non0tab.is_some_and(|non0tab| non0tab[(bas_id - sh0) * nblk + igrid / BLKSIZE] == 0) {
+        if non0tab.is_some_and(|non0tab| non0tab[(bas_id - sh0) * nblk + igrid / blksize] == 0) {
             if fill_zero {
-                gto_set_zero(aoa, ntensor, ao_shape, [iao, igrid], nao_to_set);
-                gto_set_zero(aob, ntensor, ao_shape, [iao, igrid], nao_to_set);
+                gto_set_zero(aoa, ntensor, ao_shape, [iao, igrid], nao_to_set, blksize);
+                gto_set_zero(aob, ntensor, ao_shape, [iao, igrid], nao_to_set, blksize);
             }
             continue;
         }
@@ -553,8 +576,8 @@ pub fn gto_eval_spinor_iter(
                     ptr_a,
                     ptr_b,
                     ptr_cart,
-                    BLKSIZE as c_int,
-                    BLKSIZE as c_int,
+                    blksize as c_int,
+                    blksize as c_int,
                     nctr as c_int,
                     kappa as c_int,
                     l as c_int,
@@ -566,9 +589,9 @@ pub fn gto_eval_spinor_iter(
     }
 }
 
-pub fn gto_eval_loop(
+pub fn gto_eval_loop<const NLANE: usize>(
     mol: &CInt,
-    evaluator: &dyn GtoEvalAPI,
+    evaluator: &dyn GtoEvalAPI<NLANE>,
     ao: &mut [f64], // (ncomp, nao, ngrid)
     coord: &[[f64; 3]],
     fac: f64,
@@ -576,6 +599,8 @@ pub fn gto_eval_loop(
     non0tab: Option<&[u8]>,
     fill_zero: bool,
 ) -> Result<(), CIntError> {
+    let blksize = NLANE * SIMDD;
+
     let ncomp = evaluator.ncomp();
     let bas = &mol.bas;
     let [sh0, sh1] = shls_slice;
@@ -586,7 +611,7 @@ pub fn gto_eval_loop(
         cint_raise!(RuntimeError, "ao length is smaller than required size")?;
     }
 
-    let nblk = ngrid.div_ceil(BLKSIZE);
+    let nblk = ngrid.div_ceil(blksize);
     let nbas = sh1 - sh0;
     if non0tab.is_some_and(|non0tab| non0tab.len() != nbas * nblk) {
         cint_raise!(InvalidValue, "non0tab length not equal required size")?;
@@ -597,7 +622,7 @@ pub fn gto_eval_loop(
     let nshblk = shloc.len() - 1; // usually number of atoms
 
     // split grids to blocks
-    let nblk = ngrid.div_ceil(BLKSIZE);
+    let nblk = ngrid.div_ceil(blksize);
 
     // grid2atm: usually 3, since we always split shells by atoms
     // eprim or ectr: 2 * nctr
@@ -619,9 +644,9 @@ pub fn gto_eval_loop(
 
         let ish0 = shloc[ishblk];
         let ish1 = shloc[ishblk + 1];
-        let igrid = iblk * BLKSIZE;
+        let igrid = iblk * blksize;
         let iao = ao_loc[ish0] - ao_loc[sh0];
-        let bgrid = (ngrid - igrid).min(BLKSIZE);
+        let bgrid = (ngrid - igrid).min(blksize);
 
         let ao = unsafe { cast_mut_slice(ao) };
         let coord = &coord[igrid..igrid + bgrid];
@@ -634,9 +659,9 @@ pub fn gto_eval_loop(
     Ok(())
 }
 
-pub fn gto_eval_spinor_loop(
+pub fn gto_eval_spinor_loop<const NLANE: usize>(
     mol: &CInt,
-    evaluator: &dyn GtoEvalAPI,
+    evaluator: &dyn GtoEvalAPI<NLANE>,
     ao: &mut [Complex<f64>], // (2, ntensor, nao, ngrid)
     coord: &[[f64; 3]],
     fac: f64,
@@ -644,6 +669,8 @@ pub fn gto_eval_spinor_loop(
     non0tab: Option<&[u8]>,
     fill_zero: bool,
 ) -> Result<(), CIntError> {
+    let blksize = NLANE * SIMDD;
+
     let ncomp = evaluator.ncomp();
     let ntensor = evaluator.ntensor();
     let bas = &mol.bas;
@@ -655,7 +682,7 @@ pub fn gto_eval_spinor_loop(
         cint_raise!(RuntimeError, "ao length is smaller than required size")?;
     }
 
-    let nblk = ngrid.div_ceil(BLKSIZE);
+    let nblk = ngrid.div_ceil(blksize);
     let nbas = sh1 - sh0;
     if non0tab.is_some_and(|non0tab| non0tab.len() != nbas * nblk) {
         cint_raise!(InvalidValue, "non0tab length not equal required size")?;
@@ -666,7 +693,7 @@ pub fn gto_eval_spinor_loop(
     let nshblk = shloc.len() - 1; // usually number of atoms
 
     // split grids to blocks
-    let nblk = ngrid.div_ceil(BLKSIZE);
+    let nblk = ngrid.div_ceil(blksize);
 
     // grid2atm: usually 3, since we always split shells by atoms
     let nctr_cart_max = gto_nctr_cart_max(shls_slice, bas);
@@ -691,9 +718,9 @@ pub fn gto_eval_spinor_loop(
 
         let ish0 = shloc[ishblk];
         let ish1 = shloc[ishblk + 1];
-        let igrid = iblk * BLKSIZE;
+        let igrid = iblk * blksize;
         let iao = ao_loc[ish0] - ao_loc[sh0];
-        let bgrid = (ngrid - igrid).min(BLKSIZE);
+        let bgrid = (ngrid - igrid).min(blksize);
 
         let ao = unsafe { cast_mut_slice(ao) };
         let coord = &coord[igrid..igrid + bgrid];
@@ -727,14 +754,18 @@ fn test_gto_screen_index() {
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
     let shls_slice = [0, cint_data.nbas()];
 
+    let blksize = 48;
+
     let cutoff = 0.01;
-    let (non0tab, [nbas, nblk]) = gto_screen_index(&coord, shls_slice, None, Some(cutoff), &cint_data.atm, &cint_data.bas, &cint_data.env);
+    let (non0tab, [nbas, nblk]) =
+        gto_screen_index(&coord, shls_slice, blksize, None, Some(cutoff), &cint_data.atm, &cint_data.bas, &cint_data.env);
     assert_eq!([nbas, nblk], [464, 43]);
     let non0tab_f64 = non0tab.iter().map(|&x| x as f64).collect_vec();
     assert!((cint_fp(&non0tab_f64) - 73.84344810974999).abs() < 1e-10);
 
     let cutoff = 1e-15;
-    let (non0tab, [nbas, nblk]) = gto_screen_index(&coord, shls_slice, None, Some(cutoff), &cint_data.atm, &cint_data.bas, &cint_data.env);
+    let (non0tab, [nbas, nblk]) =
+        gto_screen_index(&coord, shls_slice, blksize, None, Some(cutoff), &cint_data.atm, &cint_data.bas, &cint_data.env);
     assert_eq!([nbas, nblk], [464, 43]);
     let non0tab_f64 = non0tab.iter().map(|&x| x as f64).collect_vec();
     assert!((cint_fp(&non0tab_f64) - 160.71368457383508).abs() < 1e-10);
@@ -743,6 +774,7 @@ fn test_gto_screen_index() {
 #[test]
 fn test_gto_spinor() {
     use num::Zero;
+    const NLANE: usize = 6;
     let cint_data = init_c10h22_def2_qzvp();
     let ngrid = 2048;
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
@@ -750,9 +782,9 @@ fn test_gto_spinor() {
     let ao_loc = cint_data.make_loc_with_type(Spinor);
     let nao = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]];
     let evaluator = GtoEvalDeriv0;
-    let ntensor = evaluator.ntensor();
+    let ntensor = <GtoEvalDeriv0 as GtoEvalAPI<NLANE>>::ntensor(&evaluator);
     let mut ao = vec![Complex::<f64>::zero(); 2 * ntensor * nao * ngrid];
-    gto_eval_spinor_loop(&cint_data, &evaluator, &mut ao, &coord, 1.0, shls_slice, None, true).unwrap();
+    gto_eval_spinor_loop::<NLANE>(&cint_data, &evaluator, &mut ao, &coord, 1.0, shls_slice, None, true).unwrap();
     println!("ao[0..10]: {:?}", &ao[0..10]);
     println!("fp(ao): {}", cint_fp(&ao));
 }

@@ -65,6 +65,24 @@ pub struct GtoArgs<'l, F> {
     #[builder(default = 1.0)]
     pub fac: f64,
 
+    /// Block size for grid AO evaluation and non0tab sparsity table.
+    ///
+    /// Default to 48.
+    ///
+    /// This value is currently fixed.
+    /// - For usual users, the value must be either 48 or 56.
+    /// - It must be multiplier of 8.
+    /// - For more values, please compile with cargo feature
+    ///   `dispatch_more_blksize`, and the supported values will be 32, 48, 56,
+    ///   64, 72, 96, 104, 128, 144, 192, 256, 384, and 512. However, note that
+    ///   this will increase the binary size and compile time, so it is not
+    ///   enabled by default.
+    /// - This value will not affect the output GTO values, but will be differ
+    ///   if you use [`CInt::gto_screen_index`] function to generate a screening
+    ///   table (`non0tab`).
+    #[builder(default = 48)]
+    pub blksize: usize,
+
     /// Output array for GTO values, shape `(ngrid, nao, ncomp)` in column-major
     /// order.
     ///
@@ -84,7 +102,7 @@ pub struct GtoArgs<'l, F> {
 /// - [`Box<dyn GtoEvalAPI>`](GtoEvalAPI): The GTO evaluator instance.
 /// - [`Option<CIntType>`](CIntType): The CIntType (Spheric/Cartesian/Spinor) if
 ///   specified in the name, None if not specified.
-pub fn get_gto_eval_name_f(eval_name: &str) -> Option<(Box<dyn GtoEvalAPI>, Option<CIntType>)> {
+pub fn get_gto_eval_name_f<const NLANE: usize>(eval_name: &str) -> Option<(Box<dyn GtoEvalAPI<NLANE>>, Option<CIntType>)> {
     let name = eval_name.to_lowercase().replace(['_', '-'], " ");
     let mut name_list = name.split_whitespace().collect_vec();
 
@@ -135,8 +153,11 @@ impl CInt {
     ///
     /// - [`get_gto_eval_name`](CInt::get_gto_eval_name) for non-fallible
     ///   counterpart.
-    pub fn get_gto_eval_name_f(&self, eval_name: &str) -> Result<(Box<dyn GtoEvalAPI>, Option<CIntType>), CIntError> {
-        get_gto_eval_name_f(eval_name).ok_or(cint_error!(IntegratorNotFound, "{eval_name}"))
+    pub fn get_gto_eval_name_f<const NLANE: usize>(
+        &self,
+        eval_name: &str,
+    ) -> Result<(Box<dyn GtoEvalAPI<NLANE>>, Option<CIntType>), CIntError> {
+        get_gto_eval_name_f::<NLANE>(eval_name).ok_or(cint_error!(IntegratorNotFound, "{eval_name}"))
     }
 
     /// Get GTO evaluator by name.
@@ -152,15 +173,15 @@ impl CInt {
     ///
     /// - [`get_gto_eval_name_f`](CInt::get_gto_eval_name_f) for fallible
     ///   counterpart.
-    pub fn get_gto_eval_name(&self, eval_name: &str) -> (Box<dyn GtoEvalAPI>, Option<CIntType>) {
-        self.get_gto_eval_name_f(eval_name).cint_unwrap()
+    pub fn get_gto_eval_name<const NLANE: usize>(&self, eval_name: &str) -> (Box<dyn GtoEvalAPI<NLANE>>, Option<CIntType>) {
+        self.get_gto_eval_name_f::<NLANE>(eval_name).cint_unwrap()
     }
 
     /// Get GTO screening tabulation index (`non0tab`) on grids.
     ///
     /// This will generate a screening table with shape `(nbas, nblk)`, where
     /// $n_\mathrm{blk} = \lceil \frac{n_\mathrm{grid}}{\texttt{BLKSIZE}}
-    /// \rceil$. [`BLKSIZE`] is a predefined constant 48.
+    /// \rceil$.
     ///
     /// The screening table represents whether each (basis shell, grid block) is
     /// significant enough to be evaluated. If the tabulated value is zero, then
@@ -170,15 +191,15 @@ impl CInt {
     ///
     /// # PySCF equivalent
     ///
-    /// `pyscf.gto.eval_gto.make_screen_index`; please note that `blksize`
-    /// argument is not configurable for rust's version, which is defined as a
-    /// const [`BLKSIZE`].
+    /// `pyscf.gto.eval_gto.make_screen_index`
     ///
     /// # Arguments
     ///
     /// - `coords`: Coordinates of grids, shape `(ngrid, 3)`.
     /// - `shls_slice`: Slice of shells to evaluate. If None, evaluate all
     ///   shells in the molecule.
+    /// - `blksize`: Block size for grid AO evaluation and non0tab sparsity
+    ///   table.
     /// - `nbins`: Number of bins for screening. Default to [`NBINS`] or 100.
     /// - `cutoff`: Cutoff (GTO exponent without derivatives) for screening.
     ///   Default to [`CUTOFF`] or 1e-22.
@@ -186,11 +207,12 @@ impl CInt {
         &self,
         coords: &[[f64; 3]],
         shls_slice: Option<[usize; 2]>,
+        blksize: usize,
         nbins: Option<u8>,
         cutoff: Option<f64>,
     ) -> CIntOutput<u8> {
         let shls_slice = shls_slice.unwrap_or([0, self.nbas()]);
-        let (out, shape) = gto_screen_index(coords, shls_slice, nbins, cutoff, &self.atm, &self.bas, &self.env);
+        let (out, shape) = gto_screen_index(coords, shls_slice, blksize, nbins, cutoff, &self.atm, &self.bas, &self.env);
         CIntOutput { out: Some(out), shape: shape.into() }
     }
 }
@@ -215,11 +237,38 @@ impl CInt {
     /// - [`eval_gto_with_args`](CInt::eval_gto_with_args) for non-fallible
     ///   counterpart.
     pub fn eval_gto_with_args_f(&self, args: GtoArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
+        #[cfg(not(feature = "dispatch_more_blksize"))]
+        match args.blksize {
+            48 => self.eval_gto_with_args_dispatch_f::<6>(args),
+            56 => self.eval_gto_with_args_dispatch_f::<7>(args),
+            blksize => Err(cint_error!(InvalidValue, "Unsupported blksize {blksize} for eval_gto_with_args_f; supported values are 48 and 56 when feature `dispatch_more_blksize` is not enabled")),
+        }
+
+        #[cfg(feature = "dispatch_more_blksize")]
+        match args.blksize {
+            32 => self.eval_gto_with_args_dispatch_f::<4>(args),
+            48 => self.eval_gto_with_args_dispatch_f::<6>(args),
+            56 => self.eval_gto_with_args_dispatch_f::<7>(args),
+            64 => self.eval_gto_with_args_dispatch_f::<8>(args),
+            72 => self.eval_gto_with_args_dispatch_f::<9>(args),
+            96 => self.eval_gto_with_args_dispatch_f::<12>(args),
+            104 => self.eval_gto_with_args_dispatch_f::<13>(args),
+            128 => self.eval_gto_with_args_dispatch_f::<16>(args),
+            144 => self.eval_gto_with_args_dispatch_f::<18>(args),
+            192 => self.eval_gto_with_args_dispatch_f::<24>(args),
+            256 => self.eval_gto_with_args_dispatch_f::<32>(args),
+            384 => self.eval_gto_with_args_dispatch_f::<48>(args),
+            512 => self.eval_gto_with_args_dispatch_f::<64>(args),
+            blksize => Err(cint_error!(InvalidValue, "Unsupported blksize {blksize} for eval_gto_with_args_f; supported values are 32, 48, 54, 64, 72, 96, 104, 128, 144, 192, 256, 384, and 512")),
+        }
+    }
+
+    pub fn eval_gto_with_args_dispatch_f<const NLANE: usize>(&self, args: GtoArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
         let mut data = self.clone();
-        let GtoArgs { eval_name, coord, shls_slice, non0tab, cutoff, nbins, mut fill_zero, fac, out } = args;
+        let GtoArgs { eval_name, coord, shls_slice, non0tab, cutoff, nbins, mut fill_zero, fac, blksize, out } = args;
 
         // check name, sph/cart, set evaluator
-        let (mut evaluator, cint_type) = data.get_gto_eval_name_f(eval_name)?;
+        let (mut evaluator, cint_type) = data.get_gto_eval_name_f::<NLANE>(eval_name)?;
         if let Some(cint_type) = cint_type {
             if cint_type == Spinor {
                 cint_raise!(InvalidValue, "Spinor type is not supported for `eval_gto` or `eval_gto_with_args`. Use `eval_gto_spinor` or `eval_gto_with_args_spinor` instead.")?
@@ -266,7 +315,7 @@ impl CInt {
 
         // handle non0tab and check its sanity
         if let Some(tab) = non0tab {
-            let nblk = ngrids.div_ceil(BLKSIZE);
+            let nblk = ngrids.div_ceil(blksize);
             let expected_len = nblk * nbas;
             let tab_len = tab.len();
             if tab_len != expected_len {
@@ -274,7 +323,7 @@ impl CInt {
             }
         }
         let non0tab_with_cutoff = if non0tab.is_none() && cutoff.is_some() {
-            Some(gto_screen_index(coord, shls_slice, nbins, cutoff, &data.atm, &data.bas, &data.env).0)
+            Some(gto_screen_index(coord, shls_slice, blksize, nbins, cutoff, &data.atm, &data.bas, &data.env).0)
         } else {
             None
         };
@@ -492,11 +541,41 @@ impl CInt {
     /// - [`eval_gto_with_args_spinor`](CInt::eval_gto_with_args_spinor) for
     ///   non-fallible counterpart.
     pub fn eval_gto_with_args_spinor_f(&self, args: GtoArgs<Complex<f64>>) -> Result<CIntOutput<Complex<f64>>, CIntError> {
+        #[cfg(not(feature = "dispatch_more_blksize"))]
+        match args.blksize {
+            48 => self.eval_gto_with_args_spinor_dispatch_f::<6>(args),
+            56 => self.eval_gto_with_args_spinor_dispatch_f::<7>(args),
+            blksize => Err(cint_error!(InvalidValue, "Unsupported blksize {blksize} for eval_gto_with_args_spinor_f; supported values are 48 and 56 when feature `dispatch_more_blksize` is not enabled")),
+        }
+
+        #[cfg(feature = "dispatch_more_blksize")]
+        match args.blksize {
+            32 => self.eval_gto_with_args_spinor_dispatch_f::<4>(args),
+            48 => self.eval_gto_with_args_spinor_dispatch_f::<6>(args),
+            56 => self.eval_gto_with_args_spinor_dispatch_f::<7>(args),
+            64 => self.eval_gto_with_args_spinor_dispatch_f::<8>(args),
+            72 => self.eval_gto_with_args_spinor_dispatch_f::<9>(args),
+            96 => self.eval_gto_with_args_spinor_dispatch_f::<12>(args),
+            104 => self.eval_gto_with_args_spinor_dispatch_f::<13>(args),
+            128 => self.eval_gto_with_args_spinor_dispatch_f::<16>(args),
+            144 => self.eval_gto_with_args_spinor_dispatch_f::<18>(args),
+            192 => self.eval_gto_with_args_spinor_dispatch_f::<24>(args),
+            256 => self.eval_gto_with_args_spinor_dispatch_f::<32>(args),
+            384 => self.eval_gto_with_args_spinor_dispatch_f::<48>(args),
+            512 => self.eval_gto_with_args_spinor_dispatch_f::<64>(args),
+            blksize => Err(cint_error!(InvalidValue, "Unsupported blksize {blksize} for eval_gto_with_args_spinor_f; supported values are 32, 48, 54, 64, 72, 96, 104, 128, 144, 192, 256, 384, and 512")),
+        }
+    }
+
+    pub fn eval_gto_with_args_spinor_dispatch_f<const NLANE: usize>(
+        &self,
+        args: GtoArgs<Complex<f64>>,
+    ) -> Result<CIntOutput<Complex<f64>>, CIntError> {
         let mut data = self.clone();
-        let GtoArgs { eval_name, coord, shls_slice, non0tab, cutoff, nbins, mut fill_zero, fac, out } = args;
+        let GtoArgs { eval_name, coord, shls_slice, non0tab, cutoff, nbins, mut fill_zero, fac, blksize, out } = args;
 
         // check name, sph/cart, set evaluator
-        let (mut evaluator, cint_type) = data.get_gto_eval_name_f(eval_name)?;
+        let (mut evaluator, cint_type) = data.get_gto_eval_name_f::<NLANE>(eval_name)?;
         if cint_type.is_some_and(|cint_type| cint_type != Spinor) {
             cint_raise!(InvalidValue, "Only Spinor type is supported for `eval_gto_spinor` or `eval_gto_with_args_spinor`. For other types, use `eval_gto` or `eval_gto_with_args`.")?
         }
@@ -544,7 +623,7 @@ impl CInt {
 
         // handle non0tab and check its sanity
         if let Some(tab) = non0tab {
-            let nblk = ngrids.div_ceil(BLKSIZE);
+            let nblk = ngrids.div_ceil(blksize);
             let expected_len = nblk * nbas;
             let tab_len = tab.len();
             if tab_len != expected_len {
@@ -552,7 +631,7 @@ impl CInt {
             }
         }
         let non0tab_with_cutoff = if non0tab.is_none() && cutoff.is_some() {
-            Some(gto_screen_index(coord, shls_slice, nbins, cutoff, &data.atm, &data.bas, &data.env).0)
+            Some(gto_screen_index(coord, shls_slice, blksize, nbins, cutoff, &data.atm, &data.bas, &data.env).0)
         } else {
             None
         };

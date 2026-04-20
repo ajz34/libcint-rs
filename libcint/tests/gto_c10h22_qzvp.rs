@@ -33,30 +33,45 @@ mod test {
     }
 
     #[rstest]
-    #[case("GTOval_sph"                        , 1e-8 ,    -89.26220691313141, [2048, 1358,  1])]
-    #[case("GTOval_sph"                        , 1e-2 ,    -86.33740170264781, [2048, 1358,  1])]
-    #[case("GTOval_cart"                       , 1e-5 ,    143.0683173879014 , [2048, 1649,  1])]
-    #[case("GTOval_sph_deriv1"                 , 1e-2 ,   -926.9693102995727 , [2048, 1358,  4])]
-    #[case("GTOval_cart_deriv1"                , 1e-2 ,  -2165.767335096756  , [2048, 1649,  4])]
-    #[case("GTOval_sph_deriv2"                 , 1e-2 ,   -427.9248897536187 , [2048, 1358, 10])]
-    #[case("GTOval_cart_deriv2"                , 1e-2 ,  -2661.780110374988  , [2048, 1649, 10])]
-    #[case("GTOval_sph_deriv3"                 , 1e-2 ,  -4097.951202338538  , [2048, 1358, 20])]
-    #[case("GTOval_cart_deriv3"                , 1e-2 ,  -2321.4395429846345 , [2048, 1649, 20])]
-    #[case("GTOval_sph_deriv4"                 , 1e-2 ,   -974.7870302755828 , [2048, 1358, 35])]
-    #[case("GTOval_cart_deriv4"                , 1e-2 , -31806.509015190735  , [2048, 1649, 35])]
-    fn test_with_args(#[case] eval_name: &str, #[case] cutoff: f64, #[case] ref_fp: f64, #[case] ref_shape: impl AsRef<[usize]>) {
+    #[case("GTOval_sph"                        , 1e-8 ,    -89.26220691313141, [2048, 1358,  1], 48)]
+    #[case("GTOval_sph"                        , 1e-2 ,    -86.33740170264781, [2048, 1358,  1], 48)]
+    #[case("GTOval_cart"                       , 1e-5 ,    143.0683173879014 , [2048, 1649,  1], 56)]
+    #[case("GTOval_sph_deriv1"                 , 1e-2 ,   -926.9693102995727 , [2048, 1358,  4], 48)]
+    #[case("GTOval_cart_deriv1"                , 1e-2 ,  -2165.767335096756  , [2048, 1649,  4], 48)]
+    #[case("GTOval_sph_deriv2"                 , 1e-2 ,   -427.9248897536187 , [2048, 1358, 10], 56)]
+    #[case("GTOval_cart_deriv2"                , 1e-2 ,  -2661.780110374988  , [2048, 1649, 10], 48)]
+    #[case("GTOval_sph_deriv3"                 , 1e-2 ,  -4097.951202338538  , [2048, 1358, 20], 56)]
+    #[case("GTOval_cart_deriv3"                , 1e-2 ,  -2321.4395429846345 , [2048, 1649, 20], 48)]
+    #[case("GTOval_sph_deriv4"                 , 1e-2 ,   -974.7870302755828 , [2048, 1358, 35], 48)]
+    #[case("GTOval_cart_deriv4"                , 1e-2 , -31806.509015190735  , [2048, 1649, 35], 56)]
+    fn test_with_args(
+        #[case] eval_name: &str,
+        #[case] cutoff: f64,
+        #[case] ref_fp: f64,
+        #[case] ref_shape: impl AsRef<[usize]>,
+        #[case] blksize: usize,
+    ) {
         let mol = init_c10h22_def2_qzvp();
         let ngrid = 2048;
         let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
+        const NLANE: usize = 6;
 
         let shls_slice = [4, 432];
-        let (evaluator, cint_type) = get_gto_eval_name_f(eval_name).unwrap();
+        let (evaluator, cint_type) = get_gto_eval_name_f::<NLANE>(eval_name).unwrap();
         let ao_loc = mol.make_loc_with_type(cint_type.unwrap_or(mol.cint_type));
         let nao = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]];
         let ncomp = evaluator.ncomp();
         let mut out = vec![f64::NAN; ngrid * nao * ncomp];
-        let args =
-            mol.gto_args_builder().eval_name(eval_name).coord(&coord).shls_slice(shls_slice).out(&mut out).cutoff(cutoff).build().unwrap();
+        let args = mol
+            .gto_args_builder()
+            .eval_name(eval_name)
+            .coord(&coord)
+            .shls_slice(shls_slice)
+            .out(&mut out)
+            .cutoff(cutoff)
+            .blksize(blksize)
+            .build()
+            .unwrap();
         let result = mol.eval_gto_with_args(args);
         let out_fp = cint_fp(&out);
         assert_eq!(result.shape, ref_shape.as_ref());

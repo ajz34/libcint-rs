@@ -1,6 +1,6 @@
 use crate::gto::prelude_dev::*;
 use num::traits::{MulAdd, NumAssignOps};
-use num::Num;
+use num::{Num, Zero};
 
 /* #region simple f64x8 */
 
@@ -42,7 +42,7 @@ impl<T: Copy, const N: usize> IndexMut<usize> for FpSimd<T, N> {
     }
 }
 
-impl<T: Num + Copy, const N: usize> FpSimd<T, N> {
+impl<T: Zero + Copy, const N: usize> FpSimd<T, N> {
     /// Returns a SIMD object with all lanes set to zero.
     #[inline(always)]
     pub fn zero() -> Self {
@@ -219,45 +219,61 @@ impl f64simd {
 
 /// (dev) GTO internal block type.
 ///
-/// This type represents a block of [`BLKSIZE`] elements of type `T`, aligned to
-/// 64 bytes (AVX-512 alignment).
+/// This type represents a block of elements of type `T`, aligned to 64 bytes
+/// (AVX-512 alignment).
 ///
-/// This type is a basic building block for GTO grid evaluations. Grids will be
-/// always batched by [`BLKSIZE`].
+/// This type is a basic building block for GTO grid evaluations.
 ///
-/// This [`BLKSIZE`] value (48) should be multiple of [`SIMDD`] (8). It should
-/// be better to be multiple of 16 because of microkernel in matmul usually
-/// requires 2 lanes of SIMD (for AVX-512, it is 16 f64). Currently this value
-/// is fixed to 48, in that for the most-used deriv1 case, the processed grids
-/// per function call is $(n_\mathrm{comp}, n_\mathrm{ctr} \times
-/// n_\mathrm{cart}(l), n_\mathrm{grids})$ will usually be up to (4, 15, 48) or
-/// 22.5 KB, which fits in L1d cache (32 KB in most micro-architectures)
-/// together with other data.
+/// The const generic `NLANE` represents numbers of multiples of [`SIMDD`] (8).
+/// - For `blksize = 48`, `NLANE = 48 / 8 = 6`;
+/// - For `blksize = 56`, `NLANE = 56 / 8 = 7`.
+///
+/// `NLANE` should be better to be multiple of 2 because of microkernel in
+/// matmul usually requires 2 lanes of SIMD (for AVX-512, it is 16 f64).
+///
+/// > However, that's probably not that important? Do chemists really write
+/// > microkernels, and the efficiency is really affected by the microkernels?
+///
+/// This value is better to set to 48 or 56, in that for the most-used deriv1
+/// case, the processed grids per function call is $(n_\mathrm{comp},
+/// n_\mathrm{ctr} \times n_\mathrm{cart}(l), n_\mathrm{grids})$ will usually be
+/// up to (4, 15, 48) or 22.5 KB, which fits in L1d cache (32 KB in most
+/// micro-architectures) together with other data. However, also note that
+/// deriv1 GTO grids is bounded by both memory bandwidth and exp function, the
+/// L1d cache efficiency is important but probably not that important. It is
+/// just be a better starting point for microkernel/loop-cache-size if anyone
+/// use them for other DFT-related computations.
+///
+/// Currently, we support `NLANE = 6, 7`, or equilvently `blksize = 48, 56`. Use
+/// cargo feature `dispatch_more_blksize` to enable both of them (4, 6, 7, 8, 9,
+/// 12, 16, 24, 32, 48, and 64), or equivalently some common `blksize` from 32
+/// to 512. But note that `dispatch_more_blksize` will increase the code size
+/// and compile time.
 #[repr(align(64))]
 #[derive(Clone, Debug, Copy)]
-pub struct Blk<T: Copy>(pub [T; BLKSIZE]);
+pub struct Blk<T: Copy, const NLANE: usize>(pub [FpSimd<T, SIMDD>; NLANE]);
 
 #[allow(non_camel_case_types)]
-pub type f64blk = Blk<f64>;
+pub type f64blk<const NLANE: usize> = Blk<f64, NLANE>;
 #[allow(non_camel_case_types)]
-pub type c64blk = Blk<Complex<f64>>;
+pub type c64blk<const NLANE: usize> = Blk<Complex<f64>, NLANE>;
 
-impl<T: Copy> Index<usize> for Blk<T> {
+impl<T: Copy, const NLANE: usize> Index<usize> for Blk<T, NLANE> {
     type Output = T;
     #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
+        &self.0[index / SIMDD][index % SIMDD]
     }
 }
 
-impl<T: Copy> IndexMut<usize> for Blk<T> {
+impl<T: Copy, const NLANE: usize> IndexMut<usize> for Blk<T, NLANE> {
     #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.0[index]
+        &mut self.0[index / SIMDD][index % SIMDD]
     }
 }
 
-impl<T: Copy> Blk<T> {
+impl<T: Zero + Copy, const NLANE: usize> Blk<T, NLANE> {
     /// Returns an uninitialized bulk.
     ///
     /// # Safety
@@ -274,76 +290,99 @@ impl<T: Copy> Blk<T> {
     /// Returns a block with all elements set to `val`.
     #[inline(always)]
     pub const fn splat(val: T) -> Self {
-        Blk([val; BLKSIZE])
+        Blk([FpSimd::splat(val); NLANE])
     }
 
     /// Sets all elements to `val`.
     #[inline(always)]
     pub fn fill(&mut self, val: T) {
-        for i in 0..BLKSIZE {
-            self.0[i] = val;
+        for i in 0..NLANE {
+            self.0[i] = FpSimd::splat(val);
         }
     }
 
-    /// Reads data from `src` slice into the block, ensuring [`BLKSIZE`]
-    /// elements.
+    /// Reads data from `src` slice into the block, ensuring `BLKSIZE` elements.
     ///
     /// # Safety
     ///
     /// The caller must ensure that `src` has at least `BLKSIZE` elements.
     #[inline(always)]
     pub unsafe fn read_ensure(&mut self, src: &[T]) {
-        self.0.copy_from_slice(&src[0..BLKSIZE]);
-    }
-
-    /// Reads data from `src` slice into the block, at most [`BLKSIZE`]
-    /// elements.
-    #[inline]
-    pub fn read(&mut self, src: &[T]) {
-        let len_slc = if src.len() < BLKSIZE { src.len() } else { BLKSIZE };
-        if len_slc >= BLKSIZE {
-            unsafe { self.read_ensure(src) }
-        } else {
-            self.0.copy_from_slice(src);
+        for i in 0..NLANE {
+            self.0[i] = FpSimd([
+                src[i * SIMDD],
+                src[i * SIMDD + 1],
+                src[i * SIMDD + 2],
+                src[i * SIMDD + 3],
+                src[i * SIMDD + 4],
+                src[i * SIMDD + 5],
+                src[i * SIMDD + 6],
+                src[i * SIMDD + 7],
+            ]);
         }
     }
 
-    /// Writes data from the block into `dst` slice, ensuring [`BLKSIZE`]
-    /// elements.
+    /// Reads data from `src` slice into the block, at most `BLKSIZE` elements.
+    #[inline]
+    pub fn read(&mut self, src: &[T]) {
+        let blksize = NLANE * SIMDD;
+        let len_slc = if src.len() < blksize { src.len() } else { blksize };
+        if len_slc >= blksize {
+            unsafe { self.read_ensure(src) }
+        } else {
+            for i in 0..len_slc {
+                self[i] = src[i];
+            }
+        }
+    }
+
+    /// Writes data from the block into `dst` slice, ensuring `BLKSIZE = NLANE *
+    /// SIMDD` elements.
     ///
     /// # Safety
     ///
     /// The caller must ensure that `dst` has at least `BLKSIZE` elements.
     #[inline(always)]
     pub unsafe fn write_ensure(&self, dst: &mut [T]) {
-        dst.copy_from_slice(&self.0);
+        for i in 0..NLANE {
+            dst[i * SIMDD] = self.0[i][0];
+            dst[i * SIMDD + 1] = self.0[i][1];
+            dst[i * SIMDD + 2] = self.0[i][2];
+            dst[i * SIMDD + 3] = self.0[i][3];
+            dst[i * SIMDD + 4] = self.0[i][4];
+            dst[i * SIMDD + 5] = self.0[i][5];
+            dst[i * SIMDD + 6] = self.0[i][6];
+            dst[i * SIMDD + 7] = self.0[i][7];
+        }
     }
 
-    /// Writes data from the block into `dst` slice, at most [`BLKSIZE`]
-    /// elements.
+    /// Writes data from the block into `dst` slice, at most `BLKSIZE` elements.
     #[inline]
     pub fn write(&self, dst: &mut [T]) {
-        let len_slc = if dst.len() < BLKSIZE { dst.len() } else { BLKSIZE };
-        if len_slc >= BLKSIZE {
+        let blksize = NLANE * SIMDD;
+        let len_slc = if dst.len() < blksize { dst.len() } else { blksize };
+        if len_slc >= blksize {
             unsafe { self.write_ensure(dst) }
         } else {
-            dst.copy_from_slice(&self.0[..len_slc]);
+            for i in 0..len_slc {
+                dst[i] = self[i];
+            }
         }
     }
 }
 
-impl<T: Copy> Blk<T> {
+impl<T: Copy, const NLANE: usize> Blk<T, NLANE> {
     /// Returns a slice of SIMD (double float) blocks view of this block.
     #[inline(always)]
-    pub const fn as_simdd_slice(&self) -> &[FpSimd<T, SIMDD>; BLKSIMDD] {
-        unsafe { transmute(&self.0) }
+    pub const fn as_simdd_slice(&self) -> &[FpSimd<T, SIMDD>; NLANE] {
+        &self.0
     }
 
     /// Returns a mutable slice of SIMD (double float) blocks view of this
     /// block.
     #[inline(always)]
-    pub fn as_simdd_slice_mut(&mut self) -> &mut [FpSimd<T, SIMDD>; BLKSIMDD] {
-        unsafe { transmute(&mut self.0) }
+    pub fn as_simdd_slice_mut(&mut self) -> &mut [FpSimd<T, SIMDD>; NLANE] {
+        &mut self.0
     }
 
     /// Gets the SIMD (double float) block at `index`.
@@ -637,16 +676,19 @@ pub fn gto_r_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize) {
 /// # PySCF equivalent
 ///
 /// `libcgto.so`: `int GTOprim_exp`
-pub fn gto_prim_exp(eprim: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], fac: f64, nprim: usize) {
-    let mut rr = unsafe { f64blk::uninit() };
-    for i in 0..BLKSIZE {
-        rr[i] = coord[0][i] * coord[0][i] + coord[1][i] * coord[1][i] + coord[2][i] * coord[2][i];
+pub fn gto_prim_exp<const NLANE: usize>(eprim: &mut [f64blk<NLANE>], coord: &[f64blk<NLANE>; 3], alpha: &[f64], fac: f64, nprim: usize) {
+    let mut rr = unsafe { f64blk::<NLANE>::uninit() };
+    for g in 0..NLANE {
+        let x = coord[0].get_simdd(g);
+        let y = coord[1].get_simdd(g);
+        let z = coord[2].get_simdd(g);
+        *rr.get_simdd_mut(g) = x * x + y * y + z * z;
     }
 
     for p in 0..nprim {
-        for g in 0..BLKSIZE {
-            let arr = alpha[p] * rr[g];
-            eprim[p][g] = fac * (-arr).exp();
+        for g in 0..NLANE {
+            let arr = rr.get_simdd(g) * alpha[p];
+            *eprim[p].get_simdd_mut(g) = (-arr).map(f64::exp) * fac;
         }
     }
 }
@@ -655,6 +697,6 @@ pub fn gto_prim_exp(eprim: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], fa
 fn test_blkf64_uninit() {
     #[allow(clippy::uninit_assumed_init)]
     #[allow(invalid_value)]
-    let v: [[f64blk; 10]; 10] = unsafe { [[f64blk::uninit(); 10]; 10] };
+    let v: [[f64blk<48>; 10]; 10] = unsafe { [[f64blk::uninit(); 10]; 10] };
     println!("{:?}", v);
 }

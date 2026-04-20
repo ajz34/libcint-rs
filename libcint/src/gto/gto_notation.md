@@ -93,7 +93,7 @@
 | $p$ | `nprim` | primitive GTO |
 | $k$ | `nctr` | GTO contraction |
 | $g$ | `ngrids` | grid point |
-|     | [`BLKSIZE`] | grid block size for AO evaluation in iterations |
-|     | [`BLKSIMDD`] | grid block size in SIMD lanes for AO evaluation in iterations |
+|     | `BLKSIZE` | grid block size for AO evaluation in iterations |
+|     | `NLANE` | grid block size in SIMD lanes for AO evaluation in iterations |
 | $l$ | `l` | angular momentum |
 | $t$ | `3` | coordinate index $x, y, z$ |
