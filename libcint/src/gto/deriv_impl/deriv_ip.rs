@@ -10,7 +10,13 @@ use crate::gto::prelude_dev::*;
 /// # PySCF equivalent
 ///
 /// `libcgto.so`: `int GTOshell_eval_grid_cart_ip`
-pub fn gto_shell_eval_grid_cart_ip<const NLANE: usize>(gto: &mut [f64blk<NLANE>], exps: &[f64blk<NLANE>], coord: &[f64blk<NLANE>; 3], l: usize, nctr: usize) {
+pub fn gto_shell_eval_grid_cart_ip<const NLANE: usize>(
+    gto: &mut [f64blk<NLANE>],
+    exps: &[f64blk<NLANE>],
+    coord: &[f64blk<NLANE>; 3],
+    l: usize,
+    nctr: usize,
+) {
     const ANG_MAX: usize = crate::ffi::cint_ffi::ANG_MAX as usize;
 
     const D1_X: usize = 0;

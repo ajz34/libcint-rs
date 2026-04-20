@@ -99,7 +99,15 @@ impl<const NLANE: usize> GtoEvalAPI<NLANE> for GtoEvalDerivIpSp {
     fn ntensor(&self) -> usize {
         3
     }
-    fn gto_exp(&self, ebuf: &mut [f64blk<NLANE>], coord: &[f64blk<NLANE>; 3], alpha: &[f64], _coeff: &[f64], fac: f64, shl_shape: [usize; 2]) {
+    fn gto_exp(
+        &self,
+        ebuf: &mut [f64blk<NLANE>],
+        coord: &[f64blk<NLANE>; 3],
+        alpha: &[f64],
+        _coeff: &[f64],
+        fac: f64,
+        shl_shape: [usize; 2],
+    ) {
         let eprim = ebuf;
         let [_nctr, nprim] = shl_shape;
         gto_prim_exp(eprim, coord, alpha, fac, nprim);
