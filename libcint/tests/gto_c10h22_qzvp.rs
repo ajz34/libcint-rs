@@ -48,9 +48,10 @@ mod test {
         let mol = init_c10h22_def2_qzvp();
         let ngrid = 2048;
         let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
+        const NLANE: usize = 6;
 
         let shls_slice = [4, 432];
-        let (evaluator, cint_type) = get_gto_eval_name_f(eval_name).unwrap();
+        let (evaluator, cint_type) = get_gto_eval_name_f::<NLANE>(eval_name).unwrap();
         let ao_loc = mol.make_loc_with_type(cint_type.unwrap_or(mol.cint_type));
         let nao = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]];
         let ncomp = evaluator.ncomp();

@@ -774,6 +774,7 @@ fn test_gto_screen_index() {
 #[test]
 fn test_gto_spinor() {
     use num::Zero;
+    const NLANE: usize = 6;
     let cint_data = init_c10h22_def2_qzvp();
     let ngrid = 2048;
     let coord: Vec<[f64; 3]> = (0..ngrid).map(|i| [(i as f64).sin(), (i as f64).cos(), (i as f64 + 0.5).sin()]).collect();
@@ -781,9 +782,9 @@ fn test_gto_spinor() {
     let ao_loc = cint_data.make_loc_with_type(Spinor);
     let nao = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]];
     let evaluator = GtoEvalDeriv0;
-    let ntensor = evaluator.ntensor();
+    let ntensor = <GtoEvalDeriv0 as GtoEvalAPI<NLANE>>::ntensor(&evaluator);
     let mut ao = vec![Complex::<f64>::zero(); 2 * ntensor * nao * ngrid];
-    gto_eval_spinor_loop(&cint_data, &evaluator, &mut ao, &coord, 1.0, shls_slice, None, true).unwrap();
+    gto_eval_spinor_loop::<NLANE>(&cint_data, &evaluator, &mut ao, &coord, 1.0, shls_slice, None, true).unwrap();
     println!("ao[0..10]: {:?}", &ao[0..10]);
     println!("fp(ao): {}", cint_fp(&ao));
 }

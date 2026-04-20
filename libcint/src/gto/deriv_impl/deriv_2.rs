@@ -1,10 +1,10 @@
 use crate::gto::prelude_dev::*;
 
-pub fn gto_shell_eval_grid_cart_deriv2(
+pub fn gto_shell_eval_grid_cart_deriv2<const NLANE: usize>(
     // arguments
-    gto: &mut [f64blk],
-    eprim: &[f64blk],
-    coord: &[f64blk; 3],
+    gto: &mut [f64blk<NLANE>],
+    eprim: &[f64blk<NLANE>],
+    coord: &[f64blk<NLANE>; 3],
     alpha: &[f64],
     coeff: &[f64],
     l: usize,
@@ -29,13 +29,13 @@ pub fn gto_shell_eval_grid_cart_deriv2(
     // zero out the output buffer
     for icomp in 0..COMP_NUM {
         for mu in 0..nao_to_set {
-            for g in 0..BLKSIMDD {
+            for g in 0..NLANE {
                 gto[icomp][mu].get_simdd_mut(g).fill(0.0);
             }
         }
     }
 
-    for g in 0..BLKSIMDD {
+    for g in 0..NLANE {
         let x = coord[0].get_simdd(g);
         let y = coord[1].get_simdd(g);
         let z = coord[2].get_simdd(g);
@@ -73,7 +73,7 @@ pub fn gto_shell_eval_grid_cart_deriv2(
 }
 
 pub struct GtoEvalDeriv2;
-impl GtoEvalAPI for GtoEvalDeriv2 {
+impl<const NLANE: usize> GtoEvalAPI<NLANE> for GtoEvalDeriv2 {
     fn ne1(&self) -> usize {
         1
     }
@@ -83,8 +83,8 @@ impl GtoEvalAPI for GtoEvalDeriv2 {
     fn gto_exp(
         &self,
         // arguments
-        ebuf: &mut [f64blk],
-        coord: &[f64blk; 3],
+        ebuf: &mut [f64blk<NLANE>],
+        coord: &[f64blk<NLANE>; 3],
         alpha: &[f64],
         _coeff: &[f64],
         fac: f64,
@@ -98,9 +98,9 @@ impl GtoEvalAPI for GtoEvalDeriv2 {
     fn gto_shell_eval(
         &self,
         // arguments
-        gto: &mut [f64blk],
-        ebuf: &[f64blk],
-        coord: &[f64blk; 3],
+        gto: &mut [f64blk<NLANE>],
+        ebuf: &[f64blk<NLANE>],
+        coord: &[f64blk<NLANE>; 3],
         alpha: &[f64],
         coeff: &[f64],
         l: usize,

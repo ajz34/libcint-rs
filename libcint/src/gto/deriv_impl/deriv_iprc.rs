@@ -1,10 +1,10 @@
 use crate::gto::prelude_dev::*;
 
-pub fn gto_shell_eval_grid_cart_iprc(
+pub fn gto_shell_eval_grid_cart_iprc<const NLANE: usize>(
     // arguments
-    gto: &mut [f64blk],
-    eprim: &[f64blk],
-    coord: &[f64blk; 3],
+    gto: &mut [f64blk<NLANE>],
+    eprim: &[f64blk<NLANE>],
+    coord: &[f64blk<NLANE>; 3],
     alpha: &[f64],
     coeff: &[f64],
     l: usize,
@@ -32,13 +32,13 @@ pub fn gto_shell_eval_grid_cart_iprc(
     // zero out the output buffer
     for icomp in 0..COMP_NUM {
         for mu in 0..nao_to_set {
-            for g in 0..BLKSIMDD {
+            for g in 0..NLANE {
                 gto[icomp][mu].get_simdd_mut(g).fill(0.0);
             }
         }
     }
 
-    for g in 0..BLKSIMDD {
+    for g in 0..NLANE {
         let x = coord[0].get_simdd(g);
         let y = coord[1].get_simdd(g);
         let z = coord[2].get_simdd(g);
@@ -94,7 +94,7 @@ pub struct GtoEvalDerivIpRc {
     common_origin: [f64; 3],
 }
 
-impl GtoEvalAPI for GtoEvalDerivIpRc {
+impl<const NLANE: usize> GtoEvalAPI<NLANE> for GtoEvalDerivIpRc {
     fn ne1(&self) -> usize {
         1
     }
@@ -104,7 +104,7 @@ impl GtoEvalAPI for GtoEvalDerivIpRc {
     fn init(&mut self, mol: &CInt) {
         self.common_origin = mol.get_common_origin();
     }
-    fn gto_exp(&self, ebuf: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], _coeff: &[f64], fac: f64, shl_shape: [usize; 2]) {
+    fn gto_exp(&self, ebuf: &mut [f64blk<NLANE>], coord: &[f64blk<NLANE>; 3], alpha: &[f64], _coeff: &[f64], fac: f64, shl_shape: [usize; 2]) {
         let eprim = ebuf;
         let [_nctr, nprim] = shl_shape;
         gto_prim_exp(eprim, coord, alpha, fac, nprim);
@@ -112,9 +112,9 @@ impl GtoEvalAPI for GtoEvalDerivIpRc {
     fn gto_shell_eval(
         &self,
         // arguments
-        gto: &mut [f64blk],
-        ebuf: &[f64blk],
-        coord: &[f64blk; 3],
+        gto: &mut [f64blk<NLANE>],
+        ebuf: &[f64blk<NLANE>],
+        coord: &[f64blk<NLANE>; 3],
         alpha: &[f64],
         coeff: &[f64],
         l: usize,

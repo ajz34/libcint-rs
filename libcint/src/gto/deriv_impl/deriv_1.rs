@@ -66,10 +66,10 @@ use crate::gto::prelude_dev::*;
 /// # PySCF equivalent
 ///
 /// `libcgto.so`: `int GTOcontract_exp1`
-pub fn gto_contract_exp1(
+pub fn gto_contract_exp1<const NLANE: usize>(
     // arguments
-    ectr: &mut [f64blk],
-    coord: &[f64blk; 3],
+    ectr: &mut [f64blk<NLANE>],
+    coord: &[f64blk<NLANE>; 3],
     alpha: &[f64],
     coeff: &[f64],
     fac: f64,
@@ -84,29 +84,30 @@ pub fn gto_contract_exp1(
     let (ectr, ectr_2a) = ectr.split_at_mut(nctr);
 
     // r² = x² + y² + z²
-    let mut rr = unsafe { f64blk::uninit() };
-    for g in 0..BLKSIZE {
-        rr[g] = coord[X][g].mul_add(coord[X][g], coord[Y][g].mul_add(coord[Y][g], coord[Z][g] * coord[Z][g]));
+    let mut rr = unsafe { f64blk::<NLANE>::uninit() };
+    for g in 0..NLANE {
+        let x = coord[X].get_simdd(g);
+        let y = coord[Y].get_simdd(g);
+        let z = coord[Z].get_simdd(g);
+        *rr.get_simdd_mut(g) = x * x + y * y + z * z;
     }
     // zero ectr
     for k in 0..nctr {
-        for g in 0..BLKSIZE {
-            ectr[k][g] = 0.0;
-            ectr_2a[k][g] = 0.0;
-        }
+        ectr[k] = f64blk::splat(0.0);
+        ectr_2a[k] = f64blk::splat(0.0);
     }
     // -2 alpha_i C_ij exp(-alpha_i r_k^2)
     for p in 0..nprim {
-        let mut eprim = unsafe { f64blk::uninit() };
-        for g in 0..BLKSIZE {
-            let arr = alpha[p] * rr[g];
-            eprim[g] = (-arr).exp() * fac;
+        let mut eprim = unsafe { f64blk::<NLANE>::uninit() };
+        for g in 0..NLANE {
+            let arr = rr.get_simdd(g) * alpha[p];
+            *eprim.get_simdd_mut(g) = (-arr).map(f64::exp) * fac;
         }
         for k in 0..nctr {
             let coeff_2a = -2.0 * alpha[p] * coeff[k * nprim + p];
-            for g in 0..BLKSIZE {
-                ectr[k][g] = eprim[g].mul_add(coeff[k * nprim + p], ectr[k][g]);
-                ectr_2a[k][g] = eprim[g].mul_add(coeff_2a, ectr_2a[k][g]);
+            for g in 0..NLANE {
+                *ectr[k].get_simdd_mut(g) = eprim.get_simdd(g) * coeff[k * nprim + p] + ectr[k].get_simdd(g);
+                *ectr_2a[k].get_simdd_mut(g) = eprim.get_simdd(g) * coeff_2a + ectr_2a[k].get_simdd(g);
             }
         }
     }
@@ -174,7 +175,7 @@ pub fn gto_contract_exp1(
 /// # PySCF equivalent
 ///
 /// `libcgto.so`: `int GTOshell_eval_grid_cart_deriv1`
-pub fn gto_shell_eval_grid_cart_deriv1(gto: &mut [f64blk], exps: &[f64blk], coord: &[f64blk; 3], l: usize, nctr: usize) {
+pub fn gto_shell_eval_grid_cart_deriv1<const NLANE: usize>(gto: &mut [f64blk<NLANE>], exps: &[f64blk<NLANE>], coord: &[f64blk<NLANE>; 3], l: usize, nctr: usize) {
     const ANG_MAX: usize = crate::ffi::cint_ffi::ANG_MAX as usize;
 
     const D1_0: usize = 0;
@@ -189,7 +190,7 @@ pub fn gto_shell_eval_grid_cart_deriv1(gto: &mut [f64blk], exps: &[f64blk], coor
     match l {
         0 => {
             for k in 0..nctr {
-                for g in 0..BLKSIMDD {
+                for g in 0..NLANE {
                     let e = exps[k].get_simdd(g);
                     let e_2a = exps_2a[k].get_simdd(g);
                     let x = coord[X].get_simdd(g);
@@ -205,7 +206,7 @@ pub fn gto_shell_eval_grid_cart_deriv1(gto: &mut [f64blk], exps: &[f64blk], coor
         },
         1 => {
             for k in 0..nctr {
-                for g in 0..BLKSIMDD {
+                for g in 0..NLANE {
                     let e = exps[k].get_simdd(g);
                     let e_2a = exps_2a[k].get_simdd(g);
                     let x = coord[X].get_simdd(g);
@@ -232,7 +233,7 @@ pub fn gto_shell_eval_grid_cart_deriv1(gto: &mut [f64blk], exps: &[f64blk], coor
         },
         2 => {
             for k in 0..nctr {
-                for g in 0..BLKSIMDD {
+                for g in 0..NLANE {
                     let e = exps[k].get_simdd(g);
                     let e_2a = exps_2a[k].get_simdd(g);
                     let x = coord[X].get_simdd(g);
@@ -284,7 +285,7 @@ pub fn gto_shell_eval_grid_cart_deriv1(gto: &mut [f64blk], exps: &[f64blk], coor
         },
         3 => {
             for k in 0..nctr {
-                for g in 0..BLKSIMDD {
+                for g in 0..NLANE {
                     let e = exps[k].get_simdd(g);
                     let e_2a = exps_2a[k].get_simdd(g);
                     let x = coord[X].get_simdd(g);
@@ -361,8 +362,8 @@ pub fn gto_shell_eval_grid_cart_deriv1(gto: &mut [f64blk], exps: &[f64blk], coor
         },
         _ => {
             // initialize pows buffer
-            let mut pows_buffer = unsafe { [[f64blk::uninit(); 3]; ANG_MAX + 2] };
-            for g in 0..BLKSIMDD {
+            let mut pows_buffer = unsafe { [[f64blk::<NLANE>::uninit(); 3]; ANG_MAX + 2] };
+            for g in 0..NLANE {
                 pows_buffer[0][X].get_simdd_mut(g).fill(0.0);
                 pows_buffer[0][Y].get_simdd_mut(g).fill(0.0);
                 pows_buffer[0][Z].get_simdd_mut(g).fill(0.0);
@@ -372,7 +373,7 @@ pub fn gto_shell_eval_grid_cart_deriv1(gto: &mut [f64blk], exps: &[f64blk], coor
             }
             let pows = &mut pows_buffer[1..];
             for lx in 0..l {
-                for g in 0..BLKSIMDD {
+                for g in 0..NLANE {
                     *pows[lx + 1][X].get_simdd_mut(g) = pows[lx][X].get_simdd(g) * coord[X].get_simdd(g);
                     *pows[lx + 1][Y].get_simdd_mut(g) = pows[lx][Y].get_simdd(g) * coord[Y].get_simdd(g);
                     *pows[lx + 1][Z].get_simdd_mut(g) = pows[lx][Z].get_simdd(g) * coord[Z].get_simdd(g);
@@ -384,7 +385,7 @@ pub fn gto_shell_eval_grid_cart_deriv1(gto: &mut [f64blk], exps: &[f64blk], coor
 
             for k in 0..nctr {
                 for (icart, (lx, ly, lz)) in gto_l_iter(l).enumerate() {
-                    for g in 0..BLKSIMDD {
+                    for g in 0..NLANE {
                         let e = exps[k].get_simdd(g);
                         let e_2a = exps_2a[k].get_simdd(g);
                         let x = coord[X].get_simdd(g);
@@ -422,7 +423,7 @@ pub fn gto_shell_eval_grid_cart_deriv1(gto: &mut [f64blk], exps: &[f64blk], coor
 /// - [`gto_contract_exp1`]
 /// - [`gto_shell_eval_grid_cart_deriv1`]
 pub struct GtoEvalDeriv1;
-impl GtoEvalAPI for GtoEvalDeriv1 {
+impl<const NLANE: usize> GtoEvalAPI<NLANE> for GtoEvalDeriv1 {
     fn ne1(&self) -> usize {
         1
     }
@@ -432,8 +433,8 @@ impl GtoEvalAPI for GtoEvalDeriv1 {
     fn gto_exp(
         &self,
         // arguments
-        ebuf: &mut [f64blk],
-        coord: &[f64blk; 3],
+        ebuf: &mut [f64blk<NLANE>],
+        coord: &[f64blk<NLANE>; 3],
         alpha: &[f64],
         coeff: &[f64],
         fac: f64,
@@ -447,9 +448,9 @@ impl GtoEvalAPI for GtoEvalDeriv1 {
     fn gto_shell_eval(
         &self,
         // arguments
-        gto: &mut [f64blk],
-        exps: &[f64blk],
-        coord: &[f64blk; 3],
+        gto: &mut [f64blk<NLANE>],
+        exps: &[f64blk<NLANE>],
+        coord: &[f64blk<NLANE>; 3],
         _alpha: &[f64],
         _coeff: &[f64],
         l: usize,

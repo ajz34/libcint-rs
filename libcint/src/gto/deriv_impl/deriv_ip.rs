@@ -10,7 +10,7 @@ use crate::gto::prelude_dev::*;
 /// # PySCF equivalent
 ///
 /// `libcgto.so`: `int GTOshell_eval_grid_cart_ip`
-pub fn gto_shell_eval_grid_cart_ip(gto: &mut [f64blk], exps: &[f64blk], coord: &[f64blk; 3], l: usize, nctr: usize) {
+pub fn gto_shell_eval_grid_cart_ip<const NLANE: usize>(gto: &mut [f64blk<NLANE>], exps: &[f64blk<NLANE>], coord: &[f64blk<NLANE>; 3], l: usize, nctr: usize) {
     const ANG_MAX: usize = crate::ffi::cint_ffi::ANG_MAX as usize;
 
     const D1_X: usize = 0;
@@ -24,7 +24,7 @@ pub fn gto_shell_eval_grid_cart_ip(gto: &mut [f64blk], exps: &[f64blk], coord: &
     match l {
         0 => {
             for k in 0..nctr {
-                for g in 0..BLKSIMDD {
+                for g in 0..NLANE {
                     let e_2a = exps_2a[k].get_simdd(g);
                     let x = coord[X].get_simdd(g);
                     let y = coord[Y].get_simdd(g);
@@ -38,7 +38,7 @@ pub fn gto_shell_eval_grid_cart_ip(gto: &mut [f64blk], exps: &[f64blk], coord: &
         },
         1 => {
             for k in 0..nctr {
-                for g in 0..BLKSIMDD {
+                for g in 0..NLANE {
                     let e = exps[k].get_simdd(g);
                     let e_2a = exps_2a[k].get_simdd(g);
                     let x = coord[X].get_simdd(g);
@@ -61,7 +61,7 @@ pub fn gto_shell_eval_grid_cart_ip(gto: &mut [f64blk], exps: &[f64blk], coord: &
         },
         2 => {
             for k in 0..nctr {
-                for g in 0..BLKSIMDD {
+                for g in 0..NLANE {
                     let e = exps[k].get_simdd(g);
                     let e_2a = exps_2a[k].get_simdd(g);
                     let x = coord[X].get_simdd(g);
@@ -106,7 +106,7 @@ pub fn gto_shell_eval_grid_cart_ip(gto: &mut [f64blk], exps: &[f64blk], coord: &
         },
         3 => {
             for k in 0..nctr {
-                for g in 0..BLKSIMDD {
+                for g in 0..NLANE {
                     let e = exps[k].get_simdd(g);
                     let e_2a = exps_2a[k].get_simdd(g);
                     let x = coord[X].get_simdd(g);
@@ -172,8 +172,8 @@ pub fn gto_shell_eval_grid_cart_ip(gto: &mut [f64blk], exps: &[f64blk], coord: &
         },
         _ => {
             // initialize pows buffer
-            let mut pows_buffer = unsafe { [[f64blk::uninit(); 3]; ANG_MAX + 2] };
-            for g in 0..BLKSIMDD {
+            let mut pows_buffer = unsafe { [[f64blk::<NLANE>::uninit(); 3]; ANG_MAX + 2] };
+            for g in 0..NLANE {
                 pows_buffer[0][X].get_simdd_mut(g).fill(0.0);
                 pows_buffer[0][Y].get_simdd_mut(g).fill(0.0);
                 pows_buffer[0][Z].get_simdd_mut(g).fill(0.0);
@@ -183,7 +183,7 @@ pub fn gto_shell_eval_grid_cart_ip(gto: &mut [f64blk], exps: &[f64blk], coord: &
             }
             let pows = &mut pows_buffer[1..];
             for lx in 0..l {
-                for g in 0..BLKSIMDD {
+                for g in 0..NLANE {
                     *pows[lx + 1][X].get_simdd_mut(g) = pows[lx][X].get_simdd(g) * coord[X].get_simdd(g);
                     *pows[lx + 1][Y].get_simdd_mut(g) = pows[lx][Y].get_simdd(g) * coord[Y].get_simdd(g);
                     *pows[lx + 1][Z].get_simdd_mut(g) = pows[lx][Z].get_simdd(g) * coord[Z].get_simdd(g);
@@ -195,7 +195,7 @@ pub fn gto_shell_eval_grid_cart_ip(gto: &mut [f64blk], exps: &[f64blk], coord: &
 
             for k in 0..nctr {
                 for (icart, (lx, ly, lz)) in gto_l_iter(l).enumerate() {
-                    for g in 0..BLKSIMDD {
+                    for g in 0..NLANE {
                         let e = exps[k].get_simdd(g);
                         let e_2a = exps_2a[k].get_simdd(g);
                         let x = coord[X].get_simdd(g);
@@ -232,7 +232,7 @@ pub fn gto_shell_eval_grid_cart_ip(gto: &mut [f64blk], exps: &[f64blk], coord: &
 /// - [`gto_contract_exp1`]
 /// - [`gto_shell_eval_grid_cart_ip`]
 pub struct GtoEvalDerivIp;
-impl GtoEvalAPI for GtoEvalDerivIp {
+impl<const NLANE: usize> GtoEvalAPI<NLANE> for GtoEvalDerivIp {
     fn ne1(&self) -> usize {
         1
     }
@@ -242,8 +242,8 @@ impl GtoEvalAPI for GtoEvalDerivIp {
     fn gto_exp(
         &self,
         // arguments
-        ebuf: &mut [f64blk],
-        coord: &[f64blk; 3],
+        ebuf: &mut [f64blk<NLANE>],
+        coord: &[f64blk<NLANE>; 3],
         alpha: &[f64],
         coeff: &[f64],
         fac: f64,
@@ -257,9 +257,9 @@ impl GtoEvalAPI for GtoEvalDerivIp {
     fn gto_shell_eval(
         &self,
         // arguments
-        gto: &mut [f64blk],
-        exps: &[f64blk],
-        coord: &[f64blk; 3],
+        gto: &mut [f64blk<NLANE>],
+        exps: &[f64blk<NLANE>],
+        coord: &[f64blk<NLANE>; 3],
         _alpha: &[f64],
         _coeff: &[f64],
         l: usize,
