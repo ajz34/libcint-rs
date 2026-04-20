@@ -301,8 +301,7 @@ impl<T: Zero + Copy, const NLANE: usize> Blk<T, NLANE> {
         }
     }
 
-    /// Reads data from `src` slice into the block, ensuring [`BLKSIZE`]
-    /// elements.
+    /// Reads data from `src` slice into the block, ensuring `BLKSIZE` elements.
     ///
     /// # Safety
     ///
@@ -323,8 +322,7 @@ impl<T: Zero + Copy, const NLANE: usize> Blk<T, NLANE> {
         }
     }
 
-    /// Reads data from `src` slice into the block, at most [`BLKSIZE`]
-    /// elements.
+    /// Reads data from `src` slice into the block, at most `BLKSIZE` elements.
     #[inline]
     pub fn read(&mut self, src: &[T]) {
         let blksize = NLANE * SIMDD;
@@ -338,8 +336,8 @@ impl<T: Zero + Copy, const NLANE: usize> Blk<T, NLANE> {
         }
     }
 
-    /// Writes data from the block into `dst` slice, ensuring [`BLKSIZE`]
-    /// elements.
+    /// Writes data from the block into `dst` slice, ensuring `BLKSIZE = NLANE *
+    /// SIMDD` elements.
     ///
     /// # Safety
     ///
@@ -358,8 +356,7 @@ impl<T: Zero + Copy, const NLANE: usize> Blk<T, NLANE> {
         }
     }
 
-    /// Writes data from the block into `dst` slice, at most [`BLKSIZE`]
-    /// elements.
+    /// Writes data from the block into `dst` slice, at most `BLKSIZE` elements.
     #[inline]
     pub fn write(&self, dst: &mut [T]) {
         let blksize = NLANE * SIMDD;

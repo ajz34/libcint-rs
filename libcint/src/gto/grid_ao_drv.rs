@@ -200,7 +200,7 @@ pub fn gto_shloc_by_atom(shls_slice: [usize; 2], bas: &[[c_int; BAS_SLOTS as usi
 /// | index | size | notes |
 /// |--|--|--|
 /// | $A$ | `natm` | atom index |
-/// | $g$ | `bgrid` | grids, usually equal but may be smaller than [`BLKSIZE`] |
+/// | $g$ | `bgrid` | grids, usually equal but may be smaller than `BLKSIZE` |
 ///
 /// # Argument Table
 ///

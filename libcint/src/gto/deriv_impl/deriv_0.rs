@@ -33,7 +33,7 @@ use crate::gto::prelude_dev::*;
 /// |--|--|--|
 /// | $k$ | `nctr` | GTO contraction |
 /// | $p$ | `nprim` | primitive GTO |
-/// | $g$ | [`BLKSIZE`] | grid block in iterations |
+/// | $g$ | `BLKSIZE` | grid block in iterations |
 ///
 /// # Argument Table
 ///

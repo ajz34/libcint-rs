@@ -40,7 +40,7 @@ use crate::gto::prelude_dev::*;
 /// |--|--|--|
 /// | $k$ | `nctr` | contracted AO |
 /// | $p$ | `nprim` | primitive AO |
-/// | $g$ | [`BLKSIZE`] | grids |
+/// | $g$ | `BLKSIZE` | grids |
 ///
 /// # Argument Table
 ///
@@ -175,7 +175,13 @@ pub fn gto_contract_exp1<const NLANE: usize>(
 /// # PySCF equivalent
 ///
 /// `libcgto.so`: `int GTOshell_eval_grid_cart_deriv1`
-pub fn gto_shell_eval_grid_cart_deriv1<const NLANE: usize>(gto: &mut [f64blk<NLANE>], exps: &[f64blk<NLANE>], coord: &[f64blk<NLANE>; 3], l: usize, nctr: usize) {
+pub fn gto_shell_eval_grid_cart_deriv1<const NLANE: usize>(
+    gto: &mut [f64blk<NLANE>],
+    exps: &[f64blk<NLANE>],
+    coord: &[f64blk<NLANE>; 3],
+    l: usize,
+    nctr: usize,
+) {
     const ANG_MAX: usize = crate::ffi::cint_ffi::ANG_MAX as usize;
 
     const D1_0: usize = 0;

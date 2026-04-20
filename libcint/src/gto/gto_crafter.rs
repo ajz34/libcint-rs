@@ -191,9 +191,7 @@ impl CInt {
     ///
     /// # PySCF equivalent
     ///
-    /// `pyscf.gto.eval_gto.make_screen_index`; please note that `blksize`
-    /// argument is not configurable for rust's version, which is defined as a
-    /// const [`BLKSIZE`].
+    /// `pyscf.gto.eval_gto.make_screen_index`
     ///
     /// # Arguments
     ///
