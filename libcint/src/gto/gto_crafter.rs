@@ -225,11 +225,18 @@ impl CInt {
     /// - [`eval_gto_with_args`](CInt::eval_gto_with_args) for non-fallible
     ///   counterpart.
     pub fn eval_gto_with_args_f(&self, args: GtoArgs<f64>) -> Result<CIntOutput<f64>, CIntError> {
-        let blksize = args.blksize;
-        match blksize {
+        #[cfg(not(feature = "dispatch_more_blksize"))]
+        match args.blksize {
+            48 => self.eval_gto_with_args_dispatch_f::<6>(args),
+            56 => self.eval_gto_with_args_dispatch_f::<7>(args),
+            blksize => Err(cint_error!(InvalidValue, "Unsupported blksize {blksize} for eval_gto_with_args_f; supported values are 48 and 56 when feature `dispatch_more_blksize` is not enabled")),
+        }
+
+        #[cfg(feature = "dispatch_more_blksize")]
+        match args.blksize {
             32 => self.eval_gto_with_args_dispatch_f::<4>(args),
             48 => self.eval_gto_with_args_dispatch_f::<6>(args),
-            54 => self.eval_gto_with_args_dispatch_f::<7>(args),
+            56 => self.eval_gto_with_args_dispatch_f::<7>(args),
             64 => self.eval_gto_with_args_dispatch_f::<8>(args),
             72 => self.eval_gto_with_args_dispatch_f::<9>(args),
             96 => self.eval_gto_with_args_dispatch_f::<12>(args),
@@ -522,10 +529,18 @@ impl CInt {
     /// - [`eval_gto_with_args_spinor`](CInt::eval_gto_with_args_spinor) for
     ///   non-fallible counterpart.
     pub fn eval_gto_with_args_spinor_f(&self, args: GtoArgs<Complex<f64>>) -> Result<CIntOutput<Complex<f64>>, CIntError> {
+        #[cfg(not(feature = "dispatch_more_blksize"))]
+        match args.blksize {
+            48 => self.eval_gto_with_args_spinor_dispatch_f::<6>(args),
+            56 => self.eval_gto_with_args_spinor_dispatch_f::<7>(args),
+            blksize => Err(cint_error!(InvalidValue, "Unsupported blksize {blksize} for eval_gto_with_args_spinor_f; supported values are 48 and 56 when feature `dispatch_more_blksize` is not enabled")),
+        }
+
+        #[cfg(feature = "dispatch_more_blksize")]
         match args.blksize {
             32 => self.eval_gto_with_args_spinor_dispatch_f::<4>(args),
             48 => self.eval_gto_with_args_spinor_dispatch_f::<6>(args),
-            54 => self.eval_gto_with_args_spinor_dispatch_f::<7>(args),
+            56 => self.eval_gto_with_args_spinor_dispatch_f::<7>(args),
             64 => self.eval_gto_with_args_spinor_dispatch_f::<8>(args),
             72 => self.eval_gto_with_args_spinor_dispatch_f::<9>(args),
             96 => self.eval_gto_with_args_spinor_dispatch_f::<12>(args),
