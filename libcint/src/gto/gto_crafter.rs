@@ -259,7 +259,7 @@ impl CInt {
             256 => self.eval_gto_with_args_dispatch_f::<32>(args),
             384 => self.eval_gto_with_args_dispatch_f::<48>(args),
             512 => self.eval_gto_with_args_dispatch_f::<64>(args),
-            _ => Err(cint_error!(InvalidValue, "Unsupported blksize {blksize} for eval_gto_with_args_f; supported values are 32, 48, 54, 64, 72, 96, 104, 128, 144, 192, 256, 384, and 512")),
+            blksize => Err(cint_error!(InvalidValue, "Unsupported blksize {} for eval_gto_with_args_f; supported values are 32, 48, 54, 64, 72, 96, 104, 128, 144, 192, 256, 384, and 512")),
         }
     }
 
