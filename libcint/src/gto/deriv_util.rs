@@ -219,20 +219,36 @@ impl f64simd {
 
 /// (dev) GTO internal block type.
 ///
-/// This type represents a block of [`BLKSIZE`] elements of type `T`, aligned to
-/// 64 bytes (AVX-512 alignment).
+/// This type represents a block of elements of type `T`, aligned to 64 bytes
+/// (AVX-512 alignment).
 ///
-/// This type is a basic building block for GTO grid evaluations. Grids will be
-/// always batched by [`BLKSIZE`].
+/// This type is a basic building block for GTO grid evaluations.
 ///
-/// This [`BLKSIZE`] value (48) should be multiple of [`SIMDD`] (8). It should
-/// be better to be multiple of 16 because of microkernel in matmul usually
-/// requires 2 lanes of SIMD (for AVX-512, it is 16 f64). Currently this value
-/// is fixed to 48, in that for the most-used deriv1 case, the processed grids
-/// per function call is $(n_\mathrm{comp}, n_\mathrm{ctr} \times
-/// n_\mathrm{cart}(l), n_\mathrm{grids})$ will usually be up to (4, 15, 48) or
-/// 22.5 KB, which fits in L1d cache (32 KB in most micro-architectures)
-/// together with other data.
+/// The const generic `NLANE` represents numbers of multiples of [`SIMDD`] (8).
+/// - For `blksize = 48`, `NLANE = 48 / 8 = 6`;
+/// - For `blksize = 56`, `NLANE = 56 / 8 = 7`.
+///
+/// `NLANE` should be better to be multiple of 2 because of microkernel in
+/// matmul usually requires 2 lanes of SIMD (for AVX-512, it is 16 f64).
+///
+/// > However, that's probably not that important? Do chemists really write
+/// > microkernels, and the efficiency is really affected by the microkernels?
+///
+/// This value is better to set to 48 or 56, in that for the most-used deriv1
+/// case, the processed grids per function call is $(n_\mathrm{comp},
+/// n_\mathrm{ctr} \times n_\mathrm{cart}(l), n_\mathrm{grids})$ will usually be
+/// up to (4, 15, 48) or 22.5 KB, which fits in L1d cache (32 KB in most
+/// micro-architectures) together with other data. However, also note that
+/// deriv1 GTO grids is bounded by both memory bandwidth and exp function, the
+/// L1d cache efficiency is important but probably not that important. It is
+/// just be a better starting point for microkernel/loop-cache-size if anyone
+/// use them for other DFT-related computations.
+///
+/// Currently, we support `NLANE = 6, 7`, or equilvently `blksize = 48, 56`. Use
+/// cargo feature `dispatch_more_blksize` to enable both of them (4, 6, 7, 8, 9,
+/// 12, 16, 24, 32, 48, and 64), or equivalently some common `blksize` from 32
+/// to 512. But note that `dispatch_more_blksize` will increase the code size
+/// and compile time.
 #[repr(align(64))]
 #[derive(Clone, Debug, Copy)]
 pub struct Blk<T: Copy, const NLANE: usize>(pub [FpSimd<T, SIMDD>; NLANE]);

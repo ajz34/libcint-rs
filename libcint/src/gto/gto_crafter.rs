@@ -68,7 +68,19 @@ pub struct GtoArgs<'l, F> {
     /// Block size for grid AO evaluation and non0tab sparsity table.
     ///
     /// Default to 48.
-    #[builder(default = BLKSIZE_DEFAULT)]
+    ///
+    /// This value is currently fixed.
+    /// - For usual users, the value must be either 48 or 56.
+    /// - It must be multiplier of 8.
+    /// - For more values, please compile with cargo feature
+    ///   `dispatch_more_blksize`, and the supported values will be 32, 48, 56,
+    ///   64, 72, 96, 104, 128, 144, 192, 256, 384, and 512. However, note that
+    ///   this will increase the binary size and compile time, so it is not
+    ///   enabled by default.
+    /// - This value will not affect the output GTO values, but will be differ
+    ///   if you use [`CInt::gto_screen_index`] function to generate a screening
+    ///   table (`non0tab`).
+    #[builder(default = 48)]
     pub blksize: usize,
 
     /// Output array for GTO values, shape `(ngrid, nao, ncomp)` in column-major
@@ -169,7 +181,7 @@ impl CInt {
     ///
     /// This will generate a screening table with shape `(nbas, nblk)`, where
     /// $n_\mathrm{blk} = \lceil \frac{n_\mathrm{grid}}{\texttt{BLKSIZE}}
-    /// \rceil$. [`BLKSIZE`] is a predefined constant 48.
+    /// \rceil$.
     ///
     /// The screening table represents whether each (basis shell, grid block) is
     /// significant enough to be evaluated. If the tabulated value is zero, then
@@ -188,6 +200,8 @@ impl CInt {
     /// - `coords`: Coordinates of grids, shape `(ngrid, 3)`.
     /// - `shls_slice`: Slice of shells to evaluate. If None, evaluate all
     ///   shells in the molecule.
+    /// - `blksize`: Block size for grid AO evaluation and non0tab sparsity
+    ///   table.
     /// - `nbins`: Number of bins for screening. Default to [`NBINS`] or 100.
     /// - `cutoff`: Cutoff (GTO exponent without derivatives) for screening.
     ///   Default to [`CUTOFF`] or 1e-22.
