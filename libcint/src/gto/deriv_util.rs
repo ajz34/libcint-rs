@@ -1,6 +1,6 @@
 use crate::gto::prelude_dev::*;
 use num::traits::{MulAdd, NumAssignOps};
-use num::Num;
+use num::{Num, Zero};
 
 /* #region simple f64x8 */
 
@@ -42,7 +42,7 @@ impl<T: Copy, const N: usize> IndexMut<usize> for FpSimd<T, N> {
     }
 }
 
-impl<T: Num + Copy, const N: usize> FpSimd<T, N> {
+impl<T: Zero + Copy, const N: usize> FpSimd<T, N> {
     /// Returns a SIMD object with all lanes set to zero.
     #[inline(always)]
     pub fn zero() -> Self {
@@ -235,29 +235,29 @@ impl f64simd {
 /// together with other data.
 #[repr(align(64))]
 #[derive(Clone, Debug, Copy)]
-pub struct Blk<T: Copy>(pub [T; BLKSIZE]);
+pub struct Blk<T: Copy, const NLANE: usize>(pub [FpSimd<T, SIMDD>; NLANE]);
 
 #[allow(non_camel_case_types)]
-pub type f64blk = Blk<f64>;
+pub type f64blk<const NLANE: usize> = Blk<f64, NLANE>;
 #[allow(non_camel_case_types)]
-pub type c64blk = Blk<Complex<f64>>;
+pub type c64blk<const NLANE: usize> = Blk<Complex<f64>, NLANE>;
 
-impl<T: Copy> Index<usize> for Blk<T> {
+impl<T: Copy, const NLANE: usize> Index<usize> for Blk<T, NLANE> {
     type Output = T;
     #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
+        &self.0[index / SIMDD][index % SIMDD]
     }
 }
 
-impl<T: Copy> IndexMut<usize> for Blk<T> {
+impl<T: Copy, const NLANE: usize> IndexMut<usize> for Blk<T, NLANE> {
     #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.0[index]
+        &mut self.0[index / SIMDD][index % SIMDD]
     }
 }
 
-impl<T: Copy> Blk<T> {
+impl<T: Zero + Copy, const NLANE: usize> Blk<T, NLANE> {
     /// Returns an uninitialized bulk.
     ///
     /// # Safety
@@ -274,14 +274,14 @@ impl<T: Copy> Blk<T> {
     /// Returns a block with all elements set to `val`.
     #[inline(always)]
     pub const fn splat(val: T) -> Self {
-        Blk([val; BLKSIZE])
+        Blk([FpSimd::splat(val); NLANE])
     }
 
     /// Sets all elements to `val`.
     #[inline(always)]
     pub fn fill(&mut self, val: T) {
-        for i in 0..BLKSIZE {
-            self.0[i] = val;
+        for i in 0..NLANE {
+            self.0[i] = FpSimd::splat(val);
         }
     }
 
@@ -293,18 +293,32 @@ impl<T: Copy> Blk<T> {
     /// The caller must ensure that `src` has at least `BLKSIZE` elements.
     #[inline(always)]
     pub unsafe fn read_ensure(&mut self, src: &[T]) {
-        self.0.copy_from_slice(&src[0..BLKSIZE]);
+        for i in 0..NLANE {
+            self.0[i] = FpSimd([
+                src[i * SIMDD],
+                src[i * SIMDD + 1],
+                src[i * SIMDD + 2],
+                src[i * SIMDD + 3],
+                src[i * SIMDD + 4],
+                src[i * SIMDD + 5],
+                src[i * SIMDD + 6],
+                src[i * SIMDD + 7],
+            ]);
+        }
     }
 
     /// Reads data from `src` slice into the block, at most [`BLKSIZE`]
     /// elements.
     #[inline]
     pub fn read(&mut self, src: &[T]) {
-        let len_slc = if src.len() < BLKSIZE { src.len() } else { BLKSIZE };
-        if len_slc >= BLKSIZE {
+        let blksize = NLANE * SIMDD;
+        let len_slc = if src.len() < blksize { src.len() } else { blksize };
+        if len_slc >= blksize {
             unsafe { self.read_ensure(src) }
         } else {
-            self.0.copy_from_slice(src);
+            for i in 0..len_slc {
+                self[i] = src[i];
+            }
         }
     }
 
@@ -316,34 +330,46 @@ impl<T: Copy> Blk<T> {
     /// The caller must ensure that `dst` has at least `BLKSIZE` elements.
     #[inline(always)]
     pub unsafe fn write_ensure(&self, dst: &mut [T]) {
-        dst.copy_from_slice(&self.0);
+        for i in 0..NLANE {
+            dst[i * SIMDD] = self.0[i][0];
+            dst[i * SIMDD + 1] = self.0[i][1];
+            dst[i * SIMDD + 2] = self.0[i][2];
+            dst[i * SIMDD + 3] = self.0[i][3];
+            dst[i * SIMDD + 4] = self.0[i][4];
+            dst[i * SIMDD + 5] = self.0[i][5];
+            dst[i * SIMDD + 6] = self.0[i][6];
+            dst[i * SIMDD + 7] = self.0[i][7];
+        }
     }
 
     /// Writes data from the block into `dst` slice, at most [`BLKSIZE`]
     /// elements.
     #[inline]
     pub fn write(&self, dst: &mut [T]) {
-        let len_slc = if dst.len() < BLKSIZE { dst.len() } else { BLKSIZE };
-        if len_slc >= BLKSIZE {
+        let blksize = NLANE * SIMDD;
+        let len_slc = if dst.len() < blksize { dst.len() } else { blksize };
+        if len_slc >= blksize {
             unsafe { self.write_ensure(dst) }
         } else {
-            dst.copy_from_slice(&self.0[..len_slc]);
+            for i in 0..len_slc {
+                dst[i] = self[i];
+            }
         }
     }
 }
 
-impl<T: Copy> Blk<T> {
+impl<T: Copy, const NLANE: usize> Blk<T, NLANE> {
     /// Returns a slice of SIMD (double float) blocks view of this block.
     #[inline(always)]
-    pub const fn as_simdd_slice(&self) -> &[FpSimd<T, SIMDD>; BLKSIMDD] {
-        unsafe { transmute(&self.0) }
+    pub const fn as_simdd_slice(&self) -> &[FpSimd<T, SIMDD>; NLANE] {
+        &self.0
     }
 
     /// Returns a mutable slice of SIMD (double float) blocks view of this
     /// block.
     #[inline(always)]
-    pub fn as_simdd_slice_mut(&mut self) -> &mut [FpSimd<T, SIMDD>; BLKSIMDD] {
-        unsafe { transmute(&mut self.0) }
+    pub fn as_simdd_slice_mut(&mut self) -> &mut [FpSimd<T, SIMDD>; NLANE] {
+        &mut self.0
     }
 
     /// Gets the SIMD (double float) block at `index`.
@@ -637,16 +663,19 @@ pub fn gto_r_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize) {
 /// # PySCF equivalent
 ///
 /// `libcgto.so`: `int GTOprim_exp`
-pub fn gto_prim_exp(eprim: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], fac: f64, nprim: usize) {
-    let mut rr = unsafe { f64blk::uninit() };
-    for i in 0..BLKSIZE {
-        rr[i] = coord[0][i] * coord[0][i] + coord[1][i] * coord[1][i] + coord[2][i] * coord[2][i];
+pub fn gto_prim_exp<const NLANE: usize>(eprim: &mut [f64blk<NLANE>], coord: &[f64blk<NLANE>; 3], alpha: &[f64], fac: f64, nprim: usize) {
+    let mut rr = unsafe { f64blk::<NLANE>::uninit() };
+    for g in 0..NLANE {
+        let x = coord[0].get_simdd(g);
+        let y = coord[1].get_simdd(g);
+        let z = coord[2].get_simdd(g);
+        *rr.get_simdd_mut(g) = x * x + y * y + z * z;
     }
 
     for p in 0..nprim {
-        for g in 0..BLKSIZE {
-            let arr = alpha[p] * rr[g];
-            eprim[p][g] = fac * (-arr).exp();
+        for g in 0..NLANE {
+            let arr = rr.get_simdd(g) * alpha[p];
+            *eprim[p].get_simdd_mut(g) = (-arr).map(f64::exp) * fac;
         }
     }
 }
@@ -655,6 +684,6 @@ pub fn gto_prim_exp(eprim: &mut [f64blk], coord: &[f64blk; 3], alpha: &[f64], fa
 fn test_blkf64_uninit() {
     #[allow(clippy::uninit_assumed_init)]
     #[allow(invalid_value)]
-    let v: [[f64blk; 10]; 10] = unsafe { [[f64blk::uninit(); 10]; 10] };
+    let v: [[f64blk<48>; 10]; 10] = unsafe { [[f64blk::uninit(); 10]; 10] };
     println!("{:?}", v);
 }

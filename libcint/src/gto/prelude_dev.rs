@@ -41,13 +41,7 @@ pub const SIMDD: usize = 8;
 /// n_\mathrm{cart}(l), n_\mathrm{grids})$ will usually be up to (4, 15, 48) or
 /// 22.5 KB, which fits in L1d cache (32 KB in most micro-architectures)
 /// together with other data.
-pub const BLKSIZE: usize = 48;
-
-/// Number of SIMD blocks in a block.
-///
-/// This value will be 7 for the current settings, and will be used in loops
-/// over blocks.
-pub const BLKSIMDD: usize = BLKSIZE / SIMDD;
+pub const BLKSIZE_DEFAULT: usize = 48;
 
 /// Number of histogram bins for GTO screening [`gto_screen_index`].
 pub const NBINS: u8 = 100;
