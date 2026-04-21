@@ -22,7 +22,7 @@ derive_builder = { version = "0.20"}
 rstsr-common = { version = "0.6", features = ["rayon"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
-bse = { version = "0.1", optional = true }
+bse = { version = "0.1", optional = true, default-features = false }
 
 [dev-dependencies]
 approx = "0.5"

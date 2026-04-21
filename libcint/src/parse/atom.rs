@@ -45,16 +45,12 @@ pub struct AtomInfo {
 
 impl AtomInfo {
     /// Create a new AtomInfo from symbol and coordinates.
-    pub fn new(symbol: &str, coords: [f64; 3], unit: Unit) -> Self {
+    pub fn new(symbol: &str, coords: [f64; 3], unit: Unit) -> Result<Self, CIntError> {
         let (parsed_symbol, is_ghost) = parse_atom_symbol(symbol);
-        let charge = if is_ghost {
-            0.0
-        } else {
-            element_charge(&parsed_symbol).unwrap_or_else(|| panic!("Unknown element: {}", parsed_symbol)) as f64
-        };
+        let charge = if is_ghost { 0.0 } else { symbol_to_charge(&parsed_symbol)? as f64 };
         let coords_bohr =
             if unit == Unit::Angstrom { [coords[0] * ANG_TO_BOHR, coords[1] * ANG_TO_BOHR, coords[2] * ANG_TO_BOHR] } else { coords };
-        AtomInfo { label: symbol.to_string(), symbol: parsed_symbol, charge, is_ghost, coords: coords_bohr }
+        Ok(AtomInfo { label: symbol.to_string(), symbol: parsed_symbol, charge, is_ghost, coords: coords_bohr })
     }
 }
 
@@ -105,13 +101,13 @@ fn parse_atom_symbol(s: &str) -> (String, bool) {
 }
 
 /// Get atomic number from element symbol using bse lookup.
-pub fn element_charge(symbol: &str) -> Option<i32> {
-    element_Z_from_sym(symbol)
+pub fn symbol_to_charge(symbol: &str) -> Result<i32, CIntError> {
+    element_Z_from_sym(symbol).ok_or_else(|| cint_error!(ParseError, "Unknown element: {symbol}"))
 }
 
-/// Get element symbol from atomic number using bse lookup.
-fn charge_to_element(z: i32) -> Option<String> {
-    element_sym_from_Z_with_normalize(z)
+/// Convert atomic number to element symbol.
+fn charge_to_symbol(z: i32) -> Result<String, CIntError> {
+    element_sym_from_Z_with_normalize(z).ok_or_else(|| cint_error!(ParseError, "Invalid atomic number: {z}"))
 }
 
 /// Parse atom coordinates from a string.
@@ -138,7 +134,7 @@ pub fn parse_atom_string(s: &str, unit: Unit) -> Result<Vec<AtomInfo>, CIntError
             !trimmed.is_empty() && !trimmed.starts_with('#')
         })
         .map(|line| parse_atom_line(line.trim(), unit))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<AtomInfo>, CIntError>>()?;
 
     Ok(atoms)
 }
@@ -152,7 +148,7 @@ fn parse_atom_line(line: &str, default_unit: Unit) -> Result<AtomInfo, CIntError
     let parts: Vec<&str> = line.split_whitespace().collect();
 
     if parts.len() < 4 {
-        return cint_raise!(ParseError, "Invalid atom line: '{}'. Expected at least 4 parts.", line);
+        return cint_raise!(ParseError, "Invalid atom line: '{line}'. Expected at least 4 parts.");
     }
 
     // Parse symbol (could be numeric charge)
@@ -166,21 +162,15 @@ fn parse_atom_line(line: &str, default_unit: Unit) -> Result<AtomInfo, CIntError
     };
 
     // Parse coordinates with explicit error conversion
-    let x: f64 = parts[1]
-        .parse()
-        .map_err(|e: std::num::ParseFloatError| cint_error!(ParseError, "Failed to parse x coordinate: '{}': {}", parts[1], e))?;
-    let y: f64 = parts[2]
-        .parse()
-        .map_err(|e: std::num::ParseFloatError| cint_error!(ParseError, "Failed to parse y coordinate: '{}': {}", parts[2], e))?;
-    let z: f64 = parts[3]
-        .parse()
-        .map_err(|e: std::num::ParseFloatError| cint_error!(ParseError, "Failed to parse z coordinate: '{}': {}", parts[3], e))?;
+    let x: f64 = parse_float(parts[1], "x coordinate")?;
+    let y: f64 = parse_float(parts[2], "y coordinate")?;
+    let z: f64 = parse_float(parts[3], "z coordinate")?;
 
     // Check for unit override in 5th position
     let unit = if parts.len() > 4 {
         match parts[4].to_uppercase().as_str() {
-            "ANG" | "ANGSTROM" | "A" => Unit::Angstrom,
-            "BOHR" | "AU" | "B" => Unit::Bohr,
+            "ANG" | "ANGSTROM" => Unit::Angstrom,
+            "BOHR" | "AU" | "A.U." => Unit::Bohr,
             _ => default_unit,
         }
     } else {
@@ -190,15 +180,9 @@ fn parse_atom_line(line: &str, default_unit: Unit) -> Result<AtomInfo, CIntError
     // Convert to Bohr if necessary
     let coords_bohr = if unit == Unit::Angstrom { [x * ANG_TO_BOHR, y * ANG_TO_BOHR, z * ANG_TO_BOHR] } else { [x, y, z] };
 
-    let charge =
-        if is_ghost { 0.0 } else { element_charge(&parsed_symbol).unwrap_or_else(|| panic!("Unknown element: {}", parsed_symbol)) as f64 };
+    let charge = if is_ghost { 0.0 } else { symbol_to_charge(&parsed_symbol)? as f64 };
 
     Ok(AtomInfo { label: symbol.to_string(), symbol: parsed_symbol, charge, is_ghost, coords: coords_bohr })
-}
-
-/// Convert atomic number to element symbol.
-fn charge_to_symbol(z: i32) -> Result<String, CIntError> {
-    charge_to_element(z).ok_or_else(|| cint_error!(ParseError, "Invalid atomic number: {}", z))
 }
 
 /// Parse z-matrix format coordinates.
@@ -246,12 +230,18 @@ pub fn parse_zmatrix(s: &str, unit: Unit) -> Result<Vec<AtomInfo>, CIntError> {
         let coords = match idx {
             0 => {
                 // First atom at origin
+                if parts.len() > 1 {
+                    eprintln!("Warning: Extra parameters in z-matrix line '{line}' will be ignored for first atom.");
+                }
                 [0.0, 0.0, 0.0]
             },
             1 => {
                 // Second atom along x-axis (PySCF convention)
                 if parts.len() < 3 {
-                    return cint_raise!(ParseError, "Invalid z-matrix line: '{}'. Need bond length.", line);
+                    return cint_raise!(ParseError, "Invalid z-matrix line: '{line}'. Need bond length.");
+                }
+                if parts.len() > 3 {
+                    eprintln!("Warning: Extra parameters in z-matrix line '{line}' will be ignored for second atom.");
                 }
                 let bond: f64 = parse_float(parts[2], "bond length")?;
                 let bond_bohr = if unit == Unit::Angstrom { bond * ANG_TO_BOHR } else { bond };
@@ -264,6 +254,9 @@ pub fn parse_zmatrix(s: &str, unit: Unit) -> Result<Vec<AtomInfo>, CIntError> {
                 // reference direction atom
                 if parts.len() < 5 {
                     return cint_raise!(ParseError, "Invalid z-matrix line: '{}'. Need bond and angle.", line);
+                }
+                if parts.len() > 5 {
+                    eprintln!("Warning: Extra parameters in z-matrix line '{line}' will be ignored for third atom.");
                 }
                 let r1_name = parts[1];
                 let r1_idx = find_atom_index(&atom_order, r1_name)?;
@@ -296,7 +289,10 @@ pub fn parse_zmatrix(s: &str, unit: Unit) -> Result<Vec<AtomInfo>, CIntError> {
             _ => {
                 // Full z-matrix specification
                 if parts.len() < 7 {
-                    return cint_raise!(ParseError, "Invalid z-matrix line: '{}'. Need bond, angle, and dihedral.", line);
+                    return cint_raise!(ParseError, "Invalid z-matrix line: '{line}'. Need bond, angle, and dihedral.");
+                }
+                if parts.len() > 7 {
+                    eprintln!("Warning: Extra parameters in z-matrix line '{line}' will be ignored.");
                 }
                 let r1_name = parts[1];
                 let r1_idx = find_atom_index(&atom_order, r1_name)?;
@@ -319,15 +315,11 @@ pub fn parse_zmatrix(s: &str, unit: Unit) -> Result<Vec<AtomInfo>, CIntError> {
                 let dihedral_deg: f64 = parse_float(parts[6], "dihedral")?;
                 let dihedral_rad = dihedral_deg * std::f64::consts::PI / 180.0;
 
-                zmatrix_to_cartesian(r1_pos, a1_pos, d1_pos, bond_bohr, angle_rad, dihedral_rad)
+                zmatrix_to_cartesian(r1_pos, a1_pos, d1_pos, bond_bohr, angle_rad, dihedral_rad)?
             },
         };
 
-        let charge = if is_ghost {
-            0.0
-        } else {
-            element_charge(&parsed_symbol).unwrap_or_else(|| panic!("Unknown element: {}", parsed_symbol)) as f64
-        };
+        let charge = if is_ghost { 0.0 } else { symbol_to_charge(&parsed_symbol)? as f64 };
 
         atoms.push(AtomInfo { label: symbol.to_string(), symbol: parsed_symbol, charge, is_ghost, coords });
         atom_order.push(symbol.to_string());
@@ -338,7 +330,7 @@ pub fn parse_zmatrix(s: &str, unit: Unit) -> Result<Vec<AtomInfo>, CIntError> {
 
 /// Parse a float value with error context.
 fn parse_float(s: &str, context: &str) -> Result<f64, CIntError> {
-    s.parse().map_err(|e: std::num::ParseFloatError| cint_error!(ParseError, "Failed to parse {} '{}': {}", context, s, e))
+    s.parse().map_err(|e| cint_error!(ParseError, "Failed to parse {context} '{s}': {e}"))
 }
 
 /// Find atom index by name in z-matrix.
@@ -355,7 +347,7 @@ fn find_atom_index(order: &[String], name: &str) -> Result<usize, CIntError> {
             return Ok(idx - 1);
         }
     }
-    cint_raise!(ParseError, "Atom '{}' not found in z-matrix", name)
+    cint_raise!(ParseError, "Atom '{name}' not found in z-matrix")
 }
 
 /// Convert z-matrix parameters to Cartesian coordinates.
@@ -366,25 +358,33 @@ fn zmatrix_to_cartesian(
     bond: f64,
     angle: f64,
     dihedral: f64,
-) -> [f64; 3] {
+) -> Result<[f64; 3], CIntError> {
+    const TOL: f64 = 1e-10;
+
     // Vector from a1 to r1
     let v1 = [r1[0] - a1[0], r1[1] - a1[1], r1[2] - a1[2]];
     let v1_norm = norm3(v1);
+    if v1_norm < TOL {
+        return cint_raise!(ParseError, "Reference atoms for z-matrix ({r1:?}, {a1:?}, {d1:?}) are too close or identical");
+    }
     let v1_unit = [v1[0] / v1_norm, v1[1] / v1_norm, v1[2] / v1_norm];
 
     // Vector from d1 to a1
     let v2 = [a1[0] - d1[0], a1[1] - d1[1], a1[2] - d1[2]];
     let v2_norm = norm3(v2);
+    if v2_norm < TOL {
+        return cint_raise!(ParseError, "Reference atoms for z-matrix ({r1:?}, {a1:?}, {d1:?}) are too close or identical");
+    }
     let v2_unit = [v2[0] / v2_norm, v2[1] / v2_norm, v2[2] / v2_norm];
 
     // Normal vector (perpendicular to plane containing a1, r1, d1)
     let n = cross3(v1_unit, v2_unit);
     let n_norm = norm3(n);
-    if n_norm < 1e-10 {
+    if n_norm < TOL {
         // Collinear atoms, use arbitrary perpendicular
         let n_alt = cross3(v1_unit, [1.0, 0.0, 0.0]);
         let n_alt_norm = norm3(n_alt);
-        if n_alt_norm < 1e-10 {
+        if n_alt_norm < TOL {
             let n_alt2 = cross3(v1_unit, [0.0, 1.0, 0.0]);
             let n_alt2_norm = norm3(n_alt2);
             [n_alt2[0] / n_alt2_norm, n_alt2[1] / n_alt2_norm, n_alt2[2] / n_alt2_norm]
@@ -412,11 +412,11 @@ fn zmatrix_to_cartesian(
     let z = -bond * cos_a;
 
     // Transform to global coordinates
-    [
+    Ok([
         r1[0] + x * x_unit[0] + y * n[0] + z * v1_unit[0],
         r1[1] + x * x_unit[1] + y * n[1] + z * v1_unit[1],
         r1[2] + x * x_unit[2] + y * n[2] + z * v1_unit[2],
-    ]
+    ])
 }
 
 /// Compute norm of 3D vector.
@@ -430,7 +430,7 @@ fn cross3(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 }
 
 #[cfg(test)]
-mod tests {
+mod tests_llm_assist {
     use super::*;
     use approx::assert_relative_eq;
 
@@ -449,10 +449,10 @@ mod tests {
 
     #[test]
     fn test_element_charge() {
-        assert_eq!(element_charge("H"), Some(1));
-        assert_eq!(element_charge("O"), Some(8));
-        assert_eq!(element_charge("Au"), Some(79));
-        assert_eq!(element_charge("X"), None);
+        assert_eq!(symbol_to_charge("H").unwrap(), 1);
+        assert_eq!(symbol_to_charge("O").unwrap(), 8);
+        assert_eq!(symbol_to_charge("Au").unwrap(), 79);
+        assert!(symbol_to_charge("X").is_err());
     }
 
     #[test]
@@ -577,12 +577,41 @@ mod tests {
     #[test]
     fn test_unit_conversion() {
         let coords_ang = [1.0, 2.0, 3.0];
-        let atom = AtomInfo::new("H", coords_ang, Unit::Angstrom);
+        let atom = AtomInfo::new("H", coords_ang, Unit::Angstrom).unwrap();
         assert_relative_eq!(atom.coords[0], coords_ang[0] * ANG_TO_BOHR);
         assert_relative_eq!(atom.coords[1], coords_ang[1] * ANG_TO_BOHR);
         assert_relative_eq!(atom.coords[2], coords_ang[2] * ANG_TO_BOHR);
 
-        let atom_bohr = AtomInfo::new("H", coords_ang, Unit::Bohr);
+        let atom_bohr = AtomInfo::new("H", coords_ang, Unit::Bohr).unwrap();
         assert_relative_eq!(atom_bohr.coords[0], 1.0);
+    }
+}
+
+#[cfg(test)]
+mod test_manual {
+    use approx::assert_relative_eq;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_zmatrix() {
+        // Test z-matrix parsing
+        let token = r#"
+        H
+        H 1 2.67247631453057
+        H 1 4.22555607338457 2 50.7684795164077
+        H 1 2.90305235726773 2 79.3904651036893 3 6.20854462618583
+        "#;
+        let atoms = parse_zmatrix(token, Unit::Angstrom).unwrap();
+
+        let expected_coords =
+            [[0., 0., 0.], [5.05024830885, 0., 0.], [5.05024830885, 0., 6.185265715518], [1.01004966177, 0.583152444118, 5.360563620115]];
+
+        for (i, atom) in atoms.iter().enumerate() {
+            println!("Atom {}: symbol={}, coords={:?}", i + 1, atom.symbol, atom.coords);
+            assert_relative_eq!(atom.coords[0], expected_coords[i][0], epsilon = 1e-6);
+            assert_relative_eq!(atom.coords[1], expected_coords[i][1], epsilon = 1e-6);
+            assert_relative_eq!(atom.coords[2], expected_coords[i][2], epsilon = 1e-6);
+        }
     }
 }
