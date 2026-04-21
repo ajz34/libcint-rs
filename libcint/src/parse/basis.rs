@@ -69,7 +69,7 @@ pub struct BasisElement {
     /// Element symbol (e.g., "H", "O").
     pub symbol: String,
     /// Atomic number.
-    pub charge: i32,
+    pub charge: f64,
     /// Basis set data from BSE.
     pub basis_data: BseBasisElement,
     /// Whether this atom has ECP.
@@ -247,7 +247,7 @@ pub fn resolve_ecp(
         let ecp_electrons = match ecp_spec {
             EcpSpec::Auto => {
                 // Use ECP for heavy elements if available in basis
-                if atom.charge > ECP_AUTO_THRESHOLD && basis_elem.has_ecp {
+                if atom.charge > ECP_AUTO_THRESHOLD as f64 && basis_elem.has_ecp {
                     basis_elem.ecp_electrons
                 } else {
                     0

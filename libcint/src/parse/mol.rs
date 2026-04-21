@@ -201,7 +201,7 @@ fn generate_cint_arrays(
         let ecp_core = ecp_electrons.get(&idx).copied().unwrap_or(0);
 
         // Calculate effective charge (nuclear charge minus ECP core electrons)
-        let effective_charge = atom.charge - ecp_core;
+        let effective_charge = atom.charge - ecp_core as f64;
 
         // Coordinates already in Bohr from AtomInfo
         // Layout: [x, y, z, zeta] - 4 slots per atom
@@ -215,7 +215,7 @@ fn generate_cint_arrays(
         let ptr_zeta = coord_start + 3;
 
         // atm slot: [charge, ptr_coord, nuc_mod, ptr_zeta, ptr_frac_charge, 0]
-        atm.push([effective_charge, coord_start, 1, ptr_zeta, 0, 0]);
+        atm.push([effective_charge as c_int, coord_start, 1, ptr_zeta, 0, 0]);
     }
 
     // Collect unique element symbols with their basis data
@@ -520,7 +520,7 @@ mod tests {
 
         assert_eq!(mol.atoms.len(), 2);
         assert!(mol.atoms[1].is_ghost);
-        assert_eq!(mol.atoms[1].charge, 0);
+        assert_eq!(mol.atoms[1].charge, 0.0);
         // Ghost atom should have 0 in atm charge
         assert_eq!(mol.cint.atm[1][0], 0);
     }
