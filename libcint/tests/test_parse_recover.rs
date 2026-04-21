@@ -13,7 +13,7 @@ mod test_parse_recover {
     /// basis.
     #[test]
     fn test_recover_h2o_def2_tzvp() {
-        let mol = CIntMolInput::new().atom_str("O; H 1 0.94; H 1 0.94 2 104.5").basis_str("def2-TZVP").angstrom().as_zmatrix().build();
+        let mol = CIntMolInput::new().atom_str("O; H 1 0.94; H 1 0.94 2 104.5").basis_str("def2-TZVP").angstrom().build();
 
         // Check atom count (should be 3)
         assert_eq!(mol.cint.atm.len(), 3);
@@ -50,8 +50,7 @@ mod test_parse_recover {
     /// Test H2O with def2-universal-jkfit basis.
     #[test]
     fn test_recover_h2o_def2_jk() {
-        let mol =
-            CIntMolInput::new().atom_str("O; H 1 0.94; H 1 0.94 2 104.5").basis_str("def2-universal-jkfit").angstrom().as_zmatrix().build();
+        let mol = CIntMolInput::new().atom_str("O; H 1 0.94; H 1 0.94 2 104.5").basis_str("def2-universal-jkfit").angstrom().build();
 
         assert_eq!(mol.cint.atm.len(), 3);
         assert!(!mol.cint.bas.is_empty());

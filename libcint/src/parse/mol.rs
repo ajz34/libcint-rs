@@ -21,26 +21,10 @@
 //! let overlap = mol.cint.integrate("int1e_ovlp", None, None).unwrap();
 //! ```
 
-use std::collections::HashMap;
-
 use crate::parse::atom::{parse_atom_string, parse_zmatrix, AtomInfo, Unit};
 use crate::parse::basis::{resolve_basis, resolve_ecp, BasisElement, BasisSpec, EcpSpec};
 use crate::prelude::*;
-
-/// Input format for atom coordinates.
-#[derive(Debug, Clone, PartialEq)]
-pub enum AtomInput {
-    /// String format: "H 0 0 0; O 0 0 1.2" or z-matrix "O; H 1 0.94"
-    String(String),
-    /// List format: ["H 0 0 0", "O 0 0 1.2"]
-    List(Vec<String>),
-}
-
-impl Default for AtomInput {
-    fn default() -> Self {
-        AtomInput::String(String::new())
-    }
-}
+use std::collections::HashMap;
 
 /// Builder for creating CIntMol molecule object.
 ///
@@ -49,8 +33,8 @@ impl Default for AtomInput {
 #[derive(Debug, Clone, Builder, Default)]
 #[builder(pattern = "owned", build_fn(error = "CIntError"), default)]
 pub struct CIntMolInput {
-    /// Atom coordinates (string or list format).
-    pub atom: AtomInput,
+    /// Atom coordinates (string).
+    pub atom: String,
     /// Basis set specification.
     pub basis: BasisSpec,
     /// ECP specification (default: Auto for heavy elements).
@@ -59,8 +43,6 @@ pub struct CIntMolInput {
     pub unit: Unit,
     /// Use cartesian basis (default: spherical).
     pub cart: bool,
-    /// Whether input is z-matrix format.
-    pub zmatrix: bool,
 }
 
 /// Built molecule object containing parsed atoms and CInt instance.
@@ -86,12 +68,12 @@ impl CIntMolInput {
 
     /// Set atom coordinates from string.
     pub fn atom_str(self, s: &str) -> Self {
-        Self { atom: AtomInput::String(s.to_string()), ..self }
+        Self { atom: s.to_string(), ..self }
     }
 
     /// Set atom coordinates from list.
     pub fn atom_list(self, list: Vec<String>) -> Self {
-        Self { atom: AtomInput::List(list), ..self }
+        Self { atom: list.join("\n"), ..self }
     }
 
     /// Set basis set name (uniform for all atoms).
@@ -122,11 +104,6 @@ impl CIntMolInput {
     /// Enable spherical basis (default).
     pub fn spherical(self) -> Self {
         Self { cart: false, ..self }
-    }
-
-    /// Parse as z-matrix format.
-    pub fn as_zmatrix(self) -> Self {
-        Self { zmatrix: true, ..self }
     }
 
     /// Build the CIntMol object (fallible version).
@@ -161,17 +138,20 @@ impl CIntMolInput {
 
     /// Parse atoms from input format.
     fn parse_atoms(&self) -> Result<Vec<AtomInfo>, CIntError> {
-        match &self.atom {
-            AtomInput::String(s) => {
-                if self.zmatrix {
-                    parse_zmatrix(s, self.unit)
-                } else {
-                    parse_atom_string(s, self.unit)
-                }
-            },
-            AtomInput::List(list) => {
-                let s = list.join("\n");
-                parse_atom_string(&s, self.unit)
+        match parse_atom_string(&self.atom, self.unit) {
+            Ok(atoms) => Ok(atoms),
+            Err(e_atom) => match parse_zmatrix(&self.atom, self.unit) {
+                Ok(atoms) => Ok(atoms),
+                Err(e_zmat) => {
+                    // concat error messages from both attempts
+                    let msg =
+                        format!("Failed to parse atoms:\n- Atom string error: {:?}\n- Z-matrix error: {:?}", e_atom.kind, e_zmat.kind);
+                    let trace_msg = format!(
+                        "Backtrace for atom parsing:\n- Atom string error: {:?}\n- Z-matrix error: {:?}",
+                        e_atom.backtrace, e_zmat.backtrace
+                    );
+                    cint_raise!(ParseError, "{msg}\n======\n{trace_msg}")
+                },
             },
         }
     }
@@ -527,7 +507,7 @@ mod tests {
 
     #[test]
     fn test_zmatrix_water() {
-        let mol = CIntMolInput::new().atom_str("O\nH 1 0.94\nH 1 0.94 2 104.5").basis_str("sto-3g").angstrom().as_zmatrix().build();
+        let mol = CIntMolInput::new().atom_str("O\nH 1 0.94\nH 1 0.94 2 104.5").basis_str("sto-3g").angstrom().build();
 
         assert_eq!(mol.atoms.len(), 3);
         assert_eq!(mol.atoms[0].symbol, "O");

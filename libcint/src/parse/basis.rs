@@ -10,12 +10,11 @@
 //!
 //! Supports ghost atoms and automatic ECP detection for heavy elements.
 
-use std::collections::{HashMap, HashSet};
-
 use crate::parse::atom::AtomInfo;
 use crate::prelude::*;
 use bse::lut::element_Z_from_sym;
 use bse::prelude::*;
+use std::collections::{HashMap, HashSet};
 
 /// Specification for basis set assignment.
 #[derive(Debug, Clone, PartialEq)]
