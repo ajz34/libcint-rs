@@ -28,6 +28,22 @@ pub enum Unit {
     Bohr,
 }
 
+impl From<&str> for Unit {
+    fn from(s: &str) -> Self {
+        match s.to_uppercase().as_str() {
+            "ANG" | "ANGSTROM" => Unit::Angstrom,
+            "BOHR" | "AU" | "A.U." => Unit::Bohr,
+            _ => Unit::Angstrom, // default to Angstrom if unrecognized
+        }
+    }
+}
+
+impl From<String> for Unit {
+    fn from(s: String) -> Self {
+        Unit::from(s.as_str())
+    }
+}
+
 /// Information about a parsed atom.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AtomInfo {
@@ -62,7 +78,7 @@ impl AtomInfo {
 /// - `GHOST-H`, `GHOST_O` → ("H", true)
 /// - `X-H`, `X_O` → ("H", true)
 /// - `H@`, `O@` (trailing @) → ("H", true)
-fn parse_atom_symbol(s: &str) -> (String, bool) {
+pub(crate) fn parse_atom_symbol(s: &str) -> (String, bool) {
     let s_trimmed = s.trim();
     let s_upper = s_trimmed.to_uppercase();
 

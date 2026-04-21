@@ -5,15 +5,13 @@
 
 #[cfg(feature = "bse")]
 mod test_parse_recover {
-    use libcint::parse::mol::CIntMolInput;
+    use libcint::{parse::mol::CIntMolInputBuilder, prelude::init_h2o_def2_tzvp};
     use std::collections::HashMap;
 
-    /// Test H2O with def2-TZVP basis - verify integrals are correct.
-    /// The key check is that diagonal elements of overlap are ~1 for normalized
-    /// basis.
     #[test]
     fn test_recover_h2o_def2_tzvp() {
-        let mol = CIntMolInput::new().atom_str("O; H 1 0.94; H 1 0.94 2 104.5").basis_str("def2-TZVP").angstrom().build();
+        let mol_input = CIntMolInputBuilder::default().atom("O; H 1 0.94; H 1 0.94 2 104.5").basis("def2-TZVP").build().unwrap();
+        let mol = mol_input.create_mol();
 
         // Check atom count (should be 3)
         assert_eq!(mol.cint.atm.len(), 3);
@@ -26,31 +24,25 @@ mod test_parse_recover {
         assert_eq!(mol.cint.atm[1][0], 1); // H
         assert_eq!(mol.cint.atm[2][0], 1); // H
 
-        // Compute overlap integral
-        let (overlap, shape) = mol.cint.integrate("int1e_ovlp", None, None).into();
-
-        // Check that overlap matrix has correct shape (NAO x NAO)
-        let nao = shape[0];
-        assert_eq!(shape.len(), 2);
-        assert_eq!(shape[0], shape[1]);
-
-        // Check diagonal elements are ~1 (normalized basis)
-        for i in 0..nao {
-            let idx = i * nao + i;
-            let diag = overlap[idx];
-            assert!((diag - 1.0).abs() < 1e-6, "Diagonal {} not normalized: {}", i, diag);
-        }
-
-        // Check some overlap values are reasonable (not too large or negative)
-        for val in overlap.iter() {
-            assert!(*val >= -1.0 && *val <= 2.0, "Overlap value out of range: {}", val);
-        }
+        let cint_ref = init_h2o_def2_tzvp();
+        // perform check of similarity of CInt instances
+        assert_eq!(mol.cint.atm, cint_ref.atm);
+        assert_eq!(mol.cint.bas, cint_ref.bas);
+        assert_eq!(mol.cint.ecpbas, cint_ref.ecpbas);
+        assert_eq!(mol.cint.env.len(), cint_ref.env.len());
+        let env_diff = mol.cint.env.iter().zip(cint_ref.env.iter()).map(|(a, b)| (a - b).abs()).fold(0.0, |acc, x| acc + x);
+        assert!(env_diff < 1e-5, "CInt env differs from reference by {}", env_diff);
     }
 
     /// Test H2O with def2-universal-jkfit basis.
     #[test]
     fn test_recover_h2o_def2_jk() {
-        let mol = CIntMolInput::new().atom_str("O; H 1 0.94; H 1 0.94 2 104.5").basis_str("def2-universal-jkfit").angstrom().build();
+        let mol = CIntMolInputBuilder::default()
+            .atom("O; H 1 0.94; H 1 0.94 2 104.5")
+            .basis("def2-universal-jkfit")
+            .build()
+            .unwrap()
+            .create_mol();
 
         assert_eq!(mol.cint.atm.len(), 3);
         assert!(!mol.cint.bas.is_empty());
@@ -95,7 +87,7 @@ mod test_parse_recover {
             H          1.16111477     -0.29030616      1.51873028
         "#;
 
-        let mol = CIntMolInput::new().atom_str(atom_str).basis_map(basis_map).angstrom().build();
+        let mol = CIntMolInputBuilder::default().atom(atom_str).basis(basis_map).build().unwrap().create_mol();
 
         // Check atom count
         assert_eq!(mol.cint.atm.len(), 18);
@@ -164,7 +156,7 @@ mod test_parse_recover {
             H         13.18931        5.14445        4.49536
         "#;
 
-        let mol = CIntMolInput::new().atom_str(atom_str).basis_str("def2-QZVP").angstrom().build();
+        let mol = CIntMolInputBuilder::default().atom(atom_str).basis("def2-QZVP").build().unwrap().create_mol();
 
         // Check atom count (12 C + 26 H = 38 atoms)
         assert_eq!(mol.cint.atm.len(), 38);

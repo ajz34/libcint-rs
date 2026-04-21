@@ -22,7 +22,7 @@
 //! ```
 
 use crate::parse::atom::{parse_atom_string, parse_zmatrix, AtomInfo, Unit};
-use crate::parse::basis::{resolve_basis, resolve_ecp, BasisElement, BasisSpec, EcpSpec};
+use crate::parse::basis::{resolve_basis, BasisElement, BasisSpec};
 use crate::prelude::*;
 use std::collections::HashMap;
 
@@ -34,14 +34,16 @@ use std::collections::HashMap;
 #[builder(pattern = "owned", build_fn(error = "CIntError"), default)]
 pub struct CIntMolInput {
     /// Atom coordinates (string).
+    #[builder(setter(into))]
     pub atom: String,
     /// Basis set specification.
+    #[builder(setter(into))]
     pub basis: BasisSpec,
-    /// ECP specification (default: Auto for heavy elements).
-    pub ecp: EcpSpec,
     /// Unit of coordinates (Angstrom or Bohr).
+    #[builder(setter(into), default = "Unit::Angstrom")]
     pub unit: Unit,
     /// Use cartesian basis (default: spherical).
+    #[builder(default = "false")]
     pub cart: bool,
 }
 
@@ -51,63 +53,18 @@ pub struct CIntMol {
     /// Parsed atom information.
     pub atoms: Vec<AtomInfo>,
     /// Resolved basis elements for each atom.
-    pub basis_elements: HashMap<usize, BasisElement>,
+    ///
+    /// This is label-basis mapping.
+    pub basis_elements: HashMap<String, BasisElement>,
     /// ECP electrons for each atom.
     pub ecp_electrons: HashMap<usize, i32>,
     /// Generated CInt instance for integral calculations.
     pub cint: CInt,
-    /// Whether basis is cartesian.
-    pub cart: bool,
 }
 
 impl CIntMolInput {
-    /// Create a new CIntMolInput builder.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Set atom coordinates from string.
-    pub fn atom_str(self, s: &str) -> Self {
-        Self { atom: s.to_string(), ..self }
-    }
-
-    /// Set atom coordinates from list.
-    pub fn atom_list(self, list: Vec<String>) -> Self {
-        Self { atom: list.join("\n"), ..self }
-    }
-
-    /// Set basis set name (uniform for all atoms).
-    pub fn basis_str(self, name: &str) -> Self {
-        Self { basis: BasisSpec::uniform(name), ..self }
-    }
-
-    /// Set basis set from per-element map.
-    pub fn basis_map(self, map: HashMap<String, String>) -> Self {
-        Self { basis: BasisSpec::per_element(map), ..self }
-    }
-
-    /// Set coordinate unit to Angstrom.
-    pub fn angstrom(self) -> Self {
-        Self { unit: Unit::Angstrom, ..self }
-    }
-
-    /// Set coordinate unit to Bohr.
-    pub fn bohr(self) -> Self {
-        Self { unit: Unit::Bohr, ..self }
-    }
-
-    /// Enable cartesian basis.
-    pub fn cartesian(self) -> Self {
-        Self { cart: true, ..self }
-    }
-
-    /// Enable spherical basis (default).
-    pub fn spherical(self) -> Self {
-        Self { cart: false, ..self }
-    }
-
     /// Build the CIntMol object (fallible version).
-    pub fn build_f(self) -> Result<CIntMol, CIntError> {
+    pub fn create_mol_f(self) -> Result<CIntMol, CIntError> {
         // 1. Parse atoms
         let atoms = self.parse_atoms()?;
 
@@ -119,7 +76,12 @@ impl CIntMolInput {
         let basis_elements = resolve_basis(&atoms, &self.basis)?;
 
         // 3. Resolve ECP
-        let ecp_electrons = resolve_ecp(&atoms, &basis_elements, &self.ecp)?;
+        let ecp_electrons = atoms
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, atom)| basis_elements[&atom.label].basis_data.ecp_electrons.map(|n| (idx, n)))
+            .filter_map(|(idx, n)| (n > 0).then_some((idx, n)))
+            .collect();
 
         // 4. Generate CInt arrays
         let cint_type = if self.cart { CIntType::Cartesian } else { CIntType::Spheric };
@@ -128,12 +90,12 @@ impl CIntMolInput {
         // 5. Create CInt instance
         let cint = CInt { atm, bas, env, ecpbas, cint_type };
 
-        Ok(CIntMol { atoms, basis_elements, ecp_electrons, cint, cart: self.cart })
+        Ok(CIntMol { atoms, basis_elements, ecp_electrons, cint })
     }
 
     /// Build the CIntMol object (infallible version, panics on error).
-    pub fn build(self) -> CIntMol {
-        self.build_f().cint_unwrap()
+    pub fn create_mol(self) -> CIntMol {
+        self.create_mol_f().cint_unwrap()
     }
 
     /// Parse atoms from input format.
@@ -160,7 +122,7 @@ impl CIntMolInput {
 /// Generate CInt arrays from parsed atoms and basis data.
 fn generate_cint_arrays(
     atoms: &[AtomInfo],
-    basis_elements: &HashMap<usize, BasisElement>,
+    basis_elements: &HashMap<String, BasisElement>,
     ecp_electrons: &HashMap<usize, i32>,
     cint_type: CIntType,
 ) -> Result<(Vec<[c_int; 6]>, Vec<[c_int; 8]>, Vec<f64>, Vec<[c_int; 8]>), CIntError> {
@@ -199,24 +161,23 @@ fn generate_cint_arrays(
     }
 
     // Collect unique element symbols with their basis data
-    // Process in order of atomic number (H=1, He=2, ...) to match PySCF's ordering
-    let mut unique_elements: Vec<(String, usize)> = Vec::new(); // (symbol, first_atom_idx)
-    for (idx, atom) in atoms.iter().enumerate() {
+    // Process in order of appearance in atom list (not alphabetical)
+    // PySCF stores basis data in the order elements appear in the basis dict
+    // Use atom labels for lookup, but track unique elements by symbol
+    let mut unique_elements: Vec<(String, String)> = Vec::new(); // (symbol, first_atom_label)
+    for atom in atoms.iter() {
         if !unique_elements.iter().any(|(sym, _)| sym == &atom.symbol) {
-            unique_elements.push((atom.symbol.clone(), idx));
+            unique_elements.push((atom.symbol.clone(), atom.label.clone()));
         }
     }
-    // Sort alphabetically by element symbol (H < O) - PySCF stores basis data in
-    // alphabetical order
-    unique_elements.sort_by(|(sym_a, _), (sym_b, _)| sym_a.cmp(sym_b));
+    // Do NOT sort alphabetically - keep order of appearance in atom list
 
     // Pre-generate all basis data for unique elements
-    // This ensures basis data is stored in element order (H first, then O)
     let mut basis_cache: HashMap<String, Vec<(c_int, c_int, c_int, c_int)>> = HashMap::new();
 
-    for (element_symbol, first_atom_idx) in &unique_elements {
+    for (element_symbol, first_atom_label) in &unique_elements {
         let basis_elem =
-            basis_elements.get(first_atom_idx).ok_or_else(|| cint_error!(ParseError, "No basis for element {}", element_symbol))?;
+            basis_elements.get(first_atom_label).ok_or_else(|| cint_error!(ParseError, "No basis for element {}", element_symbol))?;
 
         if basis_elem.basis_data.electron_shells.is_none() {
             continue;
@@ -264,7 +225,7 @@ fn generate_cint_arrays(
 
     // Generate _bas for each atom (using pre-generated basis data)
     for (idx, atom) in atoms.iter().enumerate() {
-        let basis_elem = basis_elements.get(&idx).ok_or_else(|| cint_error!(ParseError, "No basis for atom {}", idx))?;
+        let basis_elem = basis_elements.get(&atom.label).ok_or_else(|| cint_error!(ParseError, "No basis for atom {}", atom.label))?;
 
         if basis_elem.basis_data.electron_shells.is_none() {
             continue;
@@ -286,13 +247,13 @@ fn generate_cint_arrays(
     }
 
     // Generate _ecpbas for atoms with ECP
-    for (idx, _atom) in atoms.iter().enumerate() {
+    for (idx, atom) in atoms.iter().enumerate() {
         let ecp_core = ecp_electrons.get(&idx).copied().unwrap_or(0);
         if ecp_core == 0 {
             continue;
         }
 
-        let basis_elem = basis_elements.get(&idx).ok_or_else(|| cint_error!(ParseError, "No basis for atom {}", idx))?;
+        let basis_elem = basis_elements.get(&atom.label).ok_or_else(|| cint_error!(ParseError, "No basis for atom {}", atom.label))?;
 
         if basis_elem.basis_data.ecp_potentials.is_none() {
             continue;
@@ -398,118 +359,11 @@ fn normalize_shell(l: i32, exponents: &[f64], coefficients: &[f64], _cint_type: 
 /// gaussian_int(n, alpha) = gamma((n+1)/2) / (2 * alpha^((n+1)/2))
 fn gaussian_int(n: i32, alpha: f64) -> f64 {
     let n1 = (n + 1) as f64 * 0.5;
-    gamma(n1) / (2.0 * alpha.powf(n1))
+    libm::tgamma(n1) / (2.0 * alpha.powf(n1))
 }
 
 /// Calculate GTO normalization factor following PySCF's formula.
 /// gto_norm(l, exp) = 1/sqrt(gaussian_int(l*2+2, 2*exp))
 fn gto_norm(l: i32, exp: f64) -> f64 {
     1.0 / gaussian_int(l * 2 + 2, 2.0 * exp).sqrt()
-}
-
-/// Calculate gamma function using recursion from known values.
-/// gamma(x) for x = n + 0.5 where n is integer:
-///   gamma(0.5) = sqrt(pi)
-///   gamma(1.5) = 0.5 * sqrt(pi)
-///   gamma(2.5) = 1.5 * gamma(1.5) = 1.5 * 0.5 * sqrt(pi)
-///   gamma(3.5) = 2.5 * gamma(2.5) = 2.5 * 1.5 * 0.5 * sqrt(pi)
-/// For integer x: gamma(x) = (x-1)!
-fn gamma(x: f64) -> f64 {
-    use std::f64::consts::PI;
-    let sqrt_pi = PI.sqrt();
-
-    if x == 0.5 {
-        sqrt_pi
-    } else if x == 1.0 {
-        1.0
-    } else if x == 1.5 {
-        sqrt_pi / 2.0
-    } else if x == 2.0 {
-        1.0
-    } else if x == 2.5 {
-        1.5 * sqrt_pi / 2.0
-    } else if x == 3.0 {
-        2.0
-    } else if x == 3.5 {
-        2.5 * 1.5 * sqrt_pi / 2.0
-    }
-    // = 3.75 * sqrt_pi / 2
-    else if x == 4.0 {
-        6.0
-    } else if x == 4.5 {
-        3.5 * 2.5 * 1.5 * sqrt_pi / 2.0
-    }
-    // = 13.125 * sqrt_pi / 2
-    else if x == 5.0 {
-        24.0
-    } else if x == 5.5 {
-        4.5 * 3.5 * 2.5 * 1.5 * sqrt_pi / 2.0
-    }
-    // = 59.0625 * sqrt_pi / 2
-    else if x == 6.0 {
-        120.0
-    } else if x == 6.5 {
-        5.5 * 4.5 * 3.5 * 2.5 * 1.5 * sqrt_pi / 2.0
-    } else if x == 7.0 {
-        720.0
-    } else if x > 1.0 {
-        (x - 1.0) * gamma(x - 1.0)
-    } else {
-        sqrt_pi / x
-    } // For x < 0.5, use gamma(x) * x = gamma(x+1)
-}
-
-/// Convenience function to create molecule from atom string and basis name
-/// (fallible). Named `M_f` following the fallible convention.
-#[allow(non_snake_case)]
-pub fn M_f(atom: &str, basis: &str) -> Result<CIntMol, CIntError> {
-    CIntMolInput::new().atom_str(atom).basis_str(basis).angstrom().build_f()
-}
-
-/// Convenience function to create molecule from atom string and basis name
-/// (infallible). Named `M` to match PySCF's convention.
-#[allow(non_snake_case)]
-pub fn M(atom: &str, basis: &str) -> CIntMol {
-    M_f(atom, basis).cint_unwrap()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_molecule_creation() {
-        let mol = M("H 0 0 0; H 0 0 0.74", "sto-3g");
-        assert_eq!(mol.atoms.len(), 2);
-        assert_eq!(mol.atoms[0].symbol, "H");
-        assert_eq!(mol.atoms[1].symbol, "H");
-    }
-
-    #[test]
-    fn test_water_sto3g() {
-        let mol = CIntMolInput::new().atom_str("O 0 0 0; H 0 0.94 0; H 0.94 0 0").basis_str("sto-3g").angstrom().build();
-
-        assert_eq!(mol.atoms.len(), 3);
-        assert_eq!(mol.cint.atm.len(), 3);
-        assert!(!mol.cint.bas.is_empty());
-    }
-
-    #[test]
-    fn test_ghost_atom() {
-        let mol = CIntMolInput::new().atom_str("H 0 0 0; GHOST-O 0 0 1.2").basis_str("sto-3g").angstrom().build();
-
-        assert_eq!(mol.atoms.len(), 2);
-        assert!(mol.atoms[1].is_ghost);
-        assert_eq!(mol.atoms[1].charge, 0.0);
-        // Ghost atom should have 0 in atm charge
-        assert_eq!(mol.cint.atm[1][0], 0);
-    }
-
-    #[test]
-    fn test_zmatrix_water() {
-        let mol = CIntMolInput::new().atom_str("O\nH 1 0.94\nH 1 0.94 2 104.5").basis_str("sto-3g").angstrom().build();
-
-        assert_eq!(mol.atoms.len(), 3);
-        assert_eq!(mol.atoms[0].symbol, "O");
-    }
 }

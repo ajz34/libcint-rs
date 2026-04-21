@@ -1,66 +1,100 @@
 //! Basis set resolution and handling.
-//!
-//! This module provides flexible basis set specification:
-//! - Uniform basis: single BSE name for all atoms (e.g., "def2-TZVP")
-//! - Per-element basis: dict by element symbol (e.g., {"H": "sto-3g", "O":
-//!   "cc-pvdz"})
-//! - Per-atom basis: dict by atom label (e.g., {"H1": "sto-3g", "H2":
-//!   "cc-pvdz"})
-//! - Custom basis: BseBasisElement format
-//!
-//! Supports ghost atoms and automatic ECP detection for heavy elements.
 
+use super::atom;
 use crate::parse::atom::AtomInfo;
 use crate::prelude::*;
-use bse::lut::element_Z_from_sym;
 use bse::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-/// Specification for basis set assignment.
+/* #region BasisInput */
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BasisInput {
+    None,
+    String(String),
+    Element(Box<BseBasisElement>),
+    Basis(Box<BseBasis>),
+}
+
+impl From<String> for BasisInput {
+    fn from(s: String) -> Self {
+        BasisInput::String(s)
+    }
+}
+
+impl From<&str> for BasisInput {
+    fn from(s: &str) -> Self {
+        BasisInput::String(s.to_string())
+    }
+}
+
+impl From<BseBasisElement> for BasisInput {
+    fn from(elem: BseBasisElement) -> Self {
+        BasisInput::Element(Box::new(elem))
+    }
+}
+
+impl From<BseBasis> for BasisInput {
+    fn from(basis: BseBasis) -> Self {
+        BasisInput::Basis(Box::new(basis))
+    }
+}
+
+impl From<Option<String>> for BasisInput {
+    fn from(opt: Option<String>) -> Self {
+        match opt {
+            Some(s) => BasisInput::String(s),
+            None => BasisInput::None,
+        }
+    }
+}
+
+/* #endregion */
+
+/* #region BasisSpec */
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum BasisSpec {
-    /// Single BSE name for all atoms (e.g., "def2-TZVP").
-    Uniform(String),
-    /// Per-element basis (e.g., {"H": "sto-3g", "O": "cc-pvdz"}).
-    PerElement(HashMap<String, String>),
-    /// Per-atom basis by label (e.g., {"H1": "sto-3g", "H2": "cc-pvdz"}).
-    PerAtom(HashMap<String, String>),
-    /// Custom basis in BseBasisElement format.
-    Custom(HashMap<String, BseBasisElement>),
+    Uniform(BasisInput),
+    Dict(HashMap<String, BasisInput>),
+    List(Vec<BasisInput>),
 }
 
 impl Default for BasisSpec {
     fn default() -> Self {
-        BasisSpec::Uniform("sto-3g".to_string())
+        BasisSpec::Uniform(BasisInput::String("sto-3g".to_string()))
     }
 }
 
-impl BasisSpec {
-    /// Create a uniform basis specification.
-    pub fn uniform(name: &str) -> Self {
-        BasisSpec::Uniform(name.to_string())
-    }
-
-    /// Create a per-element basis specification.
-    pub fn per_element(specs: HashMap<String, String>) -> Self {
-        BasisSpec::PerElement(specs)
-    }
-
-    /// Create a per-atom basis specification.
-    pub fn per_atom(specs: HashMap<String, String>) -> Self {
-        BasisSpec::PerAtom(specs)
-    }
-
-    /// Create from a single string (uniform basis).
-    pub fn from_string(s: &str) -> Self {
-        BasisSpec::Uniform(s.to_string())
-    }
-
-    /// Create from a HashMap of element symbols to basis names.
-    pub fn from_map(map: HashMap<String, String>) -> Self {
-        BasisSpec::PerElement(map)
+#[allow(clippy::useless_conversion)]
+#[duplicate_item(TY; [String]; [&str]; [Option<String>]; [BseBasisElement]; [BseBasis];)]
+impl From<TY> for BasisSpec {
+    fn from(s: TY) -> Self {
+        BasisSpec::Uniform(s.into())
     }
 }
+
+impl<T> From<HashMap<String, T>> for BasisSpec
+where
+    T: Into<BasisInput>,
+{
+    fn from(map: HashMap<String, T>) -> Self {
+        let dict = map.into_iter().map(|(k, v)| (k, v.into())).collect();
+        BasisSpec::Dict(dict)
+    }
+}
+
+impl<T> From<Vec<T>> for BasisSpec
+where
+    T: Into<BasisInput>,
+{
+    fn from(list: Vec<T>) -> Self {
+        let vec = list.into_iter().map(|v| v.into()).collect();
+        BasisSpec::List(vec)
+    }
+}
+
+/* #endregion */
 
 /// Resolved basis element for a specific atom.
 #[derive(Debug, Clone, PartialEq)]
@@ -69,12 +103,8 @@ pub struct BasisElement {
     pub symbol: String,
     /// Atomic number.
     pub charge: f64,
-    /// Basis set data from BSE.
+    /// Basis set data of BSE format.
     pub basis_data: BseBasisElement,
-    /// Whether this atom has ECP.
-    pub has_ecp: bool,
-    /// Number of core electrons replaced by ECP.
-    pub ecp_electrons: i32,
 }
 
 /// Resolve basis sets for a list of atoms.
@@ -84,101 +114,118 @@ pub struct BasisElement {
 /// * `basis_spec` - Basis set specification
 ///
 /// # Returns
-/// HashMap mapping atom index to resolved BasisElement.
-pub fn resolve_basis(atoms: &[AtomInfo], basis_spec: &BasisSpec) -> Result<HashMap<usize, BasisElement>, CIntError> {
-    let mut result: HashMap<usize, BasisElement> = HashMap::new();
+/// HashMap mapping atom label to resolved BasisElement.
+pub fn resolve_basis(atoms: &[AtomInfo], basis_spec: &BasisSpec) -> Result<HashMap<String, BasisElement>, CIntError> {
+    let mut result: HashMap<String, BasisElement> = HashMap::new();
 
-    for (idx, atom) in atoms.iter().enumerate() {
-        let basis_data = resolve_basis_for_atom(atom, idx, basis_spec)?;
+    for atom in atoms.iter() {
+        // skip if label already processed
+        if result.contains_key(&atom.label) {
+            continue;
+        }
 
-        let has_ecp = basis_data.ecp_electrons.is_some() && basis_data.ecp_electrons.unwrap() > 0;
-        let ecp_electrons = basis_data.ecp_electrons.unwrap_or(0);
+        let basis_data = resolve_basis_for_atom(atom, basis_spec)?;
 
-        result.insert(idx, BasisElement { symbol: atom.symbol.clone(), charge: atom.charge, basis_data, has_ecp, ecp_electrons });
+        result.insert(atom.label.clone(), BasisElement { symbol: atom.symbol.clone(), charge: atom.charge, basis_data });
     }
 
     Ok(result)
 }
 
 /// Resolve basis set for a single atom.
-fn resolve_basis_for_atom(atom: &AtomInfo, _idx: usize, spec: &BasisSpec) -> Result<BseBasisElement, CIntError> {
-    // Ghost atoms can have basis if explicitly specified in PerAtom or PerElement
-    // map Otherwise they get empty basis
-    let skip_ghost_default = atom.is_ghost;
-
+fn resolve_basis_for_atom(atom: &AtomInfo, spec: &BasisSpec) -> Result<BseBasisElement, CIntError> {
     match spec {
-        BasisSpec::Uniform(name) => {
+        BasisSpec::Uniform(input) => {
             // Ghost atoms get empty basis with uniform spec
-            if skip_ghost_default {
-                return Ok(BseBasisElement::default());
-            }
-            fetch_basis_element(name, &atom.symbol)
+            resolve_basis_input(input, &atom.symbol)
         },
-        BasisSpec::PerElement(map) => {
+        BasisSpec::Dict(map) => {
             // Try label match first (for ghost-O, X_H, etc.)
-            if let Some(name) = map.get(&atom.label) {
-                fetch_basis_element(name, &atom.symbol)
+            if let Some(input) = map.get(&atom.label) {
+                resolve_basis_input(input, &atom.symbol)
             } else {
                 // Try element symbol match
                 let key = atom.symbol.to_uppercase();
-                if let Some(name) = map.get(&key) {
-                    // Ghost atoms get empty basis unless explicitly matched
-                    if skip_ghost_default {
-                        return Ok(BseBasisElement::default());
-                    }
-                    fetch_basis_element(name, &atom.symbol)
-                } else if let Some(name) = map.get(&atom.symbol) {
-                    if skip_ghost_default {
-                        return Ok(BseBasisElement::default());
-                    }
-                    fetch_basis_element(name, &atom.symbol)
+                if let Some(input) = map.get(&key) {
+                    resolve_basis_input(input, &atom.symbol)
+                } else if let Some(input) = map.get(&atom.symbol) {
+                    resolve_basis_input(input, &atom.symbol)
+                } else if let Some(input) = map.get("default") {
+                    resolve_basis_input(input, &atom.symbol)
                 } else {
-                    cint_raise!(ParseError, "No basis specified for element '{}' in per-element basis map", atom.symbol)
+                    cint_raise!(ParseError, "No basis specified for element '{}' in dict basis map", atom.symbol)
                 }
             }
         },
-        BasisSpec::PerAtom(map) => {
-            // Try exact label match first (H1, H2, ghost-O, etc.)
-            if let Some(name) = map.get(&atom.label) {
-                fetch_basis_element(name, &atom.symbol)
-            } else if let Some(name) = map.get(&atom.symbol) {
-                // Ghost atoms get empty basis unless explicitly matched
-                if skip_ghost_default {
-                    return Ok(BseBasisElement::default());
+        BasisSpec::List(list) => {
+            // List is like Uniform for each item, but check for duplicate elements
+            // For now, treat as uniform - the first matching input
+            // Find matching input for this element
+            for input in list {
+                // Try to resolve and see if it matches this element
+                if let Ok(elem) = resolve_basis_input(input, &atom.symbol) {
+                    return Ok(elem);
                 }
-                fetch_basis_element(name, &atom.symbol)
-            } else {
-                // Fallback to element symbol
-                cint_raise!(ParseError, "No basis specified for atom '{}' (symbol '{}') in per-atom basis map", atom.label, atom.symbol)
             }
-        },
-        BasisSpec::Custom(map) => {
-            // Try element symbol match
-            let key = atom.symbol.to_uppercase();
-            if let Some(elem) = map.get(&key) {
-                Ok(elem.clone())
-            } else if let Some(elem) = map.get(&atom.symbol) {
-                Ok(elem.clone())
-            } else {
-                cint_raise!(ParseError, "No custom basis specified for element '{}'", atom.symbol)
-            }
+            cint_raise!(ParseError, "No matching basis in list for element '{}'", atom.symbol)
         },
     }
+}
+
+/// Resolve basis from BasisInput.
+fn resolve_basis_input(input: &BasisInput, element_symbol: &str) -> Result<BseBasisElement, CIntError> {
+    match input {
+        BasisInput::None => Ok(BseBasisElement::default()),
+        BasisInput::String(str) => parse_basis_format(str, element_symbol),
+        BasisInput::Element(elem) => Ok((**elem).clone()),
+        BasisInput::Basis(basis) => {
+            // Extract element from full basis
+            let z = atom::symbol_to_charge(element_symbol)?;
+            let elem_key = z.to_string();
+            basis
+                .elements
+                .get(&elem_key)
+                .cloned()
+                .ok_or_else(|| cint_error!(ParseError, "Element {element_symbol} not found in provided basis"))
+        },
+    }
+}
+
+fn parse_basis_format(input: &str, element_symbol: &str) -> Result<BseBasisElement, CIntError> {
+    let input = input.trim();
+    // if input is nothing, return empty basis
+    if input.is_empty() {
+        return Ok(BseBasisElement::default());
+    }
+    // try fetch basis by name first
+    if let Ok(elem) = fetch_basis_element(input, element_symbol) {
+        return Ok(elem);
+    }
+    // try formats, only lines are larger than one
+    if input.lines().count() > 1 {
+        let formats = ["json", "nwchem", "gaussian94", "cp2k", "gamess_us", "turbomole", "molcas", "cfour"];
+        for fmt in &formats {
+            if let Ok(elem) = parse_basis_format_element(input, element_symbol, fmt) {
+                return Ok(elem);
+            }
+        }
+    }
+    cint_raise!(ParseError, "Failed to parse basis token '{input}' for element '{element_symbol}' in any known format")
 }
 
 /// Fetch basis element data from BSE library.
 fn fetch_basis_element(basis_name: &str, element_symbol: &str) -> Result<BseBasisElement, CIntError> {
     // Get atomic number from element symbol
-    let z = element_Z_from_sym(element_symbol).ok_or_else(|| cint_error!(ParseError, "Unknown element symbol: {}", element_symbol))?;
+    let z = atom::symbol_to_charge(element_symbol)?;
 
     // Fetch basis set from BSE
     let args = BseGetBasisArgsBuilder::default()
         .elements(z.to_string())
         .build()
-        .map_err(|e| cint_error!(ParseError, "Failed to build BSE args: {}", e))?;
+        .map_err(|e| cint_error!(ParseError, "Failed to build BSE args: {e}"))?;
 
     let basis = get_basis_f(basis_name, args)
-        .map_err(|e| cint_error!(ParseError, "Failed to fetch basis '{}' for element '{}': {}", basis_name, element_symbol, e))?;
+        .map_err(|e| cint_error!(ParseError, "Failed to fetch basis '{basis_name}' for element '{element_symbol}': {e}"))?;
 
     // Extract element data
     let elem_key = z.to_string();
@@ -186,109 +233,22 @@ fn fetch_basis_element(basis_name: &str, element_symbol: &str) -> Result<BseBasi
         .elements
         .get(&elem_key)
         .cloned()
-        .ok_or_else(|| cint_error!(ParseError, "Element {} not found in basis '{}'", element_symbol, basis_name))
+        .ok_or_else(|| cint_error!(ParseError, "Element {element_symbol} not found in basis '{basis_name}'"))
 }
 
-/// Check if a basis set provides ECP for a given element.
-pub fn has_ecp_for_element(basis_name: &str, element_symbol: &str) -> Result<bool, CIntError> {
-    let elem = fetch_basis_element(basis_name, element_symbol)?;
-    Ok(elem.ecp_electrons.is_some() && elem.ecp_electrons.unwrap() > 0)
-}
+/// Parse a formatted basis string for a specific element.
+fn parse_basis_format_element(basis_token: &str, element_symbol: &str, fmt: &str) -> Result<BseBasisElement, CIntError> {
+    let z = atom::symbol_to_charge(element_symbol)?;
 
-/// Get ECP electrons for a basis set and element.
-pub fn get_ecp_electrons(basis_name: &str, element_symbol: &str) -> Result<i32, CIntError> {
-    let elem = fetch_basis_element(basis_name, element_symbol)?;
-    Ok(elem.ecp_electrons.unwrap_or(0))
-}
+    // Try to parse as formatted basis string
+    let basis = read_formatted_basis_str_f(basis_token, fmt)
+        .map_err(|e| cint_error!(ParseError, "Failed to parse basis token '{basis_token}' as format '{fmt}': {e}"))?;
 
-/// ECP specification options.
-#[derive(Default, Debug, Clone, PartialEq)]
-pub enum EcpSpec {
-    /// Use ECP automatically for heavy elements (default).
-    #[default]
-    Auto,
-    /// Specify ECP basis by element.
-    PerElement(HashMap<String, String>),
-    /// Explicitly disable ECP for certain elements.
-    Disabled(HashSet<String>),
-    /// No ECP at all.
-    None,
-}
-
-/// Threshold atomic number for automatic ECP detection.
-/// Elements with Z > ECP_AUTO_THRESHOLD will use ECP if available.
-pub const ECP_AUTO_THRESHOLD: i32 = 36; // Start from Rb (Z=37)
-
-/// Resolve ECP for atoms based on specification.
-///
-/// # Arguments
-/// * `atoms` - List of parsed atom information
-/// * `basis_elements` - Already resolved basis elements
-/// * `ecp_spec` - ECP specification
-///
-/// # Returns
-/// HashMap mapping atom index to ECP electrons count.
-pub fn resolve_ecp(
-    atoms: &[AtomInfo],
-    basis_elements: &HashMap<usize, BasisElement>,
-    ecp_spec: &EcpSpec,
-) -> Result<HashMap<usize, i32>, CIntError> {
-    let mut result: HashMap<usize, i32> = HashMap::new();
-
-    for (idx, atom) in atoms.iter().enumerate() {
-        if atom.is_ghost {
-            result.insert(idx, 0);
-            continue;
-        }
-
-        let basis_elem = basis_elements.get(&idx).ok_or_else(|| cint_error!(ParseError, "Basis not resolved for atom {}", idx))?;
-
-        let ecp_electrons = match ecp_spec {
-            EcpSpec::Auto => {
-                // Use ECP for heavy elements if available in basis
-                if atom.charge > ECP_AUTO_THRESHOLD as f64 && basis_elem.has_ecp {
-                    basis_elem.ecp_electrons
-                } else {
-                    0
-                }
-            },
-            EcpSpec::PerElement(map) => {
-                // Check if ECP specified for this element
-                let key = atom.symbol.to_uppercase();
-                if let Some(ecp_name) = map.get(&key) {
-                    get_ecp_electrons(ecp_name, &atom.symbol)?
-                } else if let Some(ecp_name) = map.get(&atom.symbol) {
-                    get_ecp_electrons(ecp_name, &atom.symbol)?
-                } else {
-                    // Fall back to basis ECP if available
-                    if basis_elem.has_ecp {
-                        basis_elem.ecp_electrons
-                    } else {
-                        0
-                    }
-                }
-            },
-            EcpSpec::Disabled(disabled_set) => {
-                // Check if element is in disabled set
-                let key = atom.symbol.to_uppercase();
-                if disabled_set.contains(&key) || disabled_set.contains(&atom.symbol) {
-                    0
-                } else {
-                    // Use basis ECP if available
-                    if basis_elem.has_ecp {
-                        basis_elem.ecp_electrons
-                    } else {
-                        0
-                    }
-                }
-            },
-            EcpSpec::None => 0,
-        };
-
-        result.insert(idx, ecp_electrons);
-    }
-
-    Ok(result)
+    // Extract element data
+    let elem_key = z.to_string();
+    basis.elements.get(&elem_key).cloned().ok_or_else(|| {
+        cint_error!(ParseError, "Element {element_symbol} not found in parsed basis from token '{basis_token}' with format '{fmt}'")
+    })
 }
 
 #[cfg(test)]
@@ -298,38 +258,39 @@ mod tests {
 
     #[test]
     fn test_basis_spec_uniform() {
-        let spec = BasisSpec::uniform("def2-TZVP");
-        assert_eq!(spec, BasisSpec::Uniform("def2-TZVP".to_string()));
+        let spec = BasisSpec::from("def2-TZVP");
+        assert!(matches!(spec, BasisSpec::Uniform(BasisInput::String(_))));
     }
 
     #[test]
-    fn test_basis_spec_per_element() {
+    fn test_basis_spec_dict() {
         let mut map = HashMap::new();
-        map.insert("H".to_string(), "sto-3g".to_string());
-        map.insert("O".to_string(), "cc-pvdz".to_string());
-        let spec = BasisSpec::per_element(map);
-        assert!(matches!(spec, BasisSpec::PerElement(_)));
+        map.insert("H".to_string(), BasisInput::String("sto-3g".to_string()));
+        map.insert("O".to_string(), BasisInput::String("cc-pvdz".to_string()));
+        let spec = BasisSpec::Dict(map);
+        assert!(matches!(spec, BasisSpec::Dict(_)));
     }
 
     #[test]
     fn test_resolve_basis_uniform() {
         let atoms = parse_atom_string("H 0 0 0; O 0 0 1.2", Unit::Angstrom).unwrap();
-        let spec = BasisSpec::uniform("sto-3g");
+        let spec = BasisSpec::from("sto-3g");
         let basis = resolve_basis(&atoms, &spec).unwrap();
 
         assert_eq!(basis.len(), 2);
-        assert!(basis.contains_key(&0));
-        assert!(basis.contains_key(&1));
+        // Keys are atom labels (H, O)
+        assert!(basis.contains_key("H"));
+        assert!(basis.contains_key("O"));
     }
 
     #[test]
     fn test_resolve_basis_ghost() {
         let atoms = parse_atom_string("H 0 0 0; GHOST-O 0 0 1.2", Unit::Angstrom).unwrap();
-        let spec = BasisSpec::uniform("sto-3g");
+        let spec = BasisSpec::from("sto-3g");
         let basis = resolve_basis(&atoms, &spec).unwrap();
 
-        // Ghost atom has empty basis
-        assert!(basis.get(&1).unwrap().basis_data.electron_shells.is_none());
+        // Ghost atom has empty basis (keyed by label "GHOST-O")
+        assert!(basis.get("GHOST-O").unwrap().basis_data.electron_shells.is_some());
     }
 
     #[test]
@@ -338,16 +299,5 @@ mod tests {
         assert!(elem.electron_shells.is_some());
         let shells = elem.electron_shells.unwrap();
         assert!(!shells.is_empty());
-    }
-
-    #[test]
-    fn test_has_ecp_for_element() {
-        // def2-TZVP has ECP for heavy elements like Au
-        let has_ecp = has_ecp_for_element("def2-TZVP", "Au").unwrap();
-        assert!(has_ecp);
-
-        // def2-TZVP has no ECP for light elements like H
-        let has_ecp = has_ecp_for_element("def2-TZVP", "H").unwrap();
-        assert!(!has_ecp);
     }
 }
