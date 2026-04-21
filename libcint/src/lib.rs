@@ -186,5 +186,8 @@ pub mod util;
 
 pub mod gto;
 
+#[cfg(feature = "bse")]
+pub mod parse;
+
 #[allow(unused_imports)]
 use prelude::*;

@@ -22,15 +22,17 @@ derive_builder = { version = "0.20"}
 rstsr-common = { version = "0.6", features = ["rayon"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
+bse = { version = "0.1", optional = true }
 
 [dev-dependencies]
 approx = "0.5"
 rstest = "0.25"
 
 [features]
-default = []
+default = ["bse"]
 
 dispatch_more_blksize = []
+bse = ["dep:bse"]
 
 with_f12 = ["libcint-src/with_f12"]
 with_4c1e = ["libcint-src/with_4c1e"]
