@@ -5,24 +5,16 @@
 
 #[cfg(feature = "bse")]
 mod test_parse_recover {
-    use libcint::{parse::mol::CIntMolInputBuilder, prelude::init_h2o_def2_tzvp};
+    use libcint::{
+        parse::mol::CIntMolInputBuilder,
+        prelude::{init_c10h22_def2_qzvp, init_h2o_def2_jk, init_h2o_def2_tzvp, init_sb2me4_cc_pvtz},
+    };
     use std::collections::HashMap;
 
     #[test]
     fn test_recover_h2o_def2_tzvp() {
         let mol_input = CIntMolInputBuilder::default().atom("O; H 1 0.94; H 1 0.94 2 104.5").basis("def2-TZVP").build().unwrap();
         let mol = mol_input.create_mol();
-
-        // Check atom count (should be 3)
-        assert_eq!(mol.cint.atm.len(), 3);
-
-        // Check shell count (def2-TZVP has specific shell count)
-        assert!(!mol.cint.bas.is_empty());
-
-        // Check nuclear charges
-        assert_eq!(mol.cint.atm[0][0], 8); // O
-        assert_eq!(mol.cint.atm[1][0], 1); // H
-        assert_eq!(mol.cint.atm[2][0], 1); // H
 
         let cint_ref = init_h2o_def2_tzvp();
         // perform check of similarity of CInt instances
@@ -44,18 +36,14 @@ mod test_parse_recover {
             .unwrap()
             .create_mol();
 
-        assert_eq!(mol.cint.atm.len(), 3);
-        assert!(!mol.cint.bas.is_empty());
-
-        // Compute overlap
-        let (overlap, shape) = mol.cint.integrate("int1e_ovlp", None, None).into();
-        let nao = shape[0];
-
-        // Diagonal elements should be ~1
-        for i in 0..nao {
-            let diag = overlap[i * nao + i];
-            assert!((diag - 1.0).abs() < 1e-6, "Diagonal {} not normalized: {}", i, diag);
-        }
+        let cint_ref = init_h2o_def2_jk();
+        // perform check of similarity of CInt instances
+        assert_eq!(mol.cint.atm, cint_ref.atm);
+        assert_eq!(mol.cint.bas, cint_ref.bas);
+        assert_eq!(mol.cint.ecpbas, cint_ref.ecpbas);
+        assert_eq!(mol.cint.env.len(), cint_ref.env.len());
+        let env_diff = mol.cint.env.iter().zip(cint_ref.env.iter()).map(|(a, b)| (a - b).abs()).fold(0.0, |acc, x| acc + x);
+        assert!(env_diff < 1e-5, "CInt env differs from reference by {}", env_diff);
     }
 
     /// Test Sb2Me4 with ECP (cc-pVTZ-PP for Sb).
@@ -89,27 +77,14 @@ mod test_parse_recover {
 
         let mol = CIntMolInputBuilder::default().atom(atom_str).basis(basis_map).build().unwrap().create_mol();
 
-        // Check atom count
-        assert_eq!(mol.cint.atm.len(), 18);
-
-        // Check ECP shells exist (Sb atoms should have ECP)
-        assert!(!mol.cint.ecpbas.is_empty(), "No ECP shells for Sb");
-
-        // Check nuclear charges (Sb should have reduced charge due to ECP)
-        // Sb nuclear charge = 51, cc-pVTZ-PP has 28 core electrons
-        // Effective charge = 51 - 28 = 23
-        assert_eq!(mol.cint.atm[0][0], 23, "Sb0 effective charge should be 23");
-        assert_eq!(mol.cint.atm[1][0], 23, "Sb1 effective charge should be 23");
-
-        // Compute overlap
-        let (overlap, shape) = mol.cint.integrate("int1e_ovlp", None, None).into();
-        let nao = shape[0];
-
-        // Diagonal elements should be ~1
-        for i in 0..nao {
-            let diag = overlap[i * nao + i];
-            assert!((diag - 1.0).abs() < 1e-6, "Diagonal {} not normalized: {}", i, diag);
-        }
+        let cint_ref = init_sb2me4_cc_pvtz();
+        // perform check of similarity of CInt instances
+        assert_eq!(mol.cint.atm, cint_ref.atm);
+        assert_eq!(mol.cint.bas, cint_ref.bas);
+        assert_eq!(mol.cint.ecpbas, cint_ref.ecpbas);
+        assert_eq!(mol.cint.env.len(), cint_ref.env.len());
+        let env_diff = mol.cint.env.iter().zip(cint_ref.env.iter()).map(|(a, b)| (a - b).abs()).fold(0.0, |acc, x| acc + x);
+        assert!(env_diff < 1e-5, "CInt env differs from reference by {}", env_diff);
     }
 
     /// Test C10H22 with def2-QZVP basis.
@@ -158,23 +133,13 @@ mod test_parse_recover {
 
         let mol = CIntMolInputBuilder::default().atom(atom_str).basis("def2-QZVP").build().unwrap().create_mol();
 
-        // Check atom count (12 C + 26 H = 38 atoms)
-        assert_eq!(mol.cint.atm.len(), 38);
-
-        // Check nuclear charges
-        let c_count = mol.cint.atm.iter().filter(|a| a[0] == 6).count();
-        let h_count = mol.cint.atm.iter().filter(|a| a[0] == 1).count();
-        assert_eq!(c_count, 12);
-        assert_eq!(h_count, 26);
-
-        // Compute overlap
-        let (overlap, shape) = mol.cint.integrate("int1e_ovlp", None, None).into();
-        let nao = shape[0];
-
-        // Diagonal elements should be ~1
-        for i in 0..nao {
-            let diag = overlap[i * nao + i];
-            assert!((diag - 1.0).abs() < 1e-6, "Diagonal {} not normalized: {}", i, diag);
-        }
+        let cint_ref = init_c10h22_def2_qzvp();
+        // perform check of similarity of CInt instances
+        assert_eq!(mol.cint.atm, cint_ref.atm);
+        assert_eq!(mol.cint.bas, cint_ref.bas);
+        assert_eq!(mol.cint.ecpbas, cint_ref.ecpbas);
+        assert_eq!(mol.cint.env.len(), cint_ref.env.len());
+        let env_diff = mol.cint.env.iter().zip(cint_ref.env.iter()).map(|(a, b)| (a - b).abs()).fold(0.0, |acc, x| acc + x);
+        assert!(env_diff < 1e-5, "CInt env differs from reference by {}", env_diff);
     }
 }

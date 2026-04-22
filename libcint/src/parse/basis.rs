@@ -4,7 +4,6 @@ use super::atom;
 use crate::parse::atom::AtomInfo;
 use crate::prelude::*;
 use bse::prelude::*;
-use std::collections::HashMap;
 
 /* #region BasisInput */
 
@@ -56,7 +55,7 @@ impl From<Option<String>> for BasisInput {
 #[derive(Debug, Clone, PartialEq)]
 pub enum BasisSpec {
     Uniform(BasisInput),
-    Dict(HashMap<String, BasisInput>),
+    Dict(BTreeMap<String, BasisInput>),
     List(Vec<BasisInput>),
 }
 
@@ -74,11 +73,12 @@ impl From<TY> for BasisSpec {
     }
 }
 
-impl<T> From<HashMap<String, T>> for BasisSpec
+#[duplicate_item(TY; [HashMap<String, T>]; [BTreeMap<String, T>];)]
+impl<T> From<TY> for BasisSpec
 where
     T: Into<BasisInput>,
 {
-    fn from(map: HashMap<String, T>) -> Self {
+    fn from(map: TY) -> Self {
         let dict = map.into_iter().map(|(k, v)| (k, v.into())).collect();
         BasisSpec::Dict(dict)
     }
@@ -115,8 +115,13 @@ pub struct BasisElement {
 ///
 /// # Returns
 /// HashMap mapping atom label to resolved BasisElement.
-pub fn resolve_basis(atoms: &[AtomInfo], basis_spec: &BasisSpec) -> Result<HashMap<String, BasisElement>, CIntError> {
-    let mut result: HashMap<String, BasisElement> = HashMap::new();
+pub fn resolve_basis(
+    atoms: &[AtomInfo],
+    basis_spec: &BasisSpec,
+    ecp_spec: &BasisSpec,
+    ghost_ecp: bool,
+) -> Result<BTreeMap<String, BasisElement>, CIntError> {
+    let mut result = BTreeMap::new();
 
     for atom in atoms.iter() {
         // skip if label already processed
@@ -124,7 +129,20 @@ pub fn resolve_basis(atoms: &[AtomInfo], basis_spec: &BasisSpec) -> Result<HashM
             continue;
         }
 
-        let basis_data = resolve_basis_for_atom(atom, basis_spec)?;
+        // resolve basis for this atom
+        let mut basis_data = resolve_basis_for_atom(atom, basis_spec)?;
+
+        // handle ecp basis
+        if let Ok(ecp_data) = resolve_basis_for_atom(atom, ecp_spec) {
+            basis_data.ecp_potentials = ecp_data.ecp_potentials;
+            basis_data.ecp_electrons = ecp_data.ecp_electrons;
+        };
+
+        // ecp should not be assigned to ghost atoms, for usual cases
+        if atom.is_ghost && !ghost_ecp {
+            basis_data.ecp_electrons = None;
+            basis_data.ecp_potentials = None;
+        }
 
         result.insert(atom.label.clone(), BasisElement { symbol: atom.symbol.clone(), charge: atom.charge, basis_data });
     }
@@ -264,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_basis_spec_dict() {
-        let mut map = HashMap::new();
+        let mut map = BTreeMap::new();
         map.insert("H".to_string(), BasisInput::String("sto-3g".to_string()));
         map.insert("O".to_string(), BasisInput::String("cc-pvdz".to_string()));
         let spec = BasisSpec::Dict(map);
@@ -275,7 +293,7 @@ mod tests {
     fn test_resolve_basis_uniform() {
         let atoms = parse_atom_string("H 0 0 0; O 0 0 1.2", Unit::Angstrom).unwrap();
         let spec = BasisSpec::from("sto-3g");
-        let basis = resolve_basis(&atoms, &spec).unwrap();
+        let basis = resolve_basis(&atoms, &spec, &(None.into()), false).unwrap();
 
         assert_eq!(basis.len(), 2);
         // Keys are atom labels (H, O)
@@ -287,7 +305,7 @@ mod tests {
     fn test_resolve_basis_ghost() {
         let atoms = parse_atom_string("H 0 0 0; GHOST-O 0 0 1.2", Unit::Angstrom).unwrap();
         let spec = BasisSpec::from("sto-3g");
-        let basis = resolve_basis(&atoms, &spec).unwrap();
+        let basis = resolve_basis(&atoms, &spec, &(None.into()), false).unwrap();
 
         // Ghost atom has empty basis (keyed by label "GHOST-O")
         assert!(basis.get("GHOST-O").unwrap().basis_data.electron_shells.is_some());

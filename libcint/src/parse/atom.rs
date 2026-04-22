@@ -45,10 +45,31 @@ impl From<String> for Unit {
 }
 
 /// Information about a parsed atom.
+///
+/// Atom is composed by three parts:
+/// - ghost prefix (`GHOST-`, `X-`)
+/// - symbol of element (`O`, `Au`)
+/// - label suffix (e.g., `1`, `@1`, `-1`)
+///
+/// Rules for parsing:
+/// - ghost prefix must start from `GHOST` or `X` (case insensitive), and then
+///   non-alphanumeric character.
+/// - label suffix must be non-alpha (can be numeric).
+/// - special case: if raw input is pure numeric, treat it as atomic number
+///   (e.g., `1` → `H`).
+///
+/// For basis parsing, there are three levels:
+/// - label: the raw input string (e.g., `GHOST-O@1`)
+/// - identifier: the symbol without ghost prefix (e.g., `O@1`)
+/// - symbol: the pure element symbol without label suffix (e.g., `O`)
 #[derive(Debug, Clone, PartialEq)]
 pub struct AtomInfo {
-    /// Raw symbol/label from input (e.g., "H", "H1", "GHOST-O", "O@2").
+    /// Raw input string for this atom (e.g., "H1", "ghost-O@2").
+    pub raw: String,
+    /// Uppercase symbol/label from input (e.g., "H", "H1", "GHOST-O", "O@2").
     pub label: String,
+    /// Element symbol with ghost prefix removed (e.g., "H1", "O@2").
+    pub identifier: String,
     /// Element symbol without label suffix (e.g., "H", "O").
     pub symbol: String,
     /// Atomic number (Z). 0 for ghost atoms.
@@ -61,59 +82,51 @@ pub struct AtomInfo {
 
 impl AtomInfo {
     /// Create a new AtomInfo from symbol and coordinates.
-    pub fn new(symbol: &str, coords: [f64; 3], unit: Unit) -> Result<Self, CIntError> {
-        let (parsed_symbol, is_ghost) = parse_atom_symbol(symbol);
-        let charge = if is_ghost { 0.0 } else { symbol_to_charge(&parsed_symbol)? as f64 };
+    pub fn new(raw: &str, coords: [f64; 3], unit: Unit) -> Result<Self, CIntError> {
+        let (label, identifier, symbol, is_ghost) = parse_atom_symbol(raw)?;
+        let charge = if is_ghost { 0.0 } else { symbol_to_charge(&symbol)? as f64 };
         let coords_bohr =
             if unit == Unit::Angstrom { [coords[0] * ANG_TO_BOHR, coords[1] * ANG_TO_BOHR, coords[2] * ANG_TO_BOHR] } else { coords };
-        Ok(AtomInfo { label: symbol.to_string(), symbol: parsed_symbol, charge, is_ghost, coords: coords_bohr })
+        Ok(AtomInfo { raw: raw.to_string(), label, identifier, symbol, charge, is_ghost, coords: coords_bohr })
     }
 }
 
 /// Parse atom symbol, extracting element symbol and ghost status.
 ///
-/// Handles formats:
-/// - `H`, `O`, `C` → ("H", false)
-/// - `H1`, `H2`, `O@1` → ("H", false)
-/// - `GHOST-H`, `GHOST_O` → ("H", true)
-/// - `X-H`, `X_O` → ("H", true)
-/// - `H@`, `O@` (trailing @) → ("H", true)
-pub(crate) fn parse_atom_symbol(s: &str) -> (String, bool) {
-    let s_trimmed = s.trim();
-    let s_upper = s_trimmed.to_uppercase();
+/// Output will be (label, identifier, symbol, is_ghost).
+///
+/// Will raise if symbol not found in atom list.
+pub fn parse_atom_symbol(raw: &str) -> Result<(String, String, String, bool), CIntError> {
+    let label = raw.trim().to_ascii_uppercase();
 
-    // Check for ghost atom markers: GHOST-H, GHOST_O, ghost.H, etc.
-    if let Some(rest_upper) = s_upper.strip_prefix("GHOST") {
-        let rest = rest_upper.trim_start_matches(['-', '_', '.']);
-        let (symbol, _) = parse_atom_symbol(rest);
-        return (symbol, true);
+    // handle special case of pure numeric label, convert to symbol
+    if let Ok(z) = label.parse::<i32>() {
+        let sym = charge_to_symbol(z)?;
+        return Ok((sym.clone(), sym.clone(), sym, false));
     }
 
-    // Check for X-H, X_O ghost markers
-    if s_upper.strip_prefix("X-").is_some() || s_upper.strip_prefix("X_").is_some() {
-        let rest = s_trimmed[2..].trim();
-        let (symbol, _) = parse_atom_symbol(rest);
-        return (symbol, true);
-    }
+    // follow the instruction of docstring of `AtomInfo`
+    // ghost-Au@1
+    // GHOST-AU@1 -> label
+    //       AU@1 -> identifier
+    //       AU   -> symbol
 
-    // Check for trailing @ (ghost marker): H@, O@
-    if let Some(rest) = s_trimmed.strip_suffix('@') {
-        // Avoid double @@ (not ghost marker)
-        if !rest.ends_with('@') {
-            let (symbol, _) = parse_atom_symbol(rest);
-            return (symbol, true);
-        }
-    }
+    // check and remove ghost prefix
+    let (identifier, is_ghost) = if let Some(stripped) = label.strip_prefix("GHOST") {
+        (stripped.trim_start_matches(|c: char| !c.is_alphanumeric()), true)
+    } else if let Some(stripped) = label.strip_prefix("X") {
+        (stripped.trim_start_matches(|c: char| !c.is_alphanumeric()), true)
+    } else {
+        (label.as_str(), false)
+    };
 
-    // Extract pure element symbol: strip digits and @ suffixes
-    // H1 → H, H2 → H, O@1 → O, Au1 → Au
-    let symbol = s_trimmed
-        .trim_end_matches(|c: char| c.is_ascii_digit())
-        .trim_end_matches('@')
-        .trim_end_matches(|c: char| c.is_ascii_digit())
-        .to_string();
+    // remove label suffix to get symbol
+    let symbol = identifier.trim_end_matches(|c: char| !c.is_alphabetic()).to_string();
 
-    (symbol, false)
+    // check symbol in periodic table
+    let _ = symbol_to_charge(&symbol)?;
+
+    Ok((label.to_string(), identifier.to_string(), symbol, is_ghost))
 }
 
 /// Get atomic number from element symbol using bse lookup.
@@ -168,14 +181,7 @@ fn parse_atom_line(line: &str, default_unit: Unit) -> Result<AtomInfo, CIntError
     }
 
     // Parse symbol (could be numeric charge)
-    let symbol = parts[0];
-    let (parsed_symbol, is_ghost) = if let Ok(z) = symbol.parse::<i32>() {
-        // Numeric charge: convert to symbol
-        let sym = charge_to_symbol(z)?;
-        (sym, false)
-    } else {
-        parse_atom_symbol(symbol)
-    };
+    let raw = parts[0];
 
     // Parse coordinates with explicit error conversion
     let x: f64 = parse_float(parts[1], "x coordinate")?;
@@ -193,12 +199,7 @@ fn parse_atom_line(line: &str, default_unit: Unit) -> Result<AtomInfo, CIntError
         default_unit
     };
 
-    // Convert to Bohr if necessary
-    let coords_bohr = if unit == Unit::Angstrom { [x * ANG_TO_BOHR, y * ANG_TO_BOHR, z * ANG_TO_BOHR] } else { [x, y, z] };
-
-    let charge = if is_ghost { 0.0 } else { symbol_to_charge(&parsed_symbol)? as f64 };
-
-    Ok(AtomInfo { label: symbol.to_string(), symbol: parsed_symbol, charge, is_ghost, coords: coords_bohr })
+    AtomInfo::new(raw, [x, y, z], unit)
 }
 
 /// Parse z-matrix format coordinates.
@@ -229,11 +230,7 @@ pub fn parse_zmatrix(s: &str, unit: Unit) -> Result<Vec<AtomInfo>, CIntError> {
     let atoms: Vec<AtomInfo> = labels
         .iter()
         .zip(coords.iter())
-        .map(|(label, coord)| {
-            let (parsed_symbol, is_ghost) = parse_atom_symbol(label);
-            let charge = if is_ghost { 0.0 } else { symbol_to_charge(&parsed_symbol)? as f64 };
-            Ok(AtomInfo { label: label.clone(), symbol: parsed_symbol, charge, is_ghost, coords: *coord })
-        })
+        .map(|(label, coord)| AtomInfo::new(label, *coord, unit))
         .collect::<Result<Vec<AtomInfo>, CIntError>>()?;
 
     Ok(atoms)
@@ -756,15 +753,15 @@ mod tests_llm_assist {
 
     #[test]
     fn test_parse_atom_symbol() {
-        assert_eq!(parse_atom_symbol("H"), ("H".to_string(), false));
-        assert_eq!(parse_atom_symbol("H1"), ("H".to_string(), false));
-        assert_eq!(parse_atom_symbol("O@2"), ("O".to_string(), false));
-        assert_eq!(parse_atom_symbol("GHOST-H"), ("H".to_string(), true));
-        assert_eq!(parse_atom_symbol("GHOST_O"), ("O".to_string(), true));
-        assert_eq!(parse_atom_symbol("X-H"), ("H".to_string(), true));
-        assert_eq!(parse_atom_symbol("X_O"), ("O".to_string(), true));
-        assert_eq!(parse_atom_symbol("H@"), ("H".to_string(), true));
-        assert_eq!(parse_atom_symbol("Au1"), ("Au".to_string(), false));
+        assert_eq!(parse_atom_symbol("H").unwrap(), ("H".to_string(), "H".to_string(), "H".to_string(), false));
+        assert_eq!(parse_atom_symbol("H1").unwrap(), ("H1".to_string(), "H1".to_string(), "H".to_string(), false));
+        assert_eq!(parse_atom_symbol("O@2").unwrap(), ("O@2".to_string(), "O@2".to_string(), "O".to_string(), false));
+        assert_eq!(parse_atom_symbol("GHOST-H").unwrap(), ("GHOST-H".to_string(), "H".to_string(), "H".to_string(), true));
+        assert_eq!(parse_atom_symbol("GHOST_O").unwrap(), ("GHOST_O".to_string(), "O".to_string(), "O".to_string(), true));
+        assert_eq!(parse_atom_symbol("X-H").unwrap(), ("X-H".to_string(), "H".to_string(), "H".to_string(), true));
+        assert_eq!(parse_atom_symbol("X_O").unwrap(), ("X_O".to_string(), "O".to_string(), "O".to_string(), true));
+        assert_eq!(parse_atom_symbol("H@").unwrap(), ("H@".to_string(), "H@".to_string(), "H".to_string(), false));
+        assert_eq!(parse_atom_symbol("Au1").unwrap(), ("AU1".to_string(), "AU1".to_string(), "AU".to_string(), false));
     }
 
     #[test]

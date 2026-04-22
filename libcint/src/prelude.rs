@@ -33,6 +33,7 @@ pub(crate) use rstsr_common::prelude::*;
 pub(crate) use serde::{Deserialize, Serialize};
 pub(crate) use std::any::Any;
 pub(crate) use std::backtrace::Backtrace;
+pub(crate) use std::collections::{BTreeMap, HashMap};
 pub(crate) use std::error::Error;
 pub(crate) use std::ffi::{c_int, c_void};
 pub(crate) use std::fmt::{Debug, Display, Write};

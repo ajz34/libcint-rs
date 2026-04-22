@@ -22,14 +22,14 @@
 //! ```
 
 use crate::parse::atom::{parse_atom_string, parse_zmatrix, AtomInfo, Unit};
-use crate::parse::basis::{resolve_basis, BasisElement, BasisSpec};
+use crate::parse::basis::{resolve_basis, BasisElement, BasisInput, BasisSpec};
 use crate::prelude::*;
-use std::collections::HashMap;
 
 /// Builder for creating CIntMol molecule object.
 ///
 /// Similar to PySCF's `gto.Mole`, this struct collects input parameters
 /// and generates a `CInt` instance through the `build()` method.
+#[non_exhaustive]
 #[derive(Debug, Clone, Builder, Default)]
 #[builder(pattern = "owned", build_fn(error = "CIntError"), default)]
 pub struct CIntMolInput {
@@ -39,12 +39,18 @@ pub struct CIntMolInput {
     /// Basis set specification.
     #[builder(setter(into))]
     pub basis: BasisSpec,
+    /// ECP specification (optional).
+    #[builder(setter(into), default = "BasisSpec::Uniform(BasisInput::None)")]
+    pub ecp: BasisSpec,
     /// Unit of coordinates (Angstrom or Bohr).
     #[builder(setter(into), default = "Unit::Angstrom")]
     pub unit: Unit,
     /// Use cartesian basis (default: spherical).
     #[builder(default = "false")]
     pub cart: bool,
+    /// Whether to assign ECP to ghost atoms (default: false).
+    #[builder(default = "false")]
+    pub ghost_ecp: bool,
 }
 
 /// Built molecule object containing parsed atoms and CInt instance.
@@ -55,9 +61,7 @@ pub struct CIntMol {
     /// Resolved basis elements for each atom.
     ///
     /// This is label-basis mapping.
-    pub basis_elements: HashMap<String, BasisElement>,
-    /// ECP electrons for each atom.
-    pub ecp_electrons: HashMap<usize, i32>,
+    pub basis_elements: BTreeMap<String, BasisElement>,
     /// Generated CInt instance for integral calculations.
     pub cint: CInt,
 }
@@ -73,24 +77,13 @@ impl CIntMolInput {
         }
 
         // 2. Resolve basis for each atom
-        let basis_elements = resolve_basis(&atoms, &self.basis)?;
+        let basis_elements = resolve_basis(&atoms, &self.basis, &self.ecp, self.ghost_ecp)?;
 
-        // 3. Resolve ECP
-        let ecp_electrons = atoms
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, atom)| basis_elements[&atom.label].basis_data.ecp_electrons.map(|n| (idx, n)))
-            .filter_map(|(idx, n)| (n > 0).then_some((idx, n)))
-            .collect();
-
-        // 4. Generate CInt arrays
+        // 3. Generate CInt arrays
         let cint_type = if self.cart { CIntType::Cartesian } else { CIntType::Spheric };
-        let (atm, bas, env, ecpbas) = generate_cint_arrays(&atoms, &basis_elements, &ecp_electrons, cint_type)?;
+        let cint = generate_cint_arrays(&atoms, &basis_elements, cint_type)?;
 
-        // 5. Create CInt instance
-        let cint = CInt { atm, bas, env, ecpbas, cint_type };
-
-        Ok(CIntMol { atoms, basis_elements, ecp_electrons, cint })
+        Ok(CIntMol { atoms, basis_elements, cint })
     }
 
     /// Build the CIntMol object (infallible version, panics on error).
@@ -109,7 +102,7 @@ impl CIntMolInput {
                     let msg =
                         format!("Failed to parse atoms:\n- Atom string error: {:?}\n- Z-matrix error: {:?}", e_atom.kind, e_zmat.kind);
                     let trace_msg = format!(
-                        "Backtrace for atom parsing:\n- Atom string error: {:?}\n- Z-matrix error: {:?}",
+                        "Backtrace for atom parsing:\n- Atom string error:\n{:?}\n- Z-matrix error:\n{:?}",
                         e_atom.backtrace, e_zmat.backtrace
                     );
                     cint_raise!(ParseError, "{msg}\n======\n{trace_msg}")
@@ -122,10 +115,9 @@ impl CIntMolInput {
 /// Generate CInt arrays from parsed atoms and basis data.
 fn generate_cint_arrays(
     atoms: &[AtomInfo],
-    basis_elements: &HashMap<String, BasisElement>,
-    ecp_electrons: &HashMap<usize, i32>,
+    basis_elements: &BTreeMap<String, BasisElement>,
     cint_type: CIntType,
-) -> Result<(Vec<[c_int; 6]>, Vec<[c_int; 8]>, Vec<f64>, Vec<[c_int; 8]>), CIntError> {
+) -> Result<CInt, CIntError> {
     let mut atm: Vec<[c_int; 6]> = Vec::new();
     let mut bas: Vec<[c_int; 8]> = Vec::new();
     let mut env: Vec<f64> = Vec::new();
@@ -138,9 +130,9 @@ fn generate_cint_arrays(
     // Generate _atm and coordinates
     // Note: PySCF uses 4 slots per atom: x, y, z coordinates + zeta slot (for
     // nuclear model)
-    for (idx, atom) in atoms.iter().enumerate() {
+    for atom in atoms.iter() {
         // Get ECP electrons for this atom
-        let ecp_core = ecp_electrons.get(&idx).copied().unwrap_or(0);
+        let ecp_core = basis_elements.get(&atom.label).and_then(|be| be.basis_data.ecp_electrons).unwrap_or(0);
 
         // Calculate effective charge (nuclear charge minus ECP core electrons)
         let effective_charge = atom.charge - ecp_core as f64;
@@ -248,7 +240,7 @@ fn generate_cint_arrays(
 
     // Generate _ecpbas for atoms with ECP
     for (idx, atom) in atoms.iter().enumerate() {
-        let ecp_core = ecp_electrons.get(&idx).copied().unwrap_or(0);
+        let ecp_core = basis_elements.get(&atom.label).and_then(|be| be.basis_data.ecp_electrons).unwrap_or(0);
         if ecp_core == 0 {
             continue;
         }
@@ -302,7 +294,13 @@ fn generate_cint_arrays(
         }
     }
 
-    Ok((atm, bas, env, ecpbas))
+    let mut cint = CInt::new();
+    cint.atm = atm;
+    cint.bas = bas;
+    cint.env = env;
+    cint.ecpbas = ecpbas;
+    cint.cint_type = cint_type;
+    Ok(cint)
 }
 
 /// Normalize shell coefficients to match PySCF convention exactly.
