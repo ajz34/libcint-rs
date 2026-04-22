@@ -63,8 +63,6 @@ pub struct CIntMol {
     ///
     /// This is label-basis mapping.
     pub basis_elements: IndexMap<String, BseBasisElement>,
-    /// Map of atom labels to their corresponding basis element indices.
-    pub atom_basis_map: Vec<String>,
     /// Generated CInt instance for integral calculations.
     pub cint: CInt,
 }
@@ -92,7 +90,7 @@ impl CIntMolInput {
         let has_ecp = basis_elements.values().any(|b| b.ecp_electrons.is_some() && b.ecp_potentials.is_some());
         let cint = if has_ecp { make_ecp_env(cint, &atoms, &basis_elements, &atom_basis_map)? } else { cint };
 
-        Ok(CIntMol { atoms, basis_elements, atom_basis_map, cint })
+        Ok(CIntMol { atoms, basis_elements, cint })
     }
 
     /// Build the CIntMol object (infallible version, panics on error).
@@ -169,20 +167,6 @@ fn make_bas_env(basis: &BseBasisElement, atom_id: usize, ptr: usize) -> (Vec<[i3
 
             let nprim = exponents.len() as i32;
             let nctr = coefficients.len() as i32 / nprim;
-
-            // first sort exponents, and the corresponding coefficients, by exponent value
-            // (decending)
-            let mut sort_indices: Vec<usize> = (0..exponents.len()).collect();
-            sort_indices.sort_by(|&i, &j| exponents[j].partial_cmp(&exponents[i]).unwrap());
-            let exponents: Vec<f64> = sort_indices.iter().map(|&i| exponents[i]).collect();
-            let coefficients: Vec<f64> = sort_indices
-                .iter()
-                .flat_map(|&i| {
-                    let start = i * nctr as usize;
-                    let end = start + nctr as usize;
-                    coefficients[start..end].to_vec()
-                })
-                .collect();
 
             // Normalize coefficients to match PySCF convention
             let normalized_coeffs = normalize_shell(l, &exponents, &coefficients);
@@ -290,10 +274,10 @@ fn make_ecp_env(
                 let mut sort_indices: Vec<usize> = (0..exponents.len()).collect();
                 sort_indices.sort_by(|&i, &j| exponents[j].partial_cmp(&exponents[i]).unwrap());
 
-                let sorted_exps: Vec<f64> = sort_indices.iter().map(|&i| exponents[i]).collect();
-                let sorted_coeffs: Vec<f64> = sort_indices.iter().map(|&i| coefficients[i]).collect();
+                let exponents: Vec<f64> = sort_indices.iter().map(|&i| exponents[i]).collect();
+                let coefficients: Vec<f64> = sort_indices.iter().map(|&i| coefficients[i]).collect();
 
-                let nexp = sorted_exps.len() as i32;
+                let nexp = exponents.len() as i32;
 
                 // Determine radial power (r_exponents should be same for all terms in most
                 // cases)
@@ -301,13 +285,13 @@ fn make_ecp_env(
 
                 // Add exponents to env
                 let ptr_exp = ptr as i32;
-                cint.env.extend(&sorted_exps);
-                ptr += sorted_exps.len();
+                cint.env.extend(&exponents);
+                ptr += exponents.len();
 
                 // Add coefficients to env
                 let ptr_coeff = ptr as i32;
-                cint.env.extend(&sorted_coeffs);
-                ptr += sorted_coeffs.len();
+                cint.env.extend(&coefficients);
+                ptr += coefficients.len();
 
                 // Create ecpbas entry: [atom_id, l, nexp, rorder, so_type, ptr_exp, ptr_coeff,
                 // 0] atom_id will be filled later when iterating through atoms
@@ -373,8 +357,8 @@ fn normalize_shell(l: i32, exponents: &[f64], coefficients: &[f64]) -> Vec<f64> 
     // prim j
     let prim_normalized: Vec<f64> = (0..nprim * nctr)
         .map(|idx| {
-            let i = idx % nctr; // contraction index
-            let j = idx / nctr; // primitive index
+            let i = idx / nprim; // contraction index
+            let j = idx % nprim; // primitive index
             coefficients[i * nprim + j] * prim_norms[j]
         })
         .collect();

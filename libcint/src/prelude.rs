@@ -4,6 +4,7 @@ pub use crate::cint::{CInt, CIntKind, CIntOptimizer, CIntOutput, CIntSymm, CIntT
 pub use crate::cint_change::fakemol_for_charges;
 pub use crate::cint_result::{CIntError, CIntErrorBase};
 pub use crate::ffi::wrapper_traits::Integrator;
+pub use crate::parse::mole::{CIntMol, CIntMolInput, CIntMolInputBuilder};
 pub use crate::util::ShlsSlice;
 
 // for doc testing

@@ -2,4 +2,4 @@
 
 pub mod atom;
 pub mod basis;
-pub mod mol;
+pub mod mole;

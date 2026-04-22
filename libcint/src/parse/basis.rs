@@ -3,6 +3,7 @@
 use super::atom;
 use crate::parse::atom::AtomInfo;
 use crate::prelude::*;
+use bse::manip::uncontract_spdf_in_element;
 
 /* #region BasisInput */
 
@@ -78,7 +79,12 @@ impl From<TY> for BasisSpec {
     }
 }
 
-#[duplicate_item(TY; [HashMap<String, T>]; [BTreeMap<String, T>]; [IndexMap<String, T>];)]
+#[duplicate_item(TY;
+    [HashMap<String, T>]; [HashMap<&str, T>];
+    [BTreeMap<String, T>]; [BTreeMap<&str, T>];
+    [IndexMap<String, T>]; [IndexMap<&str, T>];
+    [Vec<(String, T)>]; [Vec<(&str, T)>];
+)]
 impl<T> From<TY> for BasisSpec
 where
     T: Into<BasisInput>,
@@ -148,6 +154,16 @@ pub fn resolve_basis(
             basis_data.ecp_potentials = None;
         }
 
+        // pyscf usually use the uncontract version
+        uncontract_spdf_in_element(&mut basis_data, 0);
+        // follows bse's convention of nwchem, sort shells here
+        if let Some(ref mut electron_shells) = basis_data.electron_shells {
+            bse::sort::sort_shells(electron_shells);
+        }
+        if let Some(ref mut ecp_potentials) = basis_data.ecp_potentials {
+            bse::sort::sort_potentials(ecp_potentials);
+        }
+
         // check if the result have already have this basis (by parsed name), if so,
         // check if the basis data is the same, otherwise raise.
         if let Some(existing) = result.get(&parsed_name) {
@@ -161,7 +177,7 @@ pub fn resolve_basis(
         name_map.insert(atom.label.as_str(), parsed_name);
     }
 
-    // 2. reorder btree with input order
+    // step 2. reorder btree with input order
     // order to be expected: BasisSpec::Dict's keys, then atom labels
     let mut order_guide = vec![];
     if let BasisSpec::Dict(dict) = basis_spec {
