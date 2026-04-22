@@ -24,6 +24,7 @@
 use crate::parse::atom::{parse_atom_string, parse_zmatrix, AtomInfo, Unit};
 use crate::parse::basis::{resolve_basis, BasisInput, BasisSpec};
 use crate::prelude::*;
+use crate::util;
 
 /// Builder for creating CIntMol molecule object.
 ///
@@ -82,8 +83,10 @@ impl CIntMolInput {
         let (basis_elements, atom_basis_map) = resolve_basis(&atoms, &self.basis, &self.ecp, self.ghost_ecp)?;
 
         // 3. Generate CInt arrays
+        const PTR_ENV_START: usize = crate::ffi::cint_ffi::PTR_ENV_START as usize;
+        let pre_env = vec![0.0; PTR_ENV_START]; // reserve env slots
         let cint_type = if self.cart { CIntType::Cartesian } else { CIntType::Spheric };
-        let cint = generate_cint_arrays(&atoms, &basis_elements, cint_type)?;
+        let cint = make_env(&atoms, &basis_elements, &atom_basis_map, cint_type, pre_env)?;
 
         Ok(CIntMol { atoms, basis_elements, atom_basis_map, cint })
     }
@@ -114,185 +117,122 @@ impl CIntMolInput {
     }
 }
 
-/// Generate CInt arrays from parsed atoms and basis data.
-fn generate_cint_arrays(
+/// Add atm and env per atom.
+///
+/// atm fields: (charge, ptr_coord, nuc_mod, ptr_zeta, ptr_frac_charge, 0)
+///
+/// This function currently do not handle the following issues that PySCF do:
+/// - zeta
+/// - nuc_mod (assume NUC_POINT)
+fn make_atm_env(atom: &AtomInfo, ptr: usize) -> ([i32; 6], [f64; 4]) {
+    const CHARGE_OF: usize = crate::ffi::cint_ffi::CHARGE_OF as usize;
+    const PTR_COORD: usize = crate::ffi::cint_ffi::PTR_COORD as usize;
+    const POINT_NUC: i32 = crate::ffi::cint_ffi::POINT_NUC as i32;
+    const NUC_MOD_OF: usize = crate::ffi::cint_ffi::NUC_MOD_OF as usize;
+    const PTR_ZETA: usize = crate::ffi::cint_ffi::PTR_ZETA as usize;
+
+    let nuc_charge = atom.charge;
+    let mut atm = [0; 6];
+    let mut env = [0.0; 4];
+
+    atm[CHARGE_OF] = nuc_charge;
+    atm[PTR_COORD] = ptr as i32;
+    atm[NUC_MOD_OF] = POINT_NUC;
+    atm[PTR_ZETA] = (ptr + 3) as i32;
+
+    env[0..3].copy_from_slice(&atom.coords);
+
+    (atm, env)
+}
+
+/// Add bas and env per atom.
+///
+/// bas fields: (atom_id, l, nprim, nctr, kappa, ptr_exp, ptr_coeff, 0)
+///
+/// This implementation will also absorb normalization into GTO contraction
+/// coefficients, to match PySCF's convention exactly.
+///
+/// This function currently do not handle the following issues that PySCF do:
+/// - kappa for relativistic basis (assume non-relativistic)
+fn make_bas_env(basis: &BseBasisElement, atom_id: usize, ptr: usize) -> (Vec<[i32; 8]>, Vec<f64>) {
+    let mut bas = Vec::new();
+    let mut env = Vec::new();
+
+    basis.electron_shells.as_ref().unwrap().iter().for_each(|shell| {
+        shell.angular_momentum.iter().for_each(|&l| {
+            let exponents: Vec<f64> = shell.exponents.iter().map(|s| s.parse::<f64>().unwrap()).collect();
+            let coefficients: Vec<f64> = shell.coefficients.iter().flatten().map(|s| s.parse::<f64>().unwrap()).collect();
+
+            let nprim = exponents.len() as i32;
+            let nctr = coefficients.len() as i32 / nprim;
+
+            // first sort exponents, and the corresponding coefficients, by exponent value
+            // (decending)
+            let mut sort_indices: Vec<usize> = (0..exponents.len()).collect();
+            sort_indices.sort_by(|&i, &j| exponents[j].partial_cmp(&exponents[i]).unwrap());
+            let exponents: Vec<f64> = sort_indices.iter().map(|&i| exponents[i]).collect();
+            let coefficients: Vec<f64> = sort_indices
+                .iter()
+                .flat_map(|&i| {
+                    let start = i * nctr as usize;
+                    let end = start + nctr as usize;
+                    coefficients[start..end].to_vec()
+                })
+                .collect();
+
+            // Normalize coefficients to match PySCF convention
+            let normalized_coeffs = normalize_shell(l, &exponents, &coefficients);
+
+            // construct bas and env entries
+            let ptr_exp = (ptr + env.len()) as i32;
+            env.extend(exponents);
+            let ptr_coeff = (ptr + env.len()) as i32;
+            env.extend(normalized_coeffs);
+
+            bas.push([atom_id as i32, l, nprim, nctr, 0, ptr_exp, ptr_coeff, 0]);
+        });
+    });
+
+    (bas, env)
+}
+
+fn make_env(
     atoms: &[AtomInfo],
     basis_elements: &IndexMap<String, BseBasisElement>,
+    atom_basis_map: &[String],
     cint_type: CIntType,
+    pre_env: Vec<f64>,
 ) -> Result<CInt, CIntError> {
-    let mut atm: Vec<[c_int; 6]> = Vec::new();
-    let mut bas: Vec<[c_int; 8]> = Vec::new();
-    let mut env: Vec<f64> = Vec::new();
-    let mut ecpbas: Vec<[c_int; 8]> = Vec::new();
+    const ATOM_OF: usize = crate::ffi::cint_ffi::ATOM_OF as usize;
 
-    // Initialize env with placeholder values
-    // Index 0-19: reserved slots (set to 0)
-    env.extend_from_slice(&[0.0; 20]);
+    assert_eq!(atoms.len(), atom_basis_map.len(), "Number of atoms and atom_basis_map entries must match");
 
-    // Generate _atm and coordinates
-    // Note: PySCF uses 4 slots per atom: x, y, z coordinates + zeta slot (for
-    // nuclear model)
+    let mut atm = vec![];
+    let mut bas = vec![];
+    let mut env = pre_env;
+
+    // prepare atom and env
     for atom in atoms.iter() {
-        // Get ECP electrons for this atom
-        let ecp_core = basis_elements.get(&atom.label).and_then(|be| be.ecp_electrons).unwrap_or(0);
-
-        // Calculate effective charge (nuclear charge minus ECP core electrons)
-        let effective_charge = atom.charge - ecp_core as f64;
-
-        // Coordinates already in Bohr from AtomInfo
-        // Layout: [x, y, z, zeta] - 4 slots per atom
-        let coord_start = env.len() as c_int;
-        env.push(atom.coords[0]);
-        env.push(atom.coords[1]);
-        env.push(atom.coords[2]);
-        env.push(0.0); // zeta slot (unused for point nucleus)
-
-        // ptr_zeta = coord_start + 3 (points to the slot after coordinates)
-        let ptr_zeta = coord_start + 3;
-
-        // atm slot: [charge, ptr_coord, nuc_mod, ptr_zeta, ptr_frac_charge, 0]
-        atm.push([effective_charge as c_int, coord_start, 1, ptr_zeta, 0, 0]);
+        let (atm_entry, env_entry) = make_atm_env(atom, env.len());
+        atm.push(atm_entry);
+        env.extend_from_slice(&env_entry);
     }
 
-    // Collect unique element symbols with their basis data
-    // Process in order of appearance in atom list (not alphabetical)
-    // PySCF stores basis data in the order elements appear in the basis dict
-    // Use atom labels for lookup, but track unique elements by symbol
-    let mut unique_elements: Vec<(String, String)> = Vec::new(); // (symbol, first_atom_label)
-    for atom in atoms.iter() {
-        if !unique_elements.iter().any(|(sym, _)| sym == &atom.symbol) {
-            unique_elements.push((atom.symbol.clone(), atom.label.clone()));
-        }
-    }
-    // Do NOT sort alphabetically - keep order of appearance in atom list
-
-    // Pre-generate all basis data for unique elements
-    let mut basis_cache: HashMap<String, Vec<(c_int, c_int, c_int, c_int)>> = HashMap::new();
-
-    for (element_symbol, first_atom_label) in &unique_elements {
-        let basis_elem =
-            basis_elements.get(first_atom_label).ok_or_else(|| cint_error!(ParseError, "No basis for element {}", element_symbol))?;
-
-        if basis_elem.electron_shells.is_none() {
-            continue;
-        }
-
-        let shells = basis_elem.electron_shells.as_ref().unwrap();
-        let mut indices: Vec<(c_int, c_int, c_int, c_int)> = Vec::new();
-
-        for shell in shells {
-            for &l in &shell.angular_momentum {
-                let exponents: Vec<f64> = shell
-                    .exponents
-                    .iter()
-                    .map(|s| s.parse::<f64>())
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| cint_error!(ParseError, "Failed to parse exponents: {}", e))?;
-
-                let nprim = exponents.len() as c_int;
-
-                let coeff_idx = shell.angular_momentum.iter().position(|&am| am == l).unwrap_or(0);
-                let coefficients: Vec<f64> = shell
-                    .coefficients
-                    .get(coeff_idx)
-                    .unwrap_or(&shell.coefficients[0])
-                    .iter()
-                    .map(|s| s.parse::<f64>())
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| cint_error!(ParseError, "Failed to parse coefficients: {}", e))?;
-
-                let nctr = coefficients.len() / nprim as usize;
-                let normalized_coeffs = normalize_shell(l, &exponents, &coefficients);
-
-                let exp_start = env.len() as c_int;
-                env.extend(exponents.iter().cloned());
-
-                let coeff_start = env.len() as c_int;
-                env.extend(normalized_coeffs.iter().cloned());
-
-                indices.push((exp_start, coeff_start, nprim, nctr as c_int));
-            }
-        }
-
-        basis_cache.insert(element_symbol.clone(), indices);
+    // prepare bas and env
+    // env directly write, bas will be paired to atom info
+    let mut basdic = IndexMap::new();
+    for (symb, basis_add) in basis_elements.iter() {
+        let (bas_entries, env_entries) = make_bas_env(basis_add, 0, env.len());
+        basdic.insert(symb.clone(), bas_entries);
+        env.extend_from_slice(&env_entries);
     }
 
-    // Generate _bas for each atom (using pre-generated basis data)
-    for (idx, atom) in atoms.iter().enumerate() {
-        let basis_elem = basis_elements.get(&atom.label).ok_or_else(|| cint_error!(ParseError, "No basis for atom {}", atom.label))?;
-
-        if basis_elem.electron_shells.is_none() {
-            continue;
-        }
-
-        let shells = basis_elem.electron_shells.as_ref().unwrap();
-        let element_symbol = &atom.symbol;
-        let cached_indices =
-            basis_cache.get(element_symbol).ok_or_else(|| cint_error!(ParseError, "No cached basis for element {}", element_symbol))?;
-
-        let mut shell_idx = 0;
-        for shell in shells {
-            for &l in &shell.angular_momentum {
-                let (exp_start, coeff_start, nprim, nctr) = cached_indices[shell_idx];
-                bas.push([idx as c_int, l as c_int, nprim, nctr, 0, exp_start, coeff_start, 0]);
-                shell_idx += 1;
-            }
-        }
-    }
-
-    // Generate _ecpbas for atoms with ECP
-    for (idx, atom) in atoms.iter().enumerate() {
-        let ecp_core = basis_elements.get(&atom.label).and_then(|be| be.ecp_electrons).unwrap_or(0);
-        if ecp_core == 0 {
-            continue;
-        }
-
-        let basis_elem = basis_elements.get(&atom.label).ok_or_else(|| cint_error!(ParseError, "No basis for atom {}", atom.label))?;
-
-        if basis_elem.electron_shells.is_none() {
-            continue;
-        }
-
-        let potentials = basis_elem.ecp_potentials.as_ref().unwrap();
-
-        for potential in potentials {
-            // Each potential can have multiple angular momentants
-            for &l in &potential.angular_momentum {
-                let exponents: Vec<f64> = potential
-                    .gaussian_exponents
-                    .iter()
-                    .map(|s| s.parse::<f64>())
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| cint_error!(ParseError, "Failed to parse ECP exponents: {}", e))?;
-
-                let r_exponents: Vec<i32> = potential.r_exponents.to_vec();
-                let nexp = exponents.len() as c_int;
-
-                // Get coefficients for this angular momentum
-                let coeff_idx = potential.angular_momentum.iter().position(|&am| am == l).unwrap_or(0);
-                let coefficients: Vec<f64> = potential
-                    .coefficients
-                    .get(coeff_idx)
-                    .unwrap_or(&potential.coefficients[0])
-                    .iter()
-                    .map(|s| s.parse::<f64>())
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| cint_error!(ParseError, "Failed to parse ECP coefficients: {}", e))?;
-
-                // Add exponents to env
-                let exp_start = env.len() as c_int;
-                env.extend(exponents.iter().cloned());
-
-                // Add coefficients to env
-                let coeff_start = env.len() as c_int;
-                env.extend(coefficients.iter().cloned());
-
-                // Max r_power for this potential
-                let r_power = r_exponents.iter().max().copied().unwrap_or(0) as c_int;
-
-                // ecpbas slot: [atom_id, l, nexp, r_power, so_type, ptr_exp, ptr_coeff, 0]
-                ecpbas.push([idx as c_int, l as c_int, nexp, r_power, 0, exp_start, coeff_start, 0]);
-            }
+    for (ia, symb) in atom_basis_map.iter().enumerate() {
+        let bas_entries = basdic.get(symb).ok_or_else(|| cint_error!(ParseError, "Basis entry must exist for atom {ia} symbol {symb}"))?;
+        for bas_entry in bas_entries.iter() {
+            let mut bas_entry = *bas_entry;
+            bas_entry[ATOM_OF] = ia as i32;
+            bas.push(bas_entry);
         }
     }
 
@@ -300,7 +240,6 @@ fn generate_cint_arrays(
     cint.atm = atm;
     cint.bas = bas;
     cint.env = env;
-    cint.ecpbas = ecpbas;
     cint.cint_type = cint_type;
     Ok(cint)
 }
@@ -340,7 +279,7 @@ fn normalize_shell(l: i32, exponents: &[f64], coefficients: &[f64]) -> Vec<f64> 
             for k in 0..nprim {
                 let cj = prim_normalized[i * nprim + j];
                 let ck = prim_normalized[i * nprim + k];
-                let ee_jk = gaussian_int(l * 2 + 2, exponents[j] + exponents[k]);
+                let ee_jk = util::gaussian_int((l * 2 + 2) as f64, exponents[j] + exponents[k]);
                 contr_int += cj * ck * ee_jk;
             }
         }
@@ -355,15 +294,8 @@ fn normalize_shell(l: i32, exponents: &[f64], coefficients: &[f64]) -> Vec<f64> 
     normalized
 }
 
-/// Calculate gaussian_int(n, alpha) following PySCF's formula exactly.
-/// gaussian_int(n, alpha) = gamma((n+1)/2) / (2 * alpha^((n+1)/2))
-fn gaussian_int(n: i32, alpha: f64) -> f64 {
-    let n1 = (n + 1) as f64 * 0.5;
-    libm::tgamma(n1) / (2.0 * alpha.powf(n1))
-}
-
 /// Calculate GTO normalization factor following PySCF's formula.
 /// gto_norm(l, exp) = 1/sqrt(gaussian_int(l*2+2, 2*exp))
 fn gto_norm(l: i32, exp: f64) -> f64 {
-    1.0 / gaussian_int(l * 2 + 2, 2.0 * exp).sqrt()
+    1.0 / util::gaussian_int((l * 2 + 2) as f64, 2.0 * exp).sqrt()
 }

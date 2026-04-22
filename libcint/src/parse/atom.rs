@@ -73,7 +73,7 @@ pub struct AtomInfo {
     /// Element symbol without label suffix (e.g., "H", "O").
     pub symbol: String,
     /// Atomic number (Z). 0 for ghost atoms.
-    pub charge: f64,
+    pub charge: i32,
     /// Whether this is a ghost atom.
     pub is_ghost: bool,
     /// Cartesian coordinates in Bohr.
@@ -84,7 +84,7 @@ impl AtomInfo {
     /// Create a new AtomInfo from symbol and coordinates.
     pub fn new(raw: &str, coords: [f64; 3], unit: Unit) -> Result<Self, CIntError> {
         let (label, identifier, symbol, is_ghost) = parse_atom_symbol(raw)?;
-        let charge = if is_ghost { 0.0 } else { symbol_to_charge(&symbol)? as f64 };
+        let charge = if is_ghost { 0 } else { symbol_to_charge(&symbol)? };
         let coords_bohr =
             if unit == Unit::Angstrom { [coords[0] * ANG_TO_BOHR, coords[1] * ANG_TO_BOHR, coords[2] * ANG_TO_BOHR] } else { coords };
         Ok(AtomInfo { raw: raw.to_string(), label, identifier, symbol, charge, is_ghost, coords: coords_bohr })
@@ -777,11 +777,11 @@ mod tests_llm_assist {
         let atoms = parse_atom_string("H 0 0 0; O 0 0 1.2", Unit::Angstrom).unwrap();
         assert_eq!(atoms.len(), 2);
         assert_eq!(atoms[0].symbol, "H");
-        assert_eq!(atoms[0].charge, 1.0);
+        assert_eq!(atoms[0].charge, 1);
         assert_relative_eq!(atoms[0].coords[2], 0.0);
 
         assert_eq!(atoms[1].symbol, "O");
-        assert_eq!(atoms[1].charge, 8.0);
+        assert_eq!(atoms[1].charge, 8);
         assert_relative_eq!(atoms[1].coords[2], 1.2 * ANG_TO_BOHR);
     }
 
@@ -791,7 +791,7 @@ mod tests_llm_assist {
         assert_eq!(atoms.len(), 2);
         assert!(!atoms[0].is_ghost);
         assert!(atoms[1].is_ghost);
-        assert_eq!(atoms[1].charge, 0.0);
+        assert_eq!(atoms[1].charge, 0);
     }
 
     #[test]
@@ -800,31 +800,31 @@ mod tests_llm_assist {
         let atoms1 = parse_atom_string("GHOST-O 0 0 1.2", Unit::Angstrom).unwrap();
         assert_eq!(atoms1.len(), 1);
         assert!(atoms1[0].is_ghost);
-        assert_eq!(atoms1[0].charge, 0.0);
+        assert_eq!(atoms1[0].charge, 0);
 
         // Test ghost atom with real atom (two atoms)
         let atoms2 = parse_atom_string("GHOST-O 0 0 1.2; O 0 0 0", Unit::Angstrom).unwrap();
         assert_eq!(atoms2.len(), 2);
         assert!(atoms2[0].is_ghost);
         assert!(!atoms2[1].is_ghost);
-        assert_eq!(atoms2[0].charge, 0.0);
-        assert_eq!(atoms2[1].charge, 8.0);
+        assert_eq!(atoms2[0].charge, 0);
+        assert_eq!(atoms2[1].charge, 8);
 
         // Test X_H format
         let atoms3 = parse_atom_string("X_H 0 0 1; H 0 0 0", Unit::Angstrom).unwrap();
         assert_eq!(atoms3.len(), 2);
         assert!(atoms3[0].is_ghost);
         assert!(!atoms3[1].is_ghost);
-        assert_eq!(atoms3[0].charge, 0.0);
-        assert_eq!(atoms3[1].charge, 1.0);
+        assert_eq!(atoms3[0].charge, 0);
+        assert_eq!(atoms3[1].charge, 1);
 
         // Test ghost.H format (lowercase with dot separator)
         let atoms4 = parse_atom_string("ghost.H 0 0 1; H 0 0 0", Unit::Angstrom).unwrap();
         assert_eq!(atoms4.len(), 2);
         assert!(atoms4[0].is_ghost);
         assert!(!atoms4[1].is_ghost);
-        assert_eq!(atoms4[0].charge, 0.0);
-        assert_eq!(atoms4[1].charge, 1.0);
+        assert_eq!(atoms4[0].charge, 0);
+        assert_eq!(atoms4[1].charge, 1);
 
         // Test multiple ghost atoms
         let atoms5 = parse_atom_string("GHOST-O 0 0 0; X_H 0 0 1; ghost.H 0 0 2; O 0 0 3; H 0 0 4; H 0 0 5", Unit::Angstrom).unwrap();
@@ -843,7 +843,7 @@ mod tests_llm_assist {
         let atoms = parse_atom_string("ghost.H 0 0 1", Unit::Angstrom).unwrap();
         assert_eq!(atoms.len(), 1);
         assert!(atoms[0].is_ghost);
-        assert_eq!(atoms[0].charge, 0.0);
+        assert_eq!(atoms[0].charge, 0);
         assert_eq!(atoms[0].symbol, "H");
     }
 
