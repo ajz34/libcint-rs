@@ -88,6 +88,10 @@ impl CIntMolInput {
         let cint_type = if self.cart { CIntType::Cartesian } else { CIntType::Spheric };
         let cint = make_env(&atoms, &basis_elements, &atom_basis_map, cint_type, pre_env)?;
 
+        // 4. Add ECP data if any atom has ECP
+        let has_ecp = basis_elements.values().any(|b| b.ecp_electrons.is_some() && b.ecp_potentials.is_some());
+        let cint = if has_ecp { make_ecp_env(cint, &atoms, &basis_elements, &atom_basis_map)? } else { cint };
+
         Ok(CIntMol { atoms, basis_elements, atom_basis_map, cint })
     }
 
@@ -198,7 +202,7 @@ fn make_bas_env(basis: &BseBasisElement, atom_id: usize, ptr: usize) -> (Vec<[i3
 
 fn make_env(
     atoms: &[AtomInfo],
-    basis_elements: &IndexMap<String, BseBasisElement>,
+    basis_dict: &IndexMap<String, BseBasisElement>,
     atom_basis_map: &[String],
     cint_type: CIntType,
     pre_env: Vec<f64>,
@@ -221,7 +225,7 @@ fn make_env(
     // prepare bas and env
     // env directly write, bas will be paired to atom info
     let mut basdic = IndexMap::new();
-    for (symb, basis_add) in basis_elements.iter() {
+    for (symb, basis_add) in basis_dict.iter() {
         let (bas_entries, env_entries) = make_bas_env(basis_add, 0, env.len());
         basdic.insert(symb.clone(), bas_entries);
         env.extend_from_slice(&env_entries);
@@ -241,6 +245,116 @@ fn make_env(
     cint.bas = bas;
     cint.env = env;
     cint.cint_type = cint_type;
+    Ok(cint)
+}
+
+fn make_ecp_env(
+    mut cint: CInt,
+    atoms: &[AtomInfo],
+    basis_dict: &IndexMap<String, BseBasisElement>,
+    atom_basis_map: &[String],
+) -> Result<CInt, CIntError> {
+    const CHARGE_OF: usize = crate::ffi::cint_ffi::CHARGE_OF as usize;
+    const NUC_MOD_OF: usize = crate::ffi::cint_ffi::NUC_MOD_OF as usize;
+    const ATOM_OF: usize = crate::ffi::cint_ffi::ATOM_OF as usize;
+    const NUC_ECP: i32 = 4; // atoms with pseudo potential
+
+    let mut ecpbas: Vec<[i32; 8]> = Vec::new();
+    let ptr_env = cint.env.len();
+
+    // Build ECP dictionary: label -> (nelec, ecpbas_entries)
+    let mut ecpdic: IndexMap<String, (i32, Vec<[i32; 8]>)> = IndexMap::new();
+    let mut ptr = ptr_env;
+
+    for (symb, basis_add) in basis_dict.iter() {
+        // Skip if no ECP potentials
+        if basis_add.ecp_electrons.is_none() || basis_add.ecp_potentials.is_none() {
+            continue;
+        }
+
+        let nelec = basis_add.ecp_electrons.unwrap();
+        let potentials = basis_add.ecp_potentials.as_ref().unwrap();
+        let mut ecp0: Vec<[i32; 8]> = Vec::new();
+
+        for potential in potentials.iter() {
+            // Get angular momentum (usually one value)
+            for &l in potential.angular_momentum.iter() {
+                // Parse exponents and coefficients
+                let exponents: Vec<f64> = potential.gaussian_exponents.iter().map(|s| s.parse::<f64>().unwrap()).collect();
+                let coefficients: Vec<f64> = potential.coefficients.iter().flatten().map(|s| s.parse::<f64>().unwrap()).collect();
+
+                // Check for SO-ECP (if coefficients array has more than 1 inner vec)
+                let has_so_ecp = potential.coefficients.len() > 1;
+
+                // Sort by exponent (descending), similar to PySCF
+                let mut sort_indices: Vec<usize> = (0..exponents.len()).collect();
+                sort_indices.sort_by(|&i, &j| exponents[j].partial_cmp(&exponents[i]).unwrap());
+
+                let sorted_exps: Vec<f64> = sort_indices.iter().map(|&i| exponents[i]).collect();
+                let sorted_coeffs: Vec<f64> = sort_indices.iter().map(|&i| coefficients[i]).collect();
+
+                let nexp = sorted_exps.len() as i32;
+
+                // Determine radial power (r_exponents should be same for all terms in most
+                // cases)
+                let rorder = if potential.r_exponents.is_empty() { 0 } else { potential.r_exponents[0] };
+
+                // Add exponents to env
+                let ptr_exp = ptr as i32;
+                cint.env.extend(&sorted_exps);
+                ptr += sorted_exps.len();
+
+                // Add coefficients to env
+                let ptr_coeff = ptr as i32;
+                cint.env.extend(&sorted_coeffs);
+                ptr += sorted_coeffs.len();
+
+                // Create ecpbas entry: [atom_id, l, nexp, rorder, so_type, ptr_exp, ptr_coeff,
+                // 0] atom_id will be filled later when iterating through atoms
+                // so_type = 0 for scalar ECP
+                ecp0.push([0, l, nexp, rorder, 0, ptr_exp, ptr_coeff, 0]);
+
+                // Handle SO-ECP: add second ecpbas entry for SO part
+                if has_so_ecp {
+                    // For SO-ECP, coefficients has multiple inner vecs
+                    // The first inner vec is scalar, subsequent are SO
+                    let so_coeffs: Vec<f64> = potential.coefficients.iter().skip(1).flatten().map(|s| s.parse::<f64>().unwrap()).collect();
+                    let sorted_so_coeffs: Vec<f64> = sort_indices.iter().map(|&i| so_coeffs[i]).collect();
+
+                    let ptr_so_coeff = ptr as i32;
+                    cint.env.extend(&sorted_so_coeffs);
+                    ptr += sorted_so_coeffs.len();
+
+                    // so_type = 1 for SO-ECP
+                    ecp0.push([0, l, nexp, rorder, 1, ptr_exp, ptr_so_coeff, 0]);
+                }
+            }
+        }
+
+        ecpdic.insert(symb.clone(), (nelec, ecp0));
+    }
+
+    // Apply ECP to atoms
+    if !ecpdic.is_empty() {
+        for (ia, symb) in atom_basis_map.iter().enumerate() {
+            // Check if this atom's basis has ECP
+            if let Some((nelec, ecp_entries)) = ecpdic.get(symb) {
+                // Modify atm entry
+                let original_charge = atoms[ia].charge;
+                cint.atm[ia][CHARGE_OF] = original_charge - *nelec;
+                cint.atm[ia][NUC_MOD_OF] = NUC_ECP;
+
+                // Add ecpbas entries with correct atom_id
+                for ecp_entry in ecp_entries.iter() {
+                    let mut ecp_entry = *ecp_entry;
+                    ecp_entry[ATOM_OF] = ia as i32;
+                    ecpbas.push(ecp_entry);
+                }
+            }
+        }
+    }
+
+    cint.ecpbas = ecpbas;
     Ok(cint)
 }
 
