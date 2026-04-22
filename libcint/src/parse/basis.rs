@@ -3,7 +3,6 @@
 use super::atom;
 use crate::parse::atom::AtomInfo;
 use crate::prelude::*;
-use bse::prelude::*;
 
 /* #region BasisInput */
 
@@ -52,10 +51,16 @@ impl From<Option<String>> for BasisInput {
 
 /* #region BasisSpec */
 
+/// Specification for basis sets, which can be uniform (same for all atoms), a
+/// dict mapping atom labels to basis, or a list of basis inputs to try in
+/// order.
+///
+/// Please note for dict basis, the keys must be uppercase (`AU` instead of
+/// `Au`) to be matched.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BasisSpec {
     Uniform(BasisInput),
-    Dict(BTreeMap<String, BasisInput>),
+    Dict(IndexMap<String, BasisInput>),
     List(Vec<BasisInput>),
 }
 
@@ -73,13 +78,13 @@ impl From<TY> for BasisSpec {
     }
 }
 
-#[duplicate_item(TY; [HashMap<String, T>]; [BTreeMap<String, T>];)]
+#[duplicate_item(TY; [HashMap<String, T>]; [BTreeMap<String, T>]; [IndexMap<String, T>];)]
 impl<T> From<TY> for BasisSpec
 where
     T: Into<BasisInput>,
 {
     fn from(map: TY) -> Self {
-        let dict = map.into_iter().map(|(k, v)| (k, v.into())).collect();
+        let dict = map.into_iter().map(|(k, v)| (k.to_ascii_uppercase(), v.into())).collect();
         BasisSpec::Dict(dict)
     }
 }
@@ -96,46 +101,45 @@ where
 
 /* #endregion */
 
-/// Resolved basis element for a specific atom.
-#[derive(Debug, Clone, PartialEq)]
-pub struct BasisElement {
-    /// Element symbol (e.g., "H", "O").
-    pub symbol: String,
-    /// Atomic number.
-    pub charge: f64,
-    /// Basis set data of BSE format.
-    pub basis_data: BseBasisElement,
-}
-
 /// Resolve basis sets for a list of atoms.
 ///
 /// # Arguments
-/// * `atoms` - List of parsed atom information
-/// * `basis_spec` - Basis set specification
+/// - `atoms`: List of parsed atom information
+/// - `basis_spec`: Basis set specification
+/// - `ecp_spec`: ECP specification (same format as basis_spec)
+/// - `ghost_ecp`: Whether to assign ECP to ghost atoms (default: false)
 ///
 /// # Returns
-/// HashMap mapping atom label to resolved BasisElement.
+/// - A mapping from atom labels to resolved basis elements
 pub fn resolve_basis(
     atoms: &[AtomInfo],
     basis_spec: &BasisSpec,
     ecp_spec: &BasisSpec,
     ghost_ecp: bool,
-) -> Result<BTreeMap<String, BasisElement>, CIntError> {
+) -> Result<(IndexMap<String, BseBasisElement>, Vec<String>), CIntError> {
+    // step 1: generate the dictionary and atom label list first
     let mut result = BTreeMap::new();
+    let mut name_list: Vec<String> = Vec::new(); // list of parsed
+    let mut name_map: BTreeMap<&str, String> = BTreeMap::new(); // atom.label -> parsed
 
     for atom in atoms.iter() {
         // skip if label already processed
-        if result.contains_key(&atom.label) {
+        if let Some(parsed) = name_map.get(atom.label.as_str()) {
+            name_list.push(parsed.clone());
             continue;
         }
 
         // resolve basis for this atom
-        let mut basis_data = resolve_basis_for_atom(atom, basis_spec)?;
+        let (mut basis_data, mut parsed_name) = resolve_basis_for_atom(atom, basis_spec)?;
 
         // handle ecp basis
-        if let Ok(ecp_data) = resolve_basis_for_atom(atom, ecp_spec) {
+        if let Ok((ecp_data, parsed_name_ecp)) = resolve_basis_for_atom(atom, ecp_spec) {
             basis_data.ecp_potentials = ecp_data.ecp_potentials;
             basis_data.ecp_electrons = ecp_data.ecp_electrons;
+            // if ecp basis have larger precedence, use the ecp basis name
+            if parsed_name_ecp.len() > parsed_name.len() || parsed_name == "default" {
+                parsed_name = parsed_name_ecp;
+            }
         };
 
         // ecp should not be assigned to ghost atoms, for usual cases
@@ -144,48 +148,78 @@ pub fn resolve_basis(
             basis_data.ecp_potentials = None;
         }
 
-        result.insert(atom.label.clone(), BasisElement { symbol: atom.symbol.clone(), charge: atom.charge, basis_data });
+        // check if the result have already have this basis (by parsed name), if so,
+        // check if the basis data is the same, otherwise raise.
+        if let Some(existing) = result.get(&parsed_name) {
+            if existing != &basis_data {
+                cint_raise!(ParseError, "The basis parsing seems to give two different results with the same entry {parsed_name}.")?
+            }
+        } else {
+            result.insert(parsed_name.clone(), basis_data.clone());
+        }
+        name_list.push(parsed_name.clone());
+        name_map.insert(atom.label.as_str(), parsed_name);
     }
 
-    Ok(result)
+    // 2. reorder btree with input order
+    // order to be expected: BasisSpec::Dict's keys, then atom labels
+    let mut order_guide = vec![];
+    if let BasisSpec::Dict(dict) = basis_spec {
+        for key in dict.keys() {
+            order_guide.push(key.clone());
+        }
+    }
+    order_guide.extend(name_list.iter().cloned());
+
+    // create an ordered result based on the order guide
+    let mut ordered_result = IndexMap::new();
+    for key in order_guide {
+        if let Some(value) = result.remove(&key) {
+            ordered_result.insert(key.clone(), value);
+        }
+    }
+
+    // check the result is moved correctly
+    if !result.is_empty() {
+        cint_raise!(ParseError, "Some parsed basis entries are not included in the final result: {:?}, probably bug.", result.keys())?
+    }
+
+    Ok((ordered_result, name_list))
 }
 
 /// Resolve basis set for a single atom.
-fn resolve_basis_for_atom(atom: &AtomInfo, spec: &BasisSpec) -> Result<BseBasisElement, CIntError> {
+///
+/// The returned `String` is the parsed string for representing this basis (may
+/// be label, identifier or symbol of atom_info).
+fn resolve_basis_for_atom(atom: &AtomInfo, spec: &BasisSpec) -> Result<(BseBasisElement, String), CIntError> {
     match spec {
         BasisSpec::Uniform(input) => {
             // Ghost atoms get empty basis with uniform spec
-            resolve_basis_input(input, &atom.symbol)
-        },
-        BasisSpec::Dict(map) => {
-            // Try label match first (for ghost-O, X_H, etc.)
-            if let Some(input) = map.get(&atom.label) {
-                resolve_basis_input(input, &atom.symbol)
-            } else {
-                // Try element symbol match
-                let key = atom.symbol.to_uppercase();
-                if let Some(input) = map.get(&key) {
-                    resolve_basis_input(input, &atom.symbol)
-                } else if let Some(input) = map.get(&atom.symbol) {
-                    resolve_basis_input(input, &atom.symbol)
-                } else if let Some(input) = map.get("default") {
-                    resolve_basis_input(input, &atom.symbol)
-                } else {
-                    cint_raise!(ParseError, "No basis specified for element '{}' in dict basis map", atom.symbol)
-                }
-            }
+            Ok((resolve_basis_input(input, &atom.symbol)?, atom.symbol.clone()))
         },
         BasisSpec::List(list) => {
-            // List is like Uniform for each item, but check for duplicate elements
-            // For now, treat as uniform - the first matching input
-            // Find matching input for this element
+            // treat as uniform, find first match
             for input in list {
                 // Try to resolve and see if it matches this element
-                if let Ok(elem) = resolve_basis_input(input, &atom.symbol) {
-                    return Ok(elem);
+                if let Ok(parsed) = resolve_basis_input(input, &atom.symbol) {
+                    return Ok((parsed, atom.symbol.clone()));
                 }
             }
             cint_raise!(ParseError, "No matching basis in list for element '{}'", atom.symbol)
+        },
+        BasisSpec::Dict(map) => {
+            // match by label, then identifier, then symbol, then default, then error
+            if let Some(input) = map.get(&atom.label) {
+                Ok((resolve_basis_input(input, &atom.symbol)?, atom.label.clone()))
+            } else if let Some(input) = map.get(&atom.identifier) {
+                Ok((resolve_basis_input(input, &atom.symbol)?, atom.identifier.clone()))
+            } else if let Some(input) = map.get(&atom.symbol) {
+                Ok((resolve_basis_input(input, &atom.symbol)?, atom.symbol.clone()))
+            } else if let Some(input) = map.get("default") {
+                Ok((resolve_basis_input(input, &atom.symbol)?, atom.symbol.clone()))
+            } else {
+                cint_raise!(ParseError, "No matching basis in dict for element '{}'", atom.symbol)
+            }
         },
     }
 }
@@ -209,6 +243,10 @@ fn resolve_basis_input(input: &BasisInput, element_symbol: &str) -> Result<BseBa
     }
 }
 
+/// Parse basis from a string input, which can be either a basis name or a
+/// formatted basis string.
+///
+/// This function uses bse.
 fn parse_basis_format(input: &str, element_symbol: &str) -> Result<BseBasisElement, CIntError> {
     let input = input.trim();
     // if input is nothing, return empty basis
@@ -282,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_basis_spec_dict() {
-        let mut map = BTreeMap::new();
+        let mut map = IndexMap::new();
         map.insert("H".to_string(), BasisInput::String("sto-3g".to_string()));
         map.insert("O".to_string(), BasisInput::String("cc-pvdz".to_string()));
         let spec = BasisSpec::Dict(map);
@@ -293,7 +331,7 @@ mod tests {
     fn test_resolve_basis_uniform() {
         let atoms = parse_atom_string("H 0 0 0; O 0 0 1.2", Unit::Angstrom).unwrap();
         let spec = BasisSpec::from("sto-3g");
-        let basis = resolve_basis(&atoms, &spec, &(None.into()), false).unwrap();
+        let (basis, _) = resolve_basis(&atoms, &spec, &(None.into()), false).unwrap();
 
         assert_eq!(basis.len(), 2);
         // Keys are atom labels (H, O)
@@ -305,10 +343,10 @@ mod tests {
     fn test_resolve_basis_ghost() {
         let atoms = parse_atom_string("H 0 0 0; GHOST-O 0 0 1.2", Unit::Angstrom).unwrap();
         let spec = BasisSpec::from("sto-3g");
-        let basis = resolve_basis(&atoms, &spec, &(None.into()), false).unwrap();
+        let (basis, _) = resolve_basis(&atoms, &spec, &(None.into()), false).unwrap();
 
         // Ghost atom has empty basis (keyed by label "GHOST-O")
-        assert!(basis.get("GHOST-O").unwrap().basis_data.electron_shells.is_some());
+        assert!(basis.get("GHOST-O").unwrap().electron_shells.is_some());
     }
 
     #[test]

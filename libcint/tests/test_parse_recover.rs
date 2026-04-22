@@ -17,6 +17,7 @@ mod test_parse_recover {
         let mol = mol_input.create_mol();
 
         let cint_ref = init_h2o_def2_tzvp();
+
         // perform check of similarity of CInt instances
         assert_eq!(mol.cint.atm, cint_ref.atm);
         assert_eq!(mol.cint.bas, cint_ref.bas);

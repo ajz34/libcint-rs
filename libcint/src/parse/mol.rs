@@ -22,7 +22,7 @@
 //! ```
 
 use crate::parse::atom::{parse_atom_string, parse_zmatrix, AtomInfo, Unit};
-use crate::parse::basis::{resolve_basis, BasisElement, BasisInput, BasisSpec};
+use crate::parse::basis::{resolve_basis, BasisInput, BasisSpec};
 use crate::prelude::*;
 
 /// Builder for creating CIntMol molecule object.
@@ -61,7 +61,9 @@ pub struct CIntMol {
     /// Resolved basis elements for each atom.
     ///
     /// This is label-basis mapping.
-    pub basis_elements: BTreeMap<String, BasisElement>,
+    pub basis_elements: IndexMap<String, BseBasisElement>,
+    /// Map of atom labels to their corresponding basis element indices.
+    pub atom_basis_map: Vec<String>,
     /// Generated CInt instance for integral calculations.
     pub cint: CInt,
 }
@@ -77,13 +79,13 @@ impl CIntMolInput {
         }
 
         // 2. Resolve basis for each atom
-        let basis_elements = resolve_basis(&atoms, &self.basis, &self.ecp, self.ghost_ecp)?;
+        let (basis_elements, atom_basis_map) = resolve_basis(&atoms, &self.basis, &self.ecp, self.ghost_ecp)?;
 
         // 3. Generate CInt arrays
         let cint_type = if self.cart { CIntType::Cartesian } else { CIntType::Spheric };
         let cint = generate_cint_arrays(&atoms, &basis_elements, cint_type)?;
 
-        Ok(CIntMol { atoms, basis_elements, cint })
+        Ok(CIntMol { atoms, basis_elements, atom_basis_map, cint })
     }
 
     /// Build the CIntMol object (infallible version, panics on error).
@@ -115,7 +117,7 @@ impl CIntMolInput {
 /// Generate CInt arrays from parsed atoms and basis data.
 fn generate_cint_arrays(
     atoms: &[AtomInfo],
-    basis_elements: &BTreeMap<String, BasisElement>,
+    basis_elements: &IndexMap<String, BseBasisElement>,
     cint_type: CIntType,
 ) -> Result<CInt, CIntError> {
     let mut atm: Vec<[c_int; 6]> = Vec::new();
@@ -132,7 +134,7 @@ fn generate_cint_arrays(
     // nuclear model)
     for atom in atoms.iter() {
         // Get ECP electrons for this atom
-        let ecp_core = basis_elements.get(&atom.label).and_then(|be| be.basis_data.ecp_electrons).unwrap_or(0);
+        let ecp_core = basis_elements.get(&atom.label).and_then(|be| be.ecp_electrons).unwrap_or(0);
 
         // Calculate effective charge (nuclear charge minus ECP core electrons)
         let effective_charge = atom.charge - ecp_core as f64;
@@ -171,11 +173,11 @@ fn generate_cint_arrays(
         let basis_elem =
             basis_elements.get(first_atom_label).ok_or_else(|| cint_error!(ParseError, "No basis for element {}", element_symbol))?;
 
-        if basis_elem.basis_data.electron_shells.is_none() {
+        if basis_elem.electron_shells.is_none() {
             continue;
         }
 
-        let shells = basis_elem.basis_data.electron_shells.as_ref().unwrap();
+        let shells = basis_elem.electron_shells.as_ref().unwrap();
         let mut indices: Vec<(c_int, c_int, c_int, c_int)> = Vec::new();
 
         for shell in shells {
@@ -200,7 +202,7 @@ fn generate_cint_arrays(
                     .map_err(|e| cint_error!(ParseError, "Failed to parse coefficients: {}", e))?;
 
                 let nctr = coefficients.len() / nprim as usize;
-                let normalized_coeffs = normalize_shell(l, &exponents, &coefficients, cint_type);
+                let normalized_coeffs = normalize_shell(l, &exponents, &coefficients);
 
                 let exp_start = env.len() as c_int;
                 env.extend(exponents.iter().cloned());
@@ -219,11 +221,11 @@ fn generate_cint_arrays(
     for (idx, atom) in atoms.iter().enumerate() {
         let basis_elem = basis_elements.get(&atom.label).ok_or_else(|| cint_error!(ParseError, "No basis for atom {}", atom.label))?;
 
-        if basis_elem.basis_data.electron_shells.is_none() {
+        if basis_elem.electron_shells.is_none() {
             continue;
         }
 
-        let shells = basis_elem.basis_data.electron_shells.as_ref().unwrap();
+        let shells = basis_elem.electron_shells.as_ref().unwrap();
         let element_symbol = &atom.symbol;
         let cached_indices =
             basis_cache.get(element_symbol).ok_or_else(|| cint_error!(ParseError, "No cached basis for element {}", element_symbol))?;
@@ -240,18 +242,18 @@ fn generate_cint_arrays(
 
     // Generate _ecpbas for atoms with ECP
     for (idx, atom) in atoms.iter().enumerate() {
-        let ecp_core = basis_elements.get(&atom.label).and_then(|be| be.basis_data.ecp_electrons).unwrap_or(0);
+        let ecp_core = basis_elements.get(&atom.label).and_then(|be| be.ecp_electrons).unwrap_or(0);
         if ecp_core == 0 {
             continue;
         }
 
         let basis_elem = basis_elements.get(&atom.label).ok_or_else(|| cint_error!(ParseError, "No basis for atom {}", atom.label))?;
 
-        if basis_elem.basis_data.ecp_potentials.is_none() {
+        if basis_elem.electron_shells.is_none() {
             continue;
         }
 
-        let potentials = basis_elem.basis_data.ecp_potentials.as_ref().unwrap();
+        let potentials = basis_elem.ecp_potentials.as_ref().unwrap();
 
         for potential in potentials {
             // Each potential can have multiple angular momentants
@@ -304,7 +306,7 @@ fn generate_cint_arrays(
 }
 
 /// Normalize shell coefficients to match PySCF convention exactly.
-fn normalize_shell(l: i32, exponents: &[f64], coefficients: &[f64], _cint_type: CIntType) -> Vec<f64> {
+fn normalize_shell(l: i32, exponents: &[f64], coefficients: &[f64]) -> Vec<f64> {
     let nprim = exponents.len();
     let nctr = coefficients.len() / nprim;
 

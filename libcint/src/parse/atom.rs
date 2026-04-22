@@ -224,7 +224,7 @@ pub fn parse_zmatrix(s: &str, unit: Unit) -> Result<Vec<AtomInfo>, CIntError> {
     }
 
     // Convert to Cartesian coordinates
-    let coords = zmat_entries_to_cart(&entries, unit)?;
+    let coords = zmat_entries_to_cart(&entries)?;
 
     // Build AtomInfo structs
     let atoms: Vec<AtomInfo> = labels
@@ -326,7 +326,7 @@ fn parse_zmatrix_to_entries(s: &str) -> Result<(Vec<ZmatEntry>, Vec<String>), CI
 /// Convert ZmatEntry structs to Cartesian coordinates.
 ///
 /// Handles arbitrary reference indices (0-indexed, not limited to atoms 0,1,2).
-fn zmat_entries_to_cart(entries: &[ZmatEntry], unit: Unit) -> Result<Vec<[f64; 3]>, CIntError> {
+fn zmat_entries_to_cart(entries: &[ZmatEntry]) -> Result<Vec<[f64; 3]>, CIntError> {
     const TOL: f64 = 1e-7;
 
     if entries.is_empty() {
@@ -336,12 +336,12 @@ fn zmat_entries_to_cart(entries: &[ZmatEntry], unit: Unit) -> Result<Vec<[f64; 3
     let mut coords = vec![[0.0, 0.0, 0.0]];
 
     for (i, entry) in entries.iter().enumerate().skip(1) {
-        let bond_bohr = if unit == Unit::Angstrom { entry.bond * ANG_TO_BOHR } else { entry.bond };
+        let bond = entry.bond;
 
         let coord = if i == 1 {
             // Second atom: place along x-axis from referenced atom
             let ref_pos = coords[entry.bond_ref];
-            [ref_pos[0] + bond_bohr, ref_pos[1], ref_pos[2]]
+            [ref_pos[0] + bond, ref_pos[1], ref_pos[2]]
         } else if i == 2 {
             // Third atom: use rotation matrix approach (no dihedral)
             let bonda_pos = coords[entry.bond_ref];
@@ -360,7 +360,7 @@ fn zmat_entries_to_cart(entries: &[ZmatEntry], unit: Unit) -> Result<Vec<[f64; 3
 
             let rmat = rotation_mat(vecn, angle_rad);
             let c = mat_vec_mul(&rmat, v1);
-            let scale = bond_bohr / v1_norm;
+            let scale = bond / v1_norm;
             [bonda_pos[0] + c[0] * scale, bonda_pos[1] + c[1] * scale, bonda_pos[2] + c[2] * scale]
         } else {
             // Fourth+ atom: use zmatrix_to_cartesian
@@ -370,7 +370,7 @@ fn zmat_entries_to_cart(entries: &[ZmatEntry], unit: Unit) -> Result<Vec<[f64; 3
             let angle_rad = entry.angle * std::f64::consts::PI / 180.0;
             let dihedral_rad = entry.dihedral * std::f64::consts::PI / 180.0;
 
-            zmatrix_to_cartesian(r1_pos, a1_pos, d1_pos, bond_bohr, angle_rad, dihedral_rad)?
+            zmatrix_to_cartesian(r1_pos, a1_pos, d1_pos, bond, angle_rad, dihedral_rad)?
         };
 
         coords.push(coord);

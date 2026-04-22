@@ -24,6 +24,7 @@ pub(crate) use crate::util::*;
 pub(crate) use crate::{cint_error, cint_raise, cint_trace};
 pub(crate) use derive_builder::{Builder, UninitializedFieldError};
 pub(crate) use duplicate::duplicate_item;
+pub(crate) use indexmap::IndexMap;
 pub(crate) use itertools::Itertools;
 pub(crate) use num::complex::ComplexFloat;
 pub(crate) use num::{Complex, ToPrimitive};
@@ -40,3 +41,6 @@ pub(crate) use std::fmt::{Debug, Display, Write};
 pub(crate) use std::ptr::NonNull;
 pub(crate) use std::ptr::{null, null_mut};
 pub(crate) use CIntType::{Cartesian, Spheric, Spinor};
+
+#[cfg(feature = "bse")]
+pub(crate) use bse::prelude::*;
