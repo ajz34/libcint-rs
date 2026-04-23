@@ -284,57 +284,70 @@ fn make_ecp_env(
         let potentials = basis_add.ecp_potentials.as_ref().unwrap();
         let mut ecp0: Vec<[i32; 8]> = Vec::new();
 
+        // get the maximum angular momentum for this ECP
+        let max_ecp_am = *potentials.iter().flat_map(|p| p.angular_momentum.iter()).max().unwrap();
+
         for potential in potentials.iter() {
             // Get angular momentum (usually one value)
             for &l in potential.angular_momentum.iter() {
                 // Parse exponents and coefficients
                 let exponents: Vec<f64> = potential.gaussian_exponents.iter().map(|s| s.parse::<f64>().unwrap()).collect();
-                let coefficients: Vec<f64> = potential.coefficients.iter().flatten().map(|s| s.parse::<f64>().unwrap()).collect();
+                let coefficients: Vec<Vec<f64>> =
+                    potential.coefficients.iter().map(|v| v.iter().map(|s| s.parse::<f64>().unwrap()).collect()).collect();
+                let r_exponents: &[i32] = &potential.r_exponents;
+
+                assert!(matches!(coefficients.len(), 1 | 2), "Only support scalar ECP and SO-ECP with 1 or 2 sets of coefficients");
+                assert_eq!(r_exponents.len(), exponents.len());
+                assert_eq!(coefficients[0].len(), exponents.len());
+                if coefficients.len() == 2 {
+                    assert_eq!(coefficients[1].len(), exponents.len());
+                }
 
                 // Check for SO-ECP (if coefficients array has more than 1 inner vec)
-                let has_so_ecp = potential.coefficients.len() > 1;
+                let has_so_ecp = coefficients.len() > 1;
 
-                // Sort by exponent (descending), similar to PySCF
-                let mut sort_indices: Vec<usize> = (0..exponents.len()).collect();
-                sort_indices.sort_by(|&i, &j| exponents[j].partial_cmp(&exponents[i]).unwrap());
+                // pyscf special handle: UL ECP -> -1
+                let l = if l == max_ecp_am { -1 } else { l };
 
-                let exponents: Vec<f64> = sort_indices.iter().map(|&i| exponents[i]).collect();
-                let coefficients: Vec<f64> = sort_indices.iter().map(|&i| coefficients[i]).collect();
+                // get categorize mapping for r_exponents
+                let mut r_exp_map: BTreeMap<i32, Vec<usize>> = BTreeMap::new();
+                for (i, &r_exp) in r_exponents.iter().enumerate() {
+                    r_exp_map.entry(r_exp).or_default().push(i);
+                }
 
-                let nexp = exponents.len() as i32;
+                for (r_order, idx_list) in r_exp_map.iter() {
+                    // handle non-SO ECP case first
+                    // scalar part always in coefficients[0]
+                    let ecp_exp: Vec<f64> = idx_list.iter().map(|&i| exponents[i]).collect();
+                    let ecp_coef: Vec<f64> = idx_list.iter().map(|&i| coefficients[0][i]).collect();
+                    let nexp = ecp_exp.len() as i32;
 
-                // Determine radial power (r_exponents should be same for all terms in most
-                // cases)
-                let rorder = if potential.r_exponents.is_empty() { 0 } else { potential.r_exponents[0] };
+                    // Add exponents to env
+                    let ptr_exp = ptr as i32;
+                    cint.env.extend(&ecp_exp);
+                    ptr += ecp_exp.len();
 
-                // Add exponents to env
-                let ptr_exp = ptr as i32;
-                cint.env.extend(&exponents);
-                ptr += exponents.len();
+                    // Add coefficients to env
+                    let ptr_coeff = ptr as i32;
+                    cint.env.extend(&ecp_coef);
+                    ptr += ecp_coef.len();
 
-                // Add coefficients to env
-                let ptr_coeff = ptr as i32;
-                cint.env.extend(&coefficients);
-                ptr += coefficients.len();
+                    // Create ecpbas entry: [atom_id, l, nexp, rorder, so_type, ptr_exp, ptr_coeff,
+                    // 0] atom_id will be filled later when iterating through atoms
+                    // so_type = 0 for scalar ECP
+                    ecp0.push([0, l, nexp, *r_order, 0, ptr_exp, ptr_coeff, 0]);
 
-                // Create ecpbas entry: [atom_id, l, nexp, rorder, so_type, ptr_exp, ptr_coeff,
-                // 0] atom_id will be filled later when iterating through atoms
-                // so_type = 0 for scalar ECP
-                ecp0.push([0, l, nexp, rorder, 0, ptr_exp, ptr_coeff, 0]);
+                    // Handle SO-ECP: add second ecpbas entry for SO part
+                    if has_so_ecp {
+                        let so_coef: Vec<f64> = idx_list.iter().map(|&i| coefficients[1][i]).collect();
 
-                // Handle SO-ECP: add second ecpbas entry for SO part
-                if has_so_ecp {
-                    // For SO-ECP, coefficients has multiple inner vecs
-                    // The first inner vec is scalar, subsequent are SO
-                    let so_coeffs: Vec<f64> = potential.coefficients.iter().skip(1).flatten().map(|s| s.parse::<f64>().unwrap()).collect();
-                    let sorted_so_coeffs: Vec<f64> = sort_indices.iter().map(|&i| so_coeffs[i]).collect();
+                        let ptr_so_coeff = ptr as i32;
+                        cint.env.extend(&so_coef);
+                        ptr += so_coef.len();
 
-                    let ptr_so_coeff = ptr as i32;
-                    cint.env.extend(&sorted_so_coeffs);
-                    ptr += sorted_so_coeffs.len();
-
-                    // so_type = 1 for SO-ECP
-                    ecp0.push([0, l, nexp, rorder, 1, ptr_exp, ptr_so_coeff, 0]);
+                        // so_type = 1 for SO-ECP
+                        ecp0.push([0, l, nexp, *r_order, 1, ptr_exp, ptr_so_coeff, 0]);
+                    }
                 }
             }
         }
