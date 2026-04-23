@@ -67,7 +67,7 @@ pub enum BasisSpec {
 
 impl Default for BasisSpec {
     fn default() -> Self {
-        BasisSpec::Uniform(BasisInput::String("sto-3g".to_string()))
+        BasisSpec::Uniform("".into())
     }
 }
 
@@ -143,7 +143,7 @@ pub fn resolve_basis(
             basis_data.ecp_potentials = ecp_data.ecp_potentials;
             basis_data.ecp_electrons = ecp_data.ecp_electrons;
             // if ecp basis have larger precedence, use the ecp basis name
-            if parsed_name_ecp.len() > parsed_name.len() || parsed_name == "default" {
+            if parsed_name_ecp.len() > parsed_name.len() || parsed_name == "DEFAULT" {
                 parsed_name = parsed_name_ecp;
             }
         };
@@ -231,7 +231,7 @@ fn resolve_basis_for_atom(atom: &AtomInfo, spec: &BasisSpec) -> Result<(BseBasis
                 Ok((resolve_basis_input(input, &atom.symbol)?, atom.identifier.clone()))
             } else if let Some(input) = map.get(&atom.symbol) {
                 Ok((resolve_basis_input(input, &atom.symbol)?, atom.symbol.clone()))
-            } else if let Some(input) = map.get("default") {
+            } else if let Some(input) = map.get("DEFAULT") {
                 Ok((resolve_basis_input(input, &atom.symbol)?, atom.symbol.clone()))
             } else {
                 cint_raise!(ParseError, "No matching basis in dict for element '{}'", atom.symbol)
@@ -275,7 +275,7 @@ fn parse_basis_format(input: &str, element_symbol: &str) -> Result<BseBasisEleme
     }
     // try formats, only lines are larger than one
     if input.lines().count() > 1 {
-        let formats = ["json", "nwchem", "gaussian94", "cp2k", "gamess_us", "turbomole", "molcas", "cfour"];
+        let formats = ["json", "nwchem", "gaussian94", "cp2k", "gamess_us", "turbomole", "molcas", "cfour", "molpro", "crystal"];
         for fmt in &formats {
             if let Ok(elem) = parse_basis_format_element(input, element_symbol, fmt) {
                 return Ok(elem);

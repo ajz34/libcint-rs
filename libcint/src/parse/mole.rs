@@ -52,6 +52,9 @@ pub struct CIntMolInput {
     /// Whether to assign ECP to ghost atoms (default: false).
     #[builder(default = "false")]
     pub ghost_ecp: bool,
+    /// Allow empty basis (default: false).
+    #[builder(default = "false")]
+    pub allow_empty_basis: bool,
 }
 
 /// Built molecule object containing parsed atoms and CInt instance.
@@ -79,6 +82,20 @@ impl CIntMolInput {
 
         // 2. Resolve basis for each atom
         let (basis_elements, atom_basis_map) = resolve_basis(&atoms, &self.basis, &self.ecp, self.ghost_ecp)?;
+        // check if any atom has no basis assigned
+        for (ia, symb) in atom_basis_map.iter().enumerate() {
+            let empty_basis = match basis_elements.get(symb) {
+                Some(basis) => basis.electron_shells.as_ref().is_none_or(|shells| shells.is_empty()),
+                None => true,
+            };
+            if empty_basis {
+                if !self.allow_empty_basis {
+                    return cint_raise!(ParseError, "Atom {ia} symbol '{symb}' has no basis. Allow by setting `allow_empty_basis = true`.");
+                } else {
+                    eprintln!("Warning: Atom {ia} symbol '{symb}' has no basis.");
+                }
+            }
+        }
 
         // 3. Generate CInt arrays
         const PTR_ENV_START: usize = crate::ffi::cint_ffi::PTR_ENV_START as usize;
@@ -160,26 +177,28 @@ fn make_bas_env(basis: &BseBasisElement, atom_id: usize, ptr: usize) -> (Vec<[i3
     let mut bas = Vec::new();
     let mut env = Vec::new();
 
-    basis.electron_shells.as_ref().unwrap().iter().for_each(|shell| {
-        shell.angular_momentum.iter().for_each(|&l| {
-            let exponents: Vec<f64> = shell.exponents.iter().map(|s| s.parse::<f64>().unwrap()).collect();
-            let coefficients: Vec<f64> = shell.coefficients.iter().flatten().map(|s| s.parse::<f64>().unwrap()).collect();
+    if let Some(shells) = basis.electron_shells.as_ref() {
+        shells.iter().for_each(|shell| {
+            shell.angular_momentum.iter().for_each(|&l| {
+                let exponents: Vec<f64> = shell.exponents.iter().map(|s| s.parse::<f64>().unwrap()).collect();
+                let coefficients: Vec<f64> = shell.coefficients.iter().flatten().map(|s| s.parse::<f64>().unwrap()).collect();
 
-            let nprim = exponents.len() as i32;
-            let nctr = coefficients.len() as i32 / nprim;
+                let nprim = exponents.len() as i32;
+                let nctr = coefficients.len() as i32 / nprim;
 
-            // Normalize coefficients to match PySCF convention
-            let normalized_coeffs = normalize_shell(l, &exponents, &coefficients);
+                // Normalize coefficients to match PySCF convention
+                let normalized_coeffs = normalize_shell(l, &exponents, &coefficients);
 
-            // construct bas and env entries
-            let ptr_exp = (ptr + env.len()) as i32;
-            env.extend(exponents);
-            let ptr_coeff = (ptr + env.len()) as i32;
-            env.extend(normalized_coeffs);
+                // construct bas and env entries
+                let ptr_exp = (ptr + env.len()) as i32;
+                env.extend(exponents);
+                let ptr_coeff = (ptr + env.len()) as i32;
+                env.extend(normalized_coeffs);
 
-            bas.push([atom_id as i32, l, nprim, nctr, 0, ptr_exp, ptr_coeff, 0]);
+                bas.push([atom_id as i32, l, nprim, nctr, 0, ptr_exp, ptr_coeff, 0]);
+            });
         });
-    });
+    }
 
     (bas, env)
 }
@@ -210,17 +229,22 @@ fn make_env(
     // env directly write, bas will be paired to atom info
     let mut basdic = IndexMap::new();
     for (symb, basis_add) in basis_dict.iter() {
+        // the electron shells check happens before this function.
+        if basis_add.electron_shells.is_none() {
+            continue;
+        }
         let (bas_entries, env_entries) = make_bas_env(basis_add, 0, env.len());
         basdic.insert(symb.clone(), bas_entries);
         env.extend_from_slice(&env_entries);
     }
 
     for (ia, symb) in atom_basis_map.iter().enumerate() {
-        let bas_entries = basdic.get(symb).ok_or_else(|| cint_error!(ParseError, "Basis entry must exist for atom {ia} symbol {symb}"))?;
-        for bas_entry in bas_entries.iter() {
-            let mut bas_entry = *bas_entry;
-            bas_entry[ATOM_OF] = ia as i32;
-            bas.push(bas_entry);
+        if let Some(bas_entries) = basdic.get(symb) {
+            for bas_entry in bas_entries.iter() {
+                let mut bas_entry = *bas_entry;
+                bas_entry[ATOM_OF] = ia as i32;
+                bas.push(bas_entry);
+            }
         }
     }
 
