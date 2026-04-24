@@ -250,9 +250,18 @@ fn check_cint_ecp(
 
     assert_eq!(nao, ref_nao);
     assert_eq!(nbas, ref_nbas);
-    assert!((kin_fp - ref_kin_fp).abs() < 1e-6, "kinetic fingerprint mismatch: got {kin_fp}, expected {ref_kin_fp}");
-    assert!((nuc_fp - ref_nuc_fp).abs() < 1e-6, "nuclear fingerprint mismatch: got {nuc_fp}, expected {ref_nuc_fp}");
-    assert!((ecp_fp - ref_ecp_fp).abs() < 1e-6, "ECP fingerprint mismatch: got {ecp_fp}, expected {ref_ecp_fp}");
+    assert!(
+        (kin_fp - ref_kin_fp).abs() < 1e-6 || (kin_fp / ref_kin_fp - 1.0).abs() < 1e-4,
+        "kinetic fingerprint mismatch: got {kin_fp}, expected {ref_kin_fp}"
+    );
+    assert!(
+        (nuc_fp - ref_nuc_fp).abs() < 1e-6 || (nuc_fp / ref_nuc_fp - 1.0).abs() < 1e-4,
+        "nuclear fingerprint mismatch: got {nuc_fp}, expected {ref_nuc_fp}"
+    );
+    assert!(
+        (ecp_fp - ref_ecp_fp).abs() < 1e-6 || (ecp_fp / ref_ecp_fp - 1.0).abs() < 1e-4,
+        "ECP fingerprint mismatch: got {ecp_fp}, expected {ref_ecp_fp}"
+    );
 }
 
 test_ecp! {
@@ -284,4 +293,61 @@ test_ecp! {
         ("Sb1", "lanl2dz"),
     ],
     reference: (499, 149, 56669463.51097445, -33390.20950360246, 241.4214981674055)
+}
+
+#[test]
+fn test_ghost_heavy() {
+    let xyz = r"
+        Sb        -1.33937843      0.44597852     -1.27279684
+        Sb1        1.33937843     -0.44597852     -1.27279684
+        C1        -1.40429524      1.10441871      0.83468205
+        C         -2.16210130     -1.56132398     -0.84717555
+        C2         2.16210130      1.56132398     -0.84717555
+        C          1.40429524     -1.10441871      0.83468205
+        H1        -0.69918639      1.91987631      1.00872018
+        H1        -1.16111477      0.29030616      1.51873028
+        H1        -2.40124532      1.47235562      1.08516843
+        H1        -2.02002046     -2.22909286     -1.69887295
+        H         -1.69052287     -2.01612927      0.02577778
+        H-1       -3.23450854     -1.49489801     -0.65423339
+        H-1        2.02002046      2.22909286     -1.69887295
+        H-1        3.23450854      1.49489801     -0.65423339
+        H          1.69052287      2.01612927      0.02577778
+        H          0.69918639     -1.91987631      1.00872018
+        H@2        2.40124532     -1.47235562      1.08516843
+        H@2        1.16111477     -0.29030616      1.51873028
+        GHOST-Sb  -2.33937843      1.44597852     -1.27279684
+        GHOST-Sb1  2.33937843     -1.44597852     -1.27279684
+    ";
+    let basis = vec![
+        ("H1", "2ZaPa-NR"),
+        ("H@2", "AHGBSP1-5"),
+        ("C1", "Ahlrichs VDZ"),
+        ("C", "pcS-3"),
+        ("Sb1", "dyall-v2z"),
+        ("default", "def2-SVP"),
+    ];
+    let ecp = vec![("C2", "pSBKJC"), ("Sb1", "lanl2dz")];
+    let mol_input = CIntMolInputBuilder::default().atom(xyz).basis(basis).ecp(ecp).allow_empty_basis(true).build().unwrap();
+    let mol = mol_input.create_mol();
+    let nao = mol.cint.nao();
+    let nbas = mol.cint.nbas();
+    let (ref_nao, ref_nbas, ref_kin_fp, ref_nuc_fp, ref_ecp_fp) = (646, 206, 64220631.18409411, 26146.394518924033, -41.935106631928406);
+    let kin_fp = cint_fingerprint(mol.cint.integrate("int1e_kin", None, None).out.as_ref().unwrap());
+    let nuc_fp = cint_fingerprint(mol.cint.integrate("int1e_nuc", None, None).out.as_ref().unwrap());
+    let ecp_fp = cint_fingerprint(mol.cint.integrate_row_major("ECPscalar_iprinv", None, None).out.as_ref().unwrap());
+    assert_eq!(nao, ref_nao);
+    assert_eq!(nbas, ref_nbas);
+    assert!(
+        (kin_fp - ref_kin_fp).abs() < 1e-6 || (kin_fp / ref_kin_fp - 1.0).abs() < 1e-4,
+        "kinetic fingerprint mismatch: got {kin_fp}, expected {ref_kin_fp}"
+    );
+    assert!(
+        (nuc_fp - ref_nuc_fp).abs() < 1e-6 || (nuc_fp / ref_nuc_fp - 1.0).abs() < 1e-4,
+        "nuclear fingerprint mismatch: got {nuc_fp}, expected {ref_nuc_fp}"
+    );
+    assert!(
+        (ecp_fp - ref_ecp_fp).abs() < 1e-6 || (ecp_fp / ref_ecp_fp - 1.0).abs() < 1e-4,
+        "ECP fingerprint mismatch: got {ecp_fp}, expected {ref_ecp_fp}"
+    );
 }

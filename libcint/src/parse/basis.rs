@@ -149,9 +149,11 @@ pub fn resolve_basis(
         };
 
         // ecp should not be assigned to ghost atoms, for usual cases
+        // this is very special case, use the label name to represent the basis
         if atom.is_ghost && !ghost_ecp {
             basis_data.ecp_electrons = None;
             basis_data.ecp_potentials = None;
+            parsed_name = atom.label.clone();
         }
 
         // pyscf usually use the uncontract version
