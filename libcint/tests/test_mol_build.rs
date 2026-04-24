@@ -1,3 +1,5 @@
+#![cfg(feature = "bse")]
+
 use libcint::parse::basis::BasisSpec;
 use libcint::prelude::*;
 
