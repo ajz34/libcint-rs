@@ -140,7 +140,7 @@ fn main() {
 
 ## License
 
-This repository is licensed under Apache-2.0, the same to PySCF and REST.
+This repository is licensed under Apache-2.0, the same to PySCF.
 
 - ECP part of code is directly copied and slightly modified from PySCF.
 - Code for filling shell blocks of integrals is modified from an early version of rest_libcint.
