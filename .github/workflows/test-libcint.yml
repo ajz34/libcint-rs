@@ -7,6 +7,22 @@ on:
     branches: [main]
 
 jobs:
+  # this test also checks feature bse
+  test-build-dynamic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install basis_set_exchange
+        run: pip install basis_set_exchange
+      - name: test crate libcint
+        run: |
+          cd libcint
+          cargo test --features="build_from_source"
+
   test-custom-build:
     runs-on: ubuntu-latest
     steps:
@@ -25,16 +41,7 @@ jobs:
       - name: test crate libcint
         run: |
           cd libcint
-          cargo test
-
-  test-build-dynamic:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: test crate libcint
-        run: |
-          cd libcint
-          cargo test --features="build_from_source"
+          cargo test --no-default-features
 
   test-build-static:
     runs-on: ubuntu-latest
@@ -43,7 +50,7 @@ jobs:
       - name: test crate libcint
         run: |
           cd libcint
-          cargo test --features="build_from_source static"
+          cargo test --no-default-features --features="build_from_source static"
 
   test-build-static-qcint:
     runs-on: ubuntu-latest
@@ -52,4 +59,4 @@ jobs:
       - name: test crate libcint
         run: |
           cd libcint
-          cargo test --features="build_from_source static qcint"
+          cargo test --no-default-features --features="build_from_source static qcint"
