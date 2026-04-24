@@ -41,7 +41,7 @@ jobs:
       - name: test crate libcint
         run: |
           cd libcint
-          cargo test
+          cargo test --no-default-features
 
   test-build-static:
     runs-on: ubuntu-latest
