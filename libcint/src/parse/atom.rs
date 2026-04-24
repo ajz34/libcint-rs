@@ -11,6 +11,7 @@
 
 use crate::prelude::*;
 use bse::lut::{element_Z_from_sym, element_sym_from_Z_with_normalize};
+use serde::{Deserialize, Serialize};
 
 /// Bohr to Angstrom conversion constant.
 ///
@@ -21,10 +22,13 @@ pub const BOHR_TO_ANG: f64 = 0.529177210544;
 pub const ANG_TO_BOHR: f64 = 1.0 / BOHR_TO_ANG;
 
 /// Unit of length for coordinates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Unit {
     #[default]
+    #[serde(alias = "ANG", alias = "Angstrom", alias = "ang", alias = "angstrom")]
     Angstrom,
+    #[serde(alias = "AU", alias = "A.U.", alias = "au", alias = "a.u.", alias = "BOHR", alias = "Bohr", alias = "bohr")]
     Bohr,
 }
 

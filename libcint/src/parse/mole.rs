@@ -4,6 +4,7 @@
 //! - Parse atom coordinates from string, list, or z-matrix format
 //! - Resolve basis sets from BSE names, per-element dict, or custom format
 //! - Generate `CInt` instance for integral calculations
+//! - Build from JSON or TOML input files
 //!
 //! # Example
 //!
@@ -20,9 +21,23 @@
 //! // Now you can use mol.cint for integral calculations
 //! let overlap = mol.cint.integrate("int1e_ovlp", None, None).unwrap();
 //! ```
+//!
+//! # Building from JSON/TOML
+//!
+//! ```text
+//! use libcint::parse::mole::CIntMol;
+//!
+//! let toml = r#"
+//! atom = "O 0 0 0; H 0 0 0.9572"
+//! basis = "STO-3G"
+//! "#;
+//!
+//! let mol = CIntMol::from_toml(toml).unwrap();
+//! ```
 
 use crate::parse::atom::{parse_atom_string, parse_zmatrix, AtomInfo, Unit};
 use crate::parse::basis::{resolve_basis, BasisInput, BasisSpec};
+use crate::parse::serde_build::{SerdeBasisSpec, SerdeMolInput};
 use crate::prelude::*;
 use crate::util;
 
@@ -68,6 +83,89 @@ pub struct CIntMol {
     pub basis_elements: IndexMap<String, BseBasisElement>,
     /// Generated CInt instance for integral calculations.
     pub cint: CInt,
+}
+
+impl CIntMol {
+    /// Build molecule from JSON string.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::parse::mole::CIntMol;
+    ///
+    /// let json = r#"{
+    ///     "atom": "O 0 0 0; H 0 0 0.9572; H 0 0.9266 -0.239987",
+    ///     "basis": "STO-3G",
+    ///     "unit": "angstrom"
+    /// }"#;
+    ///
+    /// let mol = CIntMol::from_json(json).unwrap();
+    /// ```
+    ///
+    /// For custom basis sets, use inline dict format:
+    /// ```rust
+    /// let json = r#"{
+    ///     "atom": "O 0 0 0; H 0 0 0.9572",
+    ///     "basis": {"O": "STO-3G", "default": "6-31G"}
+    /// }"#;
+    /// ```
+    pub fn from_json(json: &str) -> Self {
+        Self::from_json_f(json).cint_unwrap()
+    }
+
+    pub fn from_json_f(json: &str) -> Result<Self, CIntError> {
+        let input: SerdeMolInput = serde_json::from_str(json).map_err(|e| cint_error!(ParseError, "Failed to parse JSON: {e}"))?;
+
+        if matches!(input.basis, SerdeBasisSpec::Custom) {
+            return cint_raise!(ParseError, "JSON format does not support 'basis = \"custom\"' with separate custom table. Use inline dict format instead: `{{\"basis\": {{\"O\": \"STO-3G\"}}}}`");
+        }
+        if matches!(input.ecp, SerdeBasisSpec::Custom) {
+            return cint_raise!(ParseError, "JSON format does not support 'ecp = \"custom\"' with separate custom table. Use inline dict format instead: `{{\"ecp\": {{\"Au\": \"LANL2DZ\"}}}}`");
+        }
+
+        input.build()
+    }
+
+    /// Build molecule from TOML string.
+    ///
+    /// Supports custom basis/ECP tables via `[basis-custom]` and `[ecp-custom]`
+    /// sections.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use libcint::parse::mole::CIntMol;
+    ///
+    /// let toml = r#"
+    /// atom = "O 0 0 0; H 0 0 0.9572; H 0 0.9266 -0.239987"
+    /// basis = "STO-3G"
+    /// unit = "angstrom"
+    /// "#;
+    ///
+    /// let mol = CIntMol::from_toml(toml).unwrap();
+    /// ```
+    ///
+    /// # Custom Basis Example
+    ///
+    /// ```rust
+    /// let toml = r#"
+    /// atom = "O 0 0 0; H 0 0 0.9572"
+    /// basis = "custom"
+    ///
+    /// [basis-custom]
+    /// O = "STO-3G"
+    /// default = "6-31G"
+    /// "#;
+    ///
+    /// let mol = CIntMol::from_toml(toml).unwrap();
+    /// ```
+    pub fn from_toml(toml_str: &str) -> Self {
+        Self::from_toml_f(toml_str).cint_unwrap()
+    }
+
+    pub fn from_toml_f(toml_str: &str) -> Result<Self, CIntError> {
+        crate::parse::serde_build::parse_toml_input(toml_str)
+    }
 }
 
 impl CIntMolInput {

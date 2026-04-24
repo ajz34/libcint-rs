@@ -95,6 +95,17 @@ where
     }
 }
 
+#[duplicate_item(TY; [String]; [&str])]
+impl<T, const N: usize> From<[(TY, T); N]> for BasisSpec
+where
+    T: Into<BasisInput>,
+{
+    fn from(arr: [(TY, T); N]) -> Self {
+        let dict = arr.into_iter().map(|(k, v)| (k.to_ascii_uppercase(), v.into())).collect();
+        BasisSpec::Dict(dict)
+    }
+}
+
 impl<T> From<Vec<T>> for BasisSpec
 where
     T: Into<BasisInput>,
