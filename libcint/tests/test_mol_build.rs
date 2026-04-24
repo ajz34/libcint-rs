@@ -1,6 +1,20 @@
 use libcint::parse::basis::BasisSpec;
 use libcint::prelude::*;
 
+#[test]
+fn test_showcase_h2o_build() {
+    let atom_zmat = "O; H 1 0.94; H 1 0.94 2 104.5";
+    let basis = "STO-3G";
+    let mol_input = CIntMolInputBuilder::default().atom(atom_zmat).basis(basis).cart(false).build().unwrap();
+    let mol = mol_input.create_mol();
+
+    let (int1e_ovlp, shape) = mol.cint.integrate("int1e_ovlp", None, None).into();
+    let nao = shape[0];
+    for i in 0..nao {
+        println!("AO {:2}: {:>10.6?}", i, &int1e_ovlp[i * nao..(i + 1) * nao]);
+    }
+}
+
 macro_rules! test_mol {
     (case: $case:ident; xyz: $xyz:expr; basis: $basis:expr, cart: $cart:expr, reference: ($ref_nao:expr, $ref_nbas:expr, $ref_kin_fp:expr, $ref_nuc_fp:expr)) => {
         #[test]
