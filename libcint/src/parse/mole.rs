@@ -40,7 +40,6 @@ use crate::parse::basis::{resolve_basis, BasisInput, BasisSpec};
 use crate::parse::serde_build::parse_toml_input;
 use crate::prelude::*;
 use crate::util;
-use serde::{Deserialize, Serialize};
 
 /// Builder for creating CIntMol molecule object.
 ///
