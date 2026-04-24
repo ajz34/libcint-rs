@@ -1,18 +1,6 @@
 #![cfg(feature = "bse")]
 
-use libcint::parse::mole::CIntMol;
-
-fn cint_fingerprint(data: &[f64]) -> f64 {
-    let n = data.len();
-    if n == 0 {
-        return 0.0;
-    }
-    let mut sum = 0.0;
-    for (i, &v) in data.iter().enumerate() {
-        sum += (i as f64 + 1.0) * v.abs();
-    }
-    sum / n as f64
-}
+use libcint::prelude::*;
 
 // Test basic JSON parsing
 #[test]
@@ -210,6 +198,37 @@ fn test_toml_custom_basis_missing_table_error() {
     let toml = r#"
 atom = "O 0 0 0; H 0 0 0.9572"
 basis = "custom"
+"#;
+
+    let result = CIntMol::from_toml_f(toml);
+    assert!(result.is_err());
+}
+
+// Test that TOML with custom table but basis not set to "custom" fails
+#[test]
+fn test_toml_custom_table_without_custom_marker_basis() {
+    let toml = r#"
+atom = "O 0 0 0; H 0 0 0.9572"
+basis = "STO-3G"
+
+[basis-custom]
+O = "6-31G"
+"#;
+
+    let result = CIntMol::from_toml_f(toml);
+    assert!(result.is_err());
+}
+
+// Test that TOML with custom table but ecp not set to "custom" fails
+#[test]
+fn test_toml_custom_table_without_custom_marker_ecp() {
+    let toml = r#"
+atom = "Sb 0 0 0; H 0 0 1.5"
+basis = "def2-SVP"
+ecp = "def2-SVP"
+
+[ecp-custom]
+Sb = "def2-ECP"
 "#;
 
     let result = CIntMol::from_toml_f(toml);

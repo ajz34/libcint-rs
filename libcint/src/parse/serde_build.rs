@@ -37,6 +37,14 @@ pub fn parse_toml_input(toml_str: &str) -> Result<CIntMol, CIntError> {
     // Parse into TomlInputWithCustomTables
     let raw: TomlInputWithCustomTables = toml::from_str(toml_str).map_err(|e| cint_error!(ParseError, "Failed to parse TOML: {e}"))?;
 
+    // Validate: custom table provided but basis/ecp is not "custom"
+    if !raw.basis_custom.is_empty() && !basis_is_custom {
+        return cint_raise!(ParseError, "[basis-custom] table defined but basis is not set to \"custom\"");
+    }
+    if !raw.ecp_custom.is_empty() && !ecp_is_custom {
+        return cint_raise!(ParseError, "[ecp-custom] table defined but ecp is not set to \"custom\"");
+    }
+
     // Resolve custom basis if needed
     let basis = if basis_is_custom {
         if raw.basis_custom.is_empty() {
