@@ -37,16 +37,27 @@
 
 use crate::parse::atom::{parse_atom_string, parse_zmatrix, AtomInfo, Unit};
 use crate::parse::basis::{resolve_basis, BasisInput, BasisSpec};
-use crate::parse::serde_build::{SerdeBasisSpec, SerdeMolInput};
+use crate::parse::serde_build::parse_toml_input;
 use crate::prelude::*;
 use crate::util;
+use serde::{Deserialize, Serialize};
 
 /// Builder for creating CIntMol molecule object.
 ///
 /// Similar to PySCF's `gto.Mole`, this struct collects input parameters
 /// and generates a `CInt` instance through the `build()` method.
+///
+/// Can be deserialized from JSON or TOML:
+/// ```json
+/// {
+///     "atom": "O 0 0 0; H 0 0 0.9572",
+///     "basis": "STO-3G",
+///     "unit": "angstrom"
+/// }
+/// ```
 #[non_exhaustive]
-#[derive(Debug, Clone, Builder, Default)]
+#[derive(Debug, Clone, Builder, Default, Serialize, Deserialize)]
+#[serde(default)]
 #[builder(pattern = "owned", build_fn(error = "CIntError"), default)]
 pub struct CIntMolInput {
     /// Atom coordinates (string).
@@ -114,16 +125,22 @@ impl CIntMol {
     }
 
     pub fn from_json_f(json: &str) -> Result<Self, CIntError> {
-        let input: SerdeMolInput = serde_json::from_str(json).map_err(|e| cint_error!(ParseError, "Failed to parse JSON: {e}"))?;
+        let input: CIntMolInput = serde_json::from_str(json).map_err(|e| cint_error!(ParseError, "Failed to parse JSON: {e}"))?;
 
-        if matches!(input.basis, SerdeBasisSpec::Custom) {
-            return cint_raise!(ParseError, "JSON format does not support 'basis = \"custom\"' with separate custom table. Use inline dict format instead: `{{\"basis\": {{\"O\": \"STO-3G\"}}}}`");
+        // Check if basis/ecp are "custom" strings (JSON doesn't support custom table
+        // mechanism)
+        if let BasisSpec::Uniform(BasisInput::String(s)) = &input.basis {
+            if s == "custom" {
+                return cint_raise!(ParseError, "JSON format does not support 'basis = \"custom\"' with separate custom table. Use inline dict format instead: `{{\"basis\": {{\"O\": \"STO-3G\"}}}}`");
+            }
         }
-        if matches!(input.ecp, SerdeBasisSpec::Custom) {
-            return cint_raise!(ParseError, "JSON format does not support 'ecp = \"custom\"' with separate custom table. Use inline dict format instead: `{{\"ecp\": {{\"Au\": \"LANL2DZ\"}}}}`");
+        if let BasisSpec::Uniform(BasisInput::String(s)) = &input.ecp {
+            if s == "custom" {
+                return cint_raise!(ParseError, "JSON format does not support 'ecp = \"custom\"' with separate custom table. Use inline dict format instead: `{{\"ecp\": {{\"Au\": \"LANL2DZ\"}}}}`");
+            }
         }
 
-        input.build()
+        input.create_mol_f()
     }
 
     /// Build molecule from TOML string.
@@ -164,7 +181,7 @@ impl CIntMol {
     }
 
     pub fn from_toml_f(toml_str: &str) -> Result<Self, CIntError> {
-        crate::parse::serde_build::parse_toml_input(toml_str)
+        parse_toml_input(toml_str)
     }
 }
 

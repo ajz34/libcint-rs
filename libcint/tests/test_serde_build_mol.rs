@@ -345,3 +345,43 @@ unit = "bohr"
 
     assert_eq!(mol_upper.cint.nao(), mol_lower.cint.nao());
 }
+
+// Test JSON with list basis
+#[test]
+fn test_json_list_basis() {
+    // List basis: try basis in order until one matches
+    let json = r#"{
+        "atom": "O 0 0 0; H 0 0 0.9572",
+        "basis": ["STO-3G", "6-31G"]
+    }"#;
+
+    let mol = CIntMol::from_json(json);
+    let nao = mol.cint.nao();
+    assert!(nao > 0);
+}
+
+// Test TOML with list basis
+#[test]
+fn test_toml_list_basis() {
+    let toml = r#"
+atom = "O 0 0 0; H 0 0 0.9572"
+basis = ["STO-3G", "6-31G"]
+"#;
+
+    let mol = CIntMol::from_toml(toml);
+    let nao = mol.cint.nao();
+    assert!(nao > 0);
+}
+
+// Test TOML with inline table basis
+#[test]
+fn test_toml_inline_table_basis() {
+    let toml = r#"
+atom = "O 0 0 0; H 0 0 0.9572"
+basis = { O = "STO-3G", H = "6-31G" }
+"#;
+
+    let mol = CIntMol::from_toml(toml);
+    let nao = mol.cint.nao();
+    assert!(nao > 0);
+}
