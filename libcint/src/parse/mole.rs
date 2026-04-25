@@ -25,7 +25,7 @@
 //! # Building from JSON/TOML
 //!
 //! ```text
-//! use libcint::parse::mole::CIntMol;
+//! use libcint::prelude::*;
 //!
 //! let toml = r#"
 //! atom = "O 0 0 0; H 0 0 0.9572"
@@ -101,7 +101,7 @@ impl CIntMol {
     /// # Example
     ///
     /// ```rust
-    /// use libcint::parse::mole::CIntMol;
+    /// use libcint::prelude::*;
     ///
     /// let json = r#"{
     ///     "atom": "O 0 0 0; H 0 0 0.9572; H 0 0.9266 -0.239987",
@@ -109,15 +109,19 @@ impl CIntMol {
     ///     "unit": "angstrom"
     /// }"#;
     ///
-    /// let mol = CIntMol::from_json(json).unwrap();
+    /// let mol = CIntMol::from_json(json);
     /// ```
     ///
     /// For custom basis sets, use inline dict format:
     /// ```rust
+    /// use libcint::prelude::*;
+    ///
     /// let json = r#"{
     ///     "atom": "O 0 0 0; H 0 0 0.9572",
     ///     "basis": {"O": "STO-3G", "default": "6-31G"}
     /// }"#;
+    ///
+    /// let mol = CIntMol::from_json(json);
     /// ```
     pub fn from_json(json: &str) -> Self {
         Self::from_json_f(json).cint_unwrap()
@@ -142,39 +146,7 @@ impl CIntMol {
         input.create_mol_f()
     }
 
-    /// Build molecule from TOML string.
-    ///
-    /// Supports custom basis/ECP tables via `[basis-custom]` and `[ecp-custom]`
-    /// sections.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use libcint::parse::mole::CIntMol;
-    ///
-    /// let toml = r#"
-    /// atom = "O 0 0 0; H 0 0 0.9572; H 0 0.9266 -0.239987"
-    /// basis = "STO-3G"
-    /// unit = "angstrom"
-    /// "#;
-    ///
-    /// let mol = CIntMol::from_toml(toml).unwrap();
-    /// ```
-    ///
-    /// # Custom Basis Example
-    ///
-    /// ```rust
-    /// let toml = r#"
-    /// atom = "O 0 0 0; H 0 0 0.9572"
-    /// basis = "custom"
-    ///
-    /// [basis-custom]
-    /// O = "STO-3G"
-    /// default = "6-31G"
-    /// "#;
-    ///
-    /// let mol = CIntMol::from_toml(toml).unwrap();
-    /// ```
+    #[doc = include_str!("from_toml_docs.md")]
     pub fn from_toml(toml_str: &str) -> Self {
         Self::from_toml_f(toml_str).cint_unwrap()
     }
