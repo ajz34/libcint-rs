@@ -9,14 +9,15 @@ use std::path::PathBuf;
 fn dev_link() {
     println!("cargo:rerun-if-env-changed=CINT_DEV");
     if std::env::var("CINT_DEV").is_ok() {
-        std::env::var("LD_LIBRARY_PATH").unwrap().split(":").filter(|path| !path.is_empty()).filter(|path| PathBuf::from(path).exists()).for_each(
-            |path| {
+        std::env::var("LD_LIBRARY_PATH")
+            .unwrap()
+            .split(":")
+            .filter(|path| !path.is_empty())
+            .filter(|path| PathBuf::from(path).exists())
+            .for_each(|path| {
                 println!("cargo:rustc-link-search=native={path}");
-            },
-        );
+            });
         println!("cargo:rustc-link-lib=cint");
-        println!("cargo:rustc-link-lib=openblas");
-        println!("cargo:rustc-link-lib=gomp");
     }
 }
 
