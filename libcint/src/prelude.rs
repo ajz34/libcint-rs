@@ -37,7 +37,7 @@ pub mod prelude_dev {
     pub use rayon::prelude::*;
     pub use rstsr_common::layout::exports::IndexedIterLayout;
     pub use rstsr_common::prelude::*;
-    pub use serde::{Deserialize, Serialize};
+    pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
     pub use std::any::Any;
     pub use std::backtrace::Backtrace;
     pub use std::collections::{BTreeMap, HashMap};

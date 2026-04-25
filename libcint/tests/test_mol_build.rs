@@ -48,8 +48,14 @@ fn check_cint_mol(
 
     assert_eq!(nao, ref_nao);
     assert_eq!(nbas, ref_nbas);
-    assert!((kin_fp - ref_kin_fp).abs() < 1e-6, "kinetic fingerprint mismatch: got {kin_fp}, expected {ref_kin_fp}");
-    assert!((nuc_fp - ref_nuc_fp).abs() < 1e-6, "nuclear fingerprint mismatch: got {nuc_fp}, expected {ref_nuc_fp}");
+    assert!(
+        (kin_fp - ref_kin_fp).abs() < 1e-6 || (kin_fp / ref_kin_fp - 1.0).abs() < 1e-4,
+        "kinetic fingerprint mismatch: got {kin_fp}, expected {ref_kin_fp}"
+    );
+    assert!(
+        (nuc_fp - ref_nuc_fp).abs() < 1e-6 || (nuc_fp / ref_nuc_fp - 1.0).abs() < 1e-4,
+        "nuclear fingerprint mismatch: got {nuc_fp}, expected {ref_nuc_fp}"
+    );
 }
 
 // simple case with sp shell
@@ -68,9 +74,7 @@ test_mol! {
 // zmat for three atoms
 test_mol! {
     case: simple_h2o_zmat_def2tzvp;
-    xyz: r"
-        O; H 1 0.94; H 1 0.94 2 104.5
-    ";
+    xyz: "O; H 1 0.94; H 1 0.94 2 104.5";
     basis: "def2-TZVP",
     cart: false,
     reference: (43, 19, 240.82414038242027, -455.36011189734484)

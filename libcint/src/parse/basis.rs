@@ -7,12 +7,62 @@ use bse::manip::uncontract_spdf_in_element;
 
 /* #region BasisInput */
 
+/// Input for basis set specification.
+///
+/// Can be a basis name string, a BSE basis element, or a full basis set.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BasisInput {
     None,
     String(String),
     Element(Box<BseBasisElement>),
     Basis(Box<BseBasis>),
+}
+
+impl Serialize for BasisInput {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            BasisInput::None => serializer.serialize_str(""),
+            BasisInput::String(s) => serializer.serialize_str(s),
+            BasisInput::Element(elem) => elem.serialize(serializer),
+            BasisInput::Basis(basis) => basis.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for BasisInput {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Try string first, then try as BseBasisElement or BseBasis
+        let value = serde_json::Value::deserialize(deserializer)?;
+        match value {
+            serde_json::Value::String(s) => {
+                if s.is_empty() {
+                    Ok(BasisInput::None)
+                } else {
+                    Ok(BasisInput::String(s))
+                }
+            },
+            serde_json::Value::Object(obj) => {
+                // Try to deserialize as BseBasisElement first (most common for inline)
+                if obj.contains_key("electron_shells") || obj.contains_key("ecp_electrons") {
+                    let elem: BseBasisElement = serde_json::from_value(serde_json::Value::Object(obj)).map_err(serde::de::Error::custom)?;
+                    Ok(BasisInput::Element(Box::new(elem)))
+                } else if obj.contains_key("elements") {
+                    let basis: BseBasis = serde_json::from_value(serde_json::Value::Object(obj)).map_err(serde::de::Error::custom)?;
+                    Ok(BasisInput::Basis(Box::new(basis)))
+                } else {
+                    // Unknown object, treat as error
+                    Err(serde::de::Error::custom("Unknown basis object format"))
+                }
+            },
+            _ => Err(serde::de::Error::custom("expected string or basis object")),
+        }
+    }
 }
 
 impl From<String> for BasisInput {
@@ -58,6 +108,14 @@ impl From<Option<String>> for BasisInput {
 ///
 /// Please note for dict basis, the keys must be uppercase (`AU` instead of
 /// `Au`) to be matched.
+///
+/// # Serde Format
+///
+/// Can be deserialized from:
+/// - String: `"STO-3G"` -> `Uniform(String("STO-3G"))`
+/// - Map: `{"O": "STO-3G", "H": "6-31G"}` -> `Dict`
+/// - Array: `["STO-3G", "6-31G"]` -> `List`
+/// - Object: full `BseBasisElement` or `BseBasis` -> `Uniform(Element/Basis)`
 #[derive(Debug, Clone, PartialEq)]
 pub enum BasisSpec {
     Uniform(BasisInput),
@@ -67,7 +125,88 @@ pub enum BasisSpec {
 
 impl Default for BasisSpec {
     fn default() -> Self {
-        BasisSpec::Uniform("".into())
+        BasisSpec::Uniform(BasisInput::None)
+    }
+}
+
+impl Serialize for BasisSpec {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            BasisSpec::Uniform(input) => input.serialize(serializer),
+            BasisSpec::Dict(map) => {
+                use serde::ser::SerializeMap;
+                let mut map_ser = serializer.serialize_map(Some(map.len()))?;
+                for (k, v) in map.iter() {
+                    map_ser.serialize_entry(k, v)?;
+                }
+                map_ser.end()
+            },
+            BasisSpec::List(list) => {
+                use serde::ser::SerializeSeq;
+                let mut seq = serializer.serialize_seq(Some(list.len()))?;
+                for item in list.iter() {
+                    seq.serialize_element(item)?;
+                }
+                seq.end()
+            },
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for BasisSpec {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        match value {
+            serde_json::Value::String(s) => {
+                if s.is_empty() {
+                    Ok(BasisSpec::Uniform(BasisInput::None))
+                } else {
+                    Ok(BasisSpec::Uniform(BasisInput::String(s)))
+                }
+            },
+            serde_json::Value::Object(obj) => {
+                // Check if it's a BseBasisElement or BseBasis first
+                if obj.contains_key("electron_shells") || obj.contains_key("ecp_electrons") {
+                    let elem: BseBasisElement = serde_json::from_value(serde_json::Value::Object(obj)).map_err(serde::de::Error::custom)?;
+                    Ok(BasisSpec::Uniform(BasisInput::Element(Box::new(elem))))
+                } else if obj.contains_key("elements") {
+                    let basis: BseBasis = serde_json::from_value(serde_json::Value::Object(obj)).map_err(serde::de::Error::custom)?;
+                    Ok(BasisSpec::Uniform(BasisInput::Basis(Box::new(basis))))
+                } else {
+                    // Treat as dict mapping element labels to basis names
+                    let dict: IndexMap<String, BasisInput> = obj
+                        .into_iter()
+                        .map(|(k, v)| {
+                            let input = match v {
+                                serde_json::Value::String(s) => BasisInput::String(s),
+                                serde_json::Value::Object(_) => serde_json::from_value(v).map_err(serde::de::Error::custom)?,
+                                _ => return Err(serde::de::Error::custom("expected string or object in dict value")),
+                            };
+                            Ok((k.to_ascii_uppercase(), input))
+                        })
+                        .collect::<Result<_, _>>()?;
+                    Ok(BasisSpec::Dict(dict))
+                }
+            },
+            serde_json::Value::Array(arr) => {
+                let list: Vec<BasisInput> = arr
+                    .into_iter()
+                    .map(|v| match v {
+                        serde_json::Value::String(s) => Ok(BasisInput::String(s)),
+                        serde_json::Value::Object(_) => serde_json::from_value(v).map_err(serde::de::Error::custom),
+                        _ => Err(serde::de::Error::custom("expected string or object in list element")),
+                    })
+                    .collect::<Result<_, _>>()?;
+                Ok(BasisSpec::List(list))
+            },
+            _ => Err(serde::de::Error::custom("expected string, map, or array")),
+        }
     }
 }
 
@@ -91,6 +230,17 @@ where
 {
     fn from(map: TY) -> Self {
         let dict = map.into_iter().map(|(k, v)| (k.to_ascii_uppercase(), v.into())).collect();
+        BasisSpec::Dict(dict)
+    }
+}
+
+#[duplicate_item(TY; [String]; [&str])]
+impl<T, const N: usize> From<[(TY, T); N]> for BasisSpec
+where
+    T: Into<BasisInput>,
+{
+    fn from(arr: [(TY, T); N]) -> Self {
+        let dict = arr.into_iter().map(|(k, v)| (k.to_ascii_uppercase(), v.into())).collect();
         BasisSpec::Dict(dict)
     }
 }
