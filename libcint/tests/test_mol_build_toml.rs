@@ -117,6 +117,25 @@ default = "6-31G"
     check_cint_mol(toml_input, reference);
 }
 
+// hybrid basis, zmat with dihedral, inline toml dict
+#[test]
+fn difbas_ch4_zmat_inline_dict() {
+    let toml_input = r#"
+atom = """
+C
+H1 1 1.1
+H  1 1.1 2 109.47
+H2 1 1.1 2 109.47 3 120
+H1 1 1.1 2 109.47 4 120
+"""
+
+basis = { H1 = "aug-cc-pVQZ", H2 = "def2-TZVP", default = "6-31G" }
+cart = true
+"#;
+    let reference = (127, 27, 26.883841020740512, -100.6569835983665);
+    check_cint_mol(toml_input, reference);
+}
+
 // empty basis for some atoms
 #[test]
 fn empty_basis() {
