@@ -136,6 +136,118 @@ cart = true
     check_cint_mol(toml_input, reference);
 }
 
+#[test]
+fn difbas_ch4_fmthybrid() {
+    let toml_input = r#"
+atom = """
+C
+H1 1 1.1
+H  1 1.1 2 109.47
+H2 1 1.1 2 109.47 3 120
+H1 1 1.1 2 109.47 4 120
+"""
+
+basis = "custom"
+cart = true
+
+[basis-custom]
+H1 = """BASIS_H1"""
+H2 = """BASIS_H2"""
+default = """BASIS_DEFAULT"""
+"#;
+    let toml_input = &toml_input
+        .replace("BASIS_H1", &bse::get_formatted_basis("aug-cc-pVQZ", "nwchem", ""))
+        .replace("BASIS_H2", &bse::get_formatted_basis("def2-TZVP", "cp2k", ""))
+        .replace("BASIS_DEFAULT", &bse::get_formatted_basis("6-31G", "g94", ""));
+    let reference = (127, 27, 26.883841020740512, -100.6569835983665);
+    check_cint_mol(toml_input, reference);
+}
+
+// ghost atoms with hybrid basis, hybrid formats
+#[test]
+fn ghost_ch4_fmthybrid() {
+    let toml_input = r#"
+atom = """
+C
+H1 1 1.1
+H  1 1.1 2 109.47
+H2 1 1.1 2 109.47 3 120
+H1 1 1.1 2 109.47 4 120
+GHOST-H2 1 1.1 2 50 4 60
+"""
+
+basis = "custom"
+
+[basis-custom]
+H1 = """BASIS_H1"""
+H2 = """BASIS_H2"""
+default = """BASIS_DEFAULT"""
+"#;
+    let toml_input = &toml_input
+        .replace("BASIS_H1", &bse::get_formatted_basis("aug-cc-pVQZ", "cp2k", ""))
+        .replace("BASIS_H2", &bse::get_formatted_basis("def2-TZVP", "gamess_us", ""))
+        .replace("BASIS_DEFAULT", &bse::get_formatted_basis("6-31G", "crystal", ""));
+    let reference = (115, 31, 22.917103194160873, -59.51548379533634);
+    check_cint_mol(toml_input, reference);
+}
+
+// ghost atoms with uncontract general basis, hybrid formats
+#[test]
+fn ghost_ch4_uncontract_general() {
+    let toml_input = r#"
+atom = """
+C
+H1 1 1.1
+H  1 1.1 2 109.47
+H2 1 1.1 2 109.47 3 120
+H1 1 1.1 2 109.47 4 120
+GHOST-H2 1 1.1 2 50 4 60
+"""
+
+basis = "custom"
+
+[basis-custom]
+H1 = """BASIS_H1"""
+H2 = """BASIS_H2"""
+default = """BASIS_DEFAULT"""
+"#;
+    let toml_input = &toml_input
+        .replace("BASIS_H1", &bse::get_formatted_basis("aug-cc-pVQZ", "g94", ""))
+        .replace("BASIS_H2", &bse::get_formatted_basis("def2-TZVP", "turbomole", ""))
+        .replace("BASIS_DEFAULT", &bse::get_formatted_basis("6-31G", "cp2k", ""));
+    let reference = (115, 43, 22.917103194160873, -59.51548379533635);
+    check_cint_mol(toml_input, reference);
+}
+
+// X ghost atoms with hybrid basis, hybrid formats
+#[test]
+fn x_ch4_fmthybrid() {
+    let toml_input = r#"
+atom = """
+C
+H1 1 1.1
+H  1 1.1 2 109.47
+H2 1 1.1 2 109.47 3 120
+H1 1 1.1 2 109.47 4 120
+X-H2 1 1.1 2 50 4 60
+"""
+
+basis = "custom"
+cart = true
+
+[basis-custom]
+H1 = """BASIS_H1"""
+H2 = """BASIS_H2"""
+default = """BASIS_DEFAULT"""
+"#;
+    let toml_input = &toml_input
+        .replace("BASIS_H1", &bse::get_formatted_basis("aug-cc-pVQZ", "nwchem", ""))
+        .replace("BASIS_H2", &bse::get_formatted_basis("def2-TZVP", "nwchem", ""))
+        .replace("BASIS_DEFAULT", &bse::get_formatted_basis("6-31G", "nwchem", ""));
+    let reference = (133, 31, 6.762701948984031, 6.691179124574312);
+    check_cint_mol(toml_input, reference);
+}
+
 // empty basis for some atoms
 #[test]
 fn empty_basis() {
