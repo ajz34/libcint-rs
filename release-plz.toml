@@ -1,0 +1,9 @@
+[workspace]
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "libcint"
+git_release_enable = true
+git_tag_enable = true
+
