@@ -2,6 +2,9 @@
 //!
 //! This example demonstrates a simple RHF calculation on H2O/def2-TZVP.
 
+// This line is for CI to only run this example when "bse" feature is enabled. API User is not supposed to add this line.
+#![cfg(feature = "bse")]
+
 use libcint::prelude::*;
 use rstsr::prelude::*;
 
