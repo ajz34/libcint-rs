@@ -41,7 +41,7 @@ jobs:
       - name: test crate libcint
         run: |
           cd libcint
-          cargo test --no-default-features
+          cargo test --no-default-features --features="bse"
 
   test-build-static:
     runs-on: ubuntu-latest
@@ -50,7 +50,7 @@ jobs:
       - name: test crate libcint
         run: |
           cd libcint
-          cargo test --no-default-features --features="build_from_source static"
+          cargo test --no-default-features --features="build_from_source static bse"
 
   test-build-static-qcint:
     runs-on: ubuntu-latest
@@ -59,4 +59,4 @@ jobs:
       - name: test crate libcint
         run: |
           cd libcint
-          cargo test --no-default-features --features="build_from_source static qcint"
+          cargo test --no-default-features --features="build_from_source static qcint bse"
