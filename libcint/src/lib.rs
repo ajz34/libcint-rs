@@ -186,7 +186,7 @@
 //! comparison, the **same code in Python is 23 lines**.
 //!
 //! ```ignore
-#![doc = include_str!("../assets/h2o_rhf.rs")]
+#![doc = include_str!("../examples/h2o_rhf.rs")]
 //! ```
 
 pub mod prelude;

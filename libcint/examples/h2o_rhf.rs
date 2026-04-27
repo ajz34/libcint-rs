@@ -1,4 +1,7 @@
-#![allow(unused_variables)]
+//! H2O RHF calculation example using libcint.
+//!
+//! This example demonstrates a simple RHF calculation on H2O/def2-TZVP.
+
 use libcint::prelude::*;
 use rstsr::prelude::*;
 
@@ -44,10 +47,10 @@ fn main() {
     let nocc = 5; // hardcoded for H2O, 5 occupied orbitals
 
     let mut dm = ovlp.zeros_like();
-    for idx_iter in 0..40 {
+    for _idx_iter in 0..40 {
         // hardcoded SCF iterations
         let fock = &hcore + ((1.0_f64 * &int2e - 0.5_f64 * int2e.swapaxes(1, 2)) * &dm).sum_axes([-1, -2]);
-        let (mo_energy, mo_coeff) = rt::linalg::eigh((&fock, &ovlp)).into();
+        let (_mo_energy, mo_coeff) = rt::linalg::eigh((&fock, &ovlp)).into();
         dm = 2.0_f64 * mo_coeff.i((.., ..nocc)) % mo_coeff.i((.., ..nocc)).t();
     }
     let eng_scratch = &hcore + ((0.5_f64 * &int2e - 0.25_f64 * int2e.swapaxes(1, 2)) * &dm).sum_axes([-1, -2]);
