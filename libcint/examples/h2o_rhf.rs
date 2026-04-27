@@ -2,9 +2,6 @@
 //!
 //! This example demonstrates a simple RHF calculation on H2O/def2-TZVP.
 
-// This line is for CI to only run this example when "bse" feature is enabled. API User is not supposed to add this line.
-#![cfg(feature = "bse")]
-
 use libcint::prelude::*;
 use rstsr::prelude::*;
 
@@ -21,6 +18,9 @@ pub fn intor_row_major(cint: &CInt, intor: &str) -> Tsr {
     rt::asarray((out, shape.c(), &device))
 }
 
+// This attribute line is for CI to only run this example when "bse" feature is
+// enabled. API User is not supposed to add this line.
+#[cfg(feature = "bse")]
 fn main() {
     let device = DeviceCpu::default();
     // Assuming H2O/def2-TZVP data for `CInt` has been prepared
@@ -62,4 +62,10 @@ fn main() {
     println!("Total RHF energy: {}", eng_nuc + eng_elec);
     /* #endregion */
     assert!((eng_nuc + eng_elec - -76.05945519696209).abs() < 1e-8)
+}
+
+// ignore the following lines
+#[cfg(not(feature = "bse"))]
+fn main() {
+    println!("This example requires the 'bse' feature to be enabled.");
 }
