@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.0 -- 2026-04-27
+
+API Breaking Change:
+
+- Many functions in `gto` module have additional `const NLANE: usize` generic parameter, indicating block size of grid points. Some functions also introduce `blksize: usize` parameter. (ajz34/libcint-rs#3)
+- Now cargo feature `bse` is enabled by default. (ajz34/libcint-rs#4)
+
+Enhancements:
+
+- Added dynamic block size support for GTO evaluation on grids. (ajz34/libcint-rs#3)
+- Added `CIntMol` that can parse from toml (ajz34/libcint-rs#5) and build `CInt` from it (ajz34/libcint-rs#4). Basis sets are accordance to `bse` crate (basis set exchange in rust).
+
 ## v0.2.3 -- 2026-04-16
 
 Potential bug fix:
