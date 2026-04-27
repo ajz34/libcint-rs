@@ -29,6 +29,7 @@ toml = { version = "0.8", optional = true }
 [dev-dependencies]
 approx = "0.5"
 rstest = "0.25"
+rstsr = { version = "0.7", features = ["linalg", "sci"] }
 
 [features]
 default = ["bse"]

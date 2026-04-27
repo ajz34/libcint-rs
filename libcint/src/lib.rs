@@ -22,6 +22,9 @@
 //!   useful for integral with auxiliary basis sets.
 //! - [`CInt::integrate_with_args`], [`CInt::integrate_args_builder`]: integrate
 //!   function with arguments builder (advanced options).
+//! - [`CIntMol`] (feature `bse`): molecule builder from TOML/JSON, a weaker
+//!   version of PySCF's `Mole` class (handling only atom coordinates and basis
+//!   sets).
 //! - [cint_wrapper](ffi::cint_wrapper) and [cecp_wrapper](ffi::cecp_wrapper):
 //!   supported integrators.
 //!
@@ -70,6 +73,26 @@
 //! assert_eq!(shape, [3, 43, 43]);
 //! ```
 //!
+//! # Building Molecule from TOML/JSON (feature `bse`)
+//!
+//! With the `bse` feature, you can build a [`CIntMol`] object from TOML/JSON:
+//!
+//! ```ignore
+//! use libcint::prelude::*;
+//!
+//! let toml = r#"
+//! atom = "O 0 0 0; H 0 0 0.9572; H 0 0.9266 -0.239987"
+//! basis = "STO-3G"
+//! "#;
+//!
+//! let mol = CIntMol::from_toml(toml).unwrap();
+//! let ovlp = mol.cint.integrate("int1e_ovlp", None, None).out.unwrap();
+//! ```
+//!
+//! See [`parse::mole::CIntMol`] and [`parse::serde_build`] for details.
+//! Full TOML specification is documented in
+//! `libcint/src/parse/from_toml_docs.md`.
+//!
 //! # For users from PySCF
 //!
 //! This library corresponds to some parts of `pyscf.gto` module in PySCF.
@@ -79,14 +102,15 @@
 //! - Various get/set/with-clauses methods;
 //! - [`CInt`] corresponds to `(mol._atm, mol._bas, mol._env)` in PySCF (adding
 //!   `mol._ecpbas` for ECP).
+//! - [`CIntMol`] (feature `bse`) corresponds to PySCF's `Mole` class for
+//!   molecule input parsing (atom coordinates, basis sets, ECP).
 //!
 //! Differences are:
-//! - Recall that PySCF's `Mole` class handles three parts: Python input from
-//!   user (`mol.atom`, `mol.basis`, etc.), Python intermediates (`mol._basis`,
-//!   etc.), data for C-FFI (`mol._atm`, `mol._bas`, `mol._env`). In rust's
-//!   [`CInt`], it only handles the last part.
-//! - This library does not handle molecule input (coords, spin, charge, etc.)
-//!   and basis set parse. Molecule initialization should be performed by user.
+//! - [`CInt`] only handles C-FFI data (`_atm`, `_bas`, `_env`, `_ecpbas`),
+//!   similar to PySCF's internal arrays.
+//! - [`CIntMol`] provides molecule input parsing (atom coordinates, basis/ECP
+//!   from BSE, unit conversion, ghost atoms), comparable to PySCF's
+//!   `Mole.build()` flow.
 //!
 //! # Installation and Cargo Features
 //!
@@ -121,9 +145,11 @@
 //!
 //! ## Cargo features
 //!
-//! - Default features: None of any listed below (use library provided by system
-//!   or user, using [sunqm/libcint](https://github.com/sunqm/libcint), dynamic
-//!   linking, without F12 and 4c1e support).
+//! - Default features: `bse` (molecule builder from TOML/JSON with Basis Set
+//!   Exchange support).
+//! - `bse`: Enable [`CIntMol::from_toml`] and [`CIntMol::from_json`] for
+//!   building molecules from text input. Requires `bse` crate for basis set
+//!   data.
 //! - `build_from_source`: Trigger of C language library libcint building. This
 //!   performs by CMake; source code will be automatically downloaded from
 //!   github (if environment variable `CINT_SRC` not specified).
@@ -160,7 +186,7 @@
 //! comparison, the **same code in Python is 23 lines**.
 //!
 //! ```ignore
-#![doc = include_str!("../assets/h2o_rhf.rs")]
+#![doc = include_str!("../examples/h2o_rhf.rs")]
 //! ```
 
 pub mod prelude;

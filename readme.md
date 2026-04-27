@@ -16,6 +16,8 @@ This crate is not official bindgen project, neither [libcint](https://github.com
 
 ## Minimal Example
 
+### Basic integral calculation
+
 The most important function is [`CInt::integrate`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.integrate) and [`CInt::integrate_row_major`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.integrate_row_major). It is somehow similar to PySCF's `mol.intor(intor, aosym, shls_slice)`, but the user shall check output shape and strides. For more information on usage of crate `libcint`, we refer to [API Documentation](https://docs.rs/libcint).
 
 ```rust
@@ -35,6 +37,31 @@ assert_eq!(shape, [43, 43, 3]);
 let (out, shape): (Vec<f64>, Vec<usize>) = cint_data.integrate_row_major("int1e_ipkin", None, None).into();
 assert_eq!(shape, [3, 43, 43]);
 ```
+
+### Building molecule from TOML/JSON (feature `bse`)
+
+With the `bse` feature enabled, you can build a `CIntMol` object directly from TOML or JSON strings, similar to PySCF's `gto.M` format:
+
+```rust
+use libcint::prelude::*;
+
+let toml = r#"
+atom = "O 0 0 0; H 0 0 0.9572; H 0 0.9266 -0.239987"
+basis = "STO-3G"
+"#;
+
+let mol = CIntMol::from_toml(toml).unwrap();
+let ovlp = mol.cint.integrate("int1e_ovlp", None, None).out.unwrap();
+```
+
+For JSON input:
+
+```rust
+let json = r#"{"atom": "O 0 0 0; H 0 0 0.9572", "basis": "STO-3G"}"#;
+let mol = CIntMol::from_json(json).unwrap();
+```
+
+Supported fields: `atom` (Cartesian/Z-matrix), `basis` (BSE name or custom), `ecp`, `unit`, `cart`, `ghost_ecp`. See [from_toml_docs.md](libcint/src/parse/from_toml_docs.md) for full specification.
 
 ## Installation and Cargo Features
 
@@ -62,7 +89,8 @@ If access to github is not available, you can use environment variable `CINT_SRC
 
 ### Cargo features
 
-- Default features: None of any listed below (use library provided by system or user, using [sunqm/libcint](https://github.com/sunqm/libcint), dynamic linking, without F12 and 4c1e support).
+- Default features: `bse` (molecule builder from TOML/JSON with Basis Set Exchange support).
+- `bse`: Enable [`CIntMol::from_toml`] and [`CIntMol::from_json`] for building molecules from text input. Requires `bse` crate for basis set data.
 - `build_from_source`: Trigger of C language library libcint building. This performs by CMake; source code will be automatically downloaded from github (if environment variable `CINT_SRC` not specified).
 - `static`: Use static library for linking. This will require static link `libcint.a`, and dynamic link `libquadmath.so`.
 - `qcint`: Use [sunqm/qcint](https://github.com/sunqm/qcint) instead of [sunqm/libcint](https://github.com/sunqm/libcint). Some integrals will not be available if `qcint` does not supports that. This will also change URL source if cargo feature `build_from_source` specified.
