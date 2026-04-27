@@ -1,1 +1,1 @@
-../../examples/h2o_rhf/src/main.rs
+../examples/h2o_rhf.rs
