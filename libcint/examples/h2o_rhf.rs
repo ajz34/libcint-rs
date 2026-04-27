@@ -58,4 +58,5 @@ fn main() {
     println!("Total elec energy: {eng_elec}");
     println!("Total RHF energy: {}", eng_nuc + eng_elec);
     /* #endregion */
+    assert!((eng_nuc + eng_elec - -76.05945519696209).abs() < 1e-8)
 }
