@@ -104,6 +104,11 @@ fn link_cint() {
 
     if cfg!(feature = "static") {
         println!("cargo:rustc-link-lib=static=cint");
+        // It seems that quadmath is usually not linked by libcint on macOS (at least
+        // for conda shipped versions).
+        // Anyway, if encountered any problem, the API user should try dynamic linking
+        // or manually write build.rs.
+        #[cfg(not(target_os = "macos"))]
         println!("cargo:rustc-link-lib=quadmath");
     } else {
         println!("cargo:rustc-link-lib=cint");

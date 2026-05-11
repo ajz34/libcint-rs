@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.1 -- 2026-05-11
+
+OS dependent fix:
+
+- For libcint-src, MacOS will not statically link `quadmath` (which should be accordance to conda's shipped libcint).
+  If user encounter any problem, please try dynamic linking or manually write build.rs.
+
 ## v0.3.0 -- 2026-04-27
 
 API Breaking Change:
