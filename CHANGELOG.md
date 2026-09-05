@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.4.0 -- 2026-09-05
+
+Dependency Change:
+
+- The internal SIMD implementation (`FpSimd`) is replaced by the [`lightweight-simd`](https://crates.io/crates/lightweight-simd) crate (v0.1), which relies on compiler auto-vectorization rather than hand-written arithmetic implementation. (ajz34/libcint-rs#8)
+- MSRV is raised from 1.82.0 to 1.85.0, following the edition 2024 dependency.
+
+API Deprecation (source compatible):
+
+- `FpSimd` and `f64simd` are now deprecated type aliases of `lightweight_simd::Aligned64` and `lightweight_simd::f64x8`; use the latter directly. The method `is_gto_zero` is now provided by the extension trait `IsGtoZero`.
+
 ## v0.3.2 -- 2026-05-11
 
 OS dependent fix:
