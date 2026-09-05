@@ -9,6 +9,10 @@ tarpaulin-report.html
 book
 *.npy
 
+# local settings
+*.local
+*.local.*
+
 # bindgen
 blas_bindgen.h
 
