@@ -20,10 +20,10 @@ pub fn gto_shell_eval_grid_cart_deriv2<const NLANE: usize>(
     let [nctr, nprim] = shl_shape;
     let ncart = (l + 1) * (l + 2) / 2;
     let nao_to_set = nctr * ncart;
-    let mut f0 = [[f64simd::zero(); 3]; ANG_MAX + 2];
-    let mut f1 = [[f64simd::zero(); 3]; ANG_MAX + 2];
-    let mut f2 = [[f64simd::zero(); 3]; ANG_MAX + 2];
-    let mut buf = [f64simd::zero(); COMP_NUM];
+    let mut f0 = [[f64x8::zero(); 3]; ANG_MAX + 2];
+    let mut f1 = [[f64x8::zero(); 3]; ANG_MAX + 2];
+    let mut f2 = [[f64x8::zero(); 3]; ANG_MAX + 2];
+    let mut buf = [f64x8::zero(); COMP_NUM];
     let mut gto = gto.chunks_exact_mut(nao_to_set).collect_vec();
 
     // zero out the output buffer
@@ -45,9 +45,9 @@ pub fn gto_shell_eval_grid_cart_deriv2<const NLANE: usize>(
             if e.is_gto_zero() {
                 continue;
             }
-            f0[0][X] = f64simd::splat(1.0);
-            f0[0][Y] = f64simd::splat(1.0);
-            f0[0][Z] = f64simd::splat(1.0);
+            f0[0][X] = f64x8::splat(1.0);
+            f0[0][Y] = f64x8::splat(1.0);
+            f0[0][Z] = f64x8::splat(1.0);
             for ll in 1..=l + 2 {
                 f0[ll][X] = f0[ll - 1][X] * x;
                 f0[ll][Y] = f0[ll - 1][Y] * y;
@@ -62,7 +62,7 @@ pub fn gto_shell_eval_grid_cart_deriv2<const NLANE: usize>(
                     buf[icomp] = e * f[ix][lx][X] * f[iy][ly][Y] * f[iz][lz][Z];
                 }
                 for k in 0..nctr {
-                    let c = f64simd::splat(coeff[k * nprim + p]);
+                    let c = f64x8::splat(coeff[k * nprim + p]);
                     for icomp in 0..COMP_NUM {
                         gto[icomp][k * ncart + icart].get_simdd_mut(g).fma_from(c, buf[icomp]);
                     }

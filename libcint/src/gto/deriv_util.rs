@@ -1,215 +1,38 @@
 use crate::gto::prelude_dev::*;
-use num::traits::{MulAdd, NumAssignOps};
-use num::{Num, Zero};
+use num::Zero;
+
+pub use lightweight_simd::{f64x8, Aligned64};
 
 /* #region simple f64x8 */
-
-// TODO: use fearless_simd or pulp, they are more heavy but more complete SIMD
-// abstraction crates
 
 /// (dev) GTO internal SIMD type.
 ///
 /// In most cases, we use f64x8 as the SIMD type, which corresponds to AVX-512.
 ///
-/// This type implements basic arithmetic operations and some utility functions,
-/// such as arithmetics, fmadd, map, splat, etc.
-///
-/// Please note this is only a simple implementation. This does not cover any
-/// target of protable SIMD propose ([#86656](https://github.com/rust-lang/rust/issues/86656)).
+/// The SIMD implementation (arithmetics, fmadd, map, splat, etc.) is provided
+/// by the [`lightweight-simd`](lightweight_simd) crate, which relies on
+/// compiler auto-vectorization rather than explicit intrinsics.
 ///
 /// To fully utilize SIMD capabilities, you need to compile by `RUSTFLAGS="-C
 /// target-cpu=native"` or similar flags.
-#[repr(align(64))]
-#[derive(Clone, Debug, Copy)]
-pub struct FpSimd<T: Copy, const N: usize = SIMDD>(pub [T; N]);
+#[deprecated(since = "0.4.0", note = "use `lightweight_simd::Aligned64` (or `f64x8`) directly")]
+pub type FpSimd<T, const N: usize = SIMDD> = Aligned64<T, N>;
 
 /// Type alias for f64x8 SIMD type [`FpSimd<f64, 8>`].
 #[allow(non_camel_case_types)]
-pub type f64simd = FpSimd<f64, SIMDD>;
+#[deprecated(since = "0.4.0", note = "use `lightweight_simd::f64x8` directly")]
+pub type f64simd = f64x8;
 
-impl<T: Copy, const N: usize> Index<usize> for FpSimd<T, N> {
-    type Output = T;
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
-    }
-}
-
-impl<T: Copy, const N: usize> IndexMut<usize> for FpSimd<T, N> {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.0[index]
-    }
-}
-
-impl<T: Zero + Copy, const N: usize> FpSimd<T, N> {
-    /// Returns a SIMD object with all lanes set to zero.
-    #[inline(always)]
-    pub fn zero() -> Self {
-        FpSimd([T::zero(); N])
-    }
-
-    /// Returns an uninitialized SIMD object.
-    ///
-    /// # Safety
-    ///
-    /// This function returns an uninitialized object. The caller must ensure
-    /// that the returned value is properly initialized before use.
-    #[inline(always)]
-    #[allow(clippy::uninit_assumed_init)]
-    #[allow(invalid_value)]
-    pub unsafe fn uninit() -> Self {
-        core::mem::MaybeUninit::uninit().assume_init()
-    }
-
-    /// Returns a SIMD object with all lanes set to `val`.
-    #[inline(always)]
-    pub const fn splat(val: T) -> Self {
-        FpSimd([val; N])
-    }
-
-    /// Sets all lanes to `val`.
-    #[inline(always)]
-    pub fn fill(&mut self, val: T) {
-        self.0 = [val; N];
-    }
-
-    /// Applies function `f` to each lane and returns a new SIMD object.
-    #[inline]
-    pub fn map<F>(&self, f: F) -> Self
-    where
-        F: Fn(T) -> T,
-    {
-        FpSimd(self.0.map(f))
-    }
-}
-
-#[duplicate_item(
-    Trait trait_fn;
-    [Add] [add];
-    [Sub] [sub];
-    [Mul] [mul];
-    [Div] [div];
-)]
-mod impl_trait_for_f64simd {
-    use super::*;
-
-    // simd * simd
-    impl<T: Num + Copy> Trait for FpSimd<T, SIMDD> {
-        type Output = Self;
-        #[inline(always)]
-        fn trait_fn(self, rhs: Self) -> Self::Output {
-            FpSimd([
-                T::trait_fn(self[0], rhs[0]),
-                T::trait_fn(self[1], rhs[1]),
-                T::trait_fn(self[2], rhs[2]),
-                T::trait_fn(self[3], rhs[3]),
-                T::trait_fn(self[4], rhs[4]),
-                T::trait_fn(self[5], rhs[5]),
-                T::trait_fn(self[6], rhs[6]),
-                T::trait_fn(self[7], rhs[7]),
-            ])
-        }
-    }
-
-    // simd * scalar
-    impl<T: Num + Copy> Trait<T> for FpSimd<T, SIMDD> {
-        type Output = Self;
-        #[inline(always)]
-        fn trait_fn(self, rhs: T) -> Self::Output {
-            FpSimd([
-                T::trait_fn(self[0], rhs),
-                T::trait_fn(self[1], rhs),
-                T::trait_fn(self[2], rhs),
-                T::trait_fn(self[3], rhs),
-                T::trait_fn(self[4], rhs),
-                T::trait_fn(self[5], rhs),
-                T::trait_fn(self[6], rhs),
-                T::trait_fn(self[7], rhs),
-            ])
-        }
-    }
-}
-
-#[duplicate_item(
-    Trait trait_fn;
-    [AddAssign] [add_assign];
-    [SubAssign] [sub_assign];
-    [MulAssign] [mul_assign];
-    [DivAssign] [div_assign];
-)]
-impl<T: NumAssignOps + Copy> Trait for FpSimd<T, SIMDD> {
-    #[inline(always)]
-    fn trait_fn(&mut self, rhs: Self) {
-        self[0].trait_fn(rhs[0]);
-        self[1].trait_fn(rhs[1]);
-        self[2].trait_fn(rhs[2]);
-        self[3].trait_fn(rhs[3]);
-        self[4].trait_fn(rhs[4]);
-        self[5].trait_fn(rhs[5]);
-        self[6].trait_fn(rhs[6]);
-        self[7].trait_fn(rhs[7]);
-    }
-}
-
-impl<T: Neg<Output = T> + Copy> Neg for FpSimd<T, SIMDD> {
-    type Output = Self;
-    #[inline(always)]
-    fn neg(self) -> Self::Output {
-        FpSimd([-self[0], -self[1], -self[2], -self[3], -self[4], -self[5], -self[6], -self[7]])
-    }
-}
-
-impl<T> FpSimd<T, SIMDD>
-where
-    T: MulAdd<Output = T> + Copy,
-{
-    /// Performs fused multiply-add: `self * b + c`.
-    ///
-    /// This is similar function to [`MulAdd::mul_add`].
-    #[inline(always)]
-    pub fn mul_add(self, b: FpSimd<T, SIMDD>, c: FpSimd<T, SIMDD>) -> FpSimd<T, SIMDD> {
-        FpSimd([
-            self[0].mul_add(b[0], c[0]),
-            self[1].mul_add(b[1], c[1]),
-            self[2].mul_add(b[2], c[2]),
-            self[3].mul_add(b[3], c[3]),
-            self[4].mul_add(b[4], c[4]),
-            self[5].mul_add(b[5], c[5]),
-            self[6].mul_add(b[6], c[6]),
-            self[7].mul_add(b[7], c[7]),
-        ])
-    }
-
-    /// Performs fused multiply-add: `self = self + b * c`.
-    ///
-    /// Note that the order of multiplication and addition is different from
-    /// [`FpSimd::mul_add`].
-    #[inline(always)]
-    pub fn fma_from(&mut self, b: FpSimd<T, SIMDD>, c: FpSimd<T, SIMDD>) {
-        *self = FpSimd([
-            b[0].mul_add(c[0], self[0]),
-            b[1].mul_add(c[1], self[1]),
-            b[2].mul_add(c[2], self[2]),
-            b[3].mul_add(c[3], self[3]),
-            b[4].mul_add(c[4], self[4]),
-            b[5].mul_add(c[5], self[5]),
-            b[6].mul_add(c[6], self[6]),
-            b[7].mul_add(c[7], self[7]),
-        ])
-    }
-}
-
-impl f64simd {
+/// (dev) GTO zero-cutoff check for SIMD vectors.
+pub trait IsGtoZero {
     /// Checks if all lanes are smaller than the GTO zero cutoff [`GTOZERO`].
+    fn is_gto_zero(&self) -> bool;
+}
+
+impl<const N: usize> IsGtoZero for Aligned64<f64, N> {
     #[inline(always)]
-    pub fn is_gto_zero(&self) -> bool {
-        for i in 0..SIMDD {
-            if self[i].abs() > GTOZERO {
-                return false;
-            }
-        }
-        true
+    fn is_gto_zero(&self) -> bool {
+        self.as_array().iter().all(|&v| v.abs() <= GTOZERO)
     }
 }
 
@@ -251,7 +74,7 @@ impl f64simd {
 /// and compile time.
 #[repr(align(64))]
 #[derive(Clone, Debug, Copy)]
-pub struct Blk<T: Copy, const NLANE: usize>(pub [FpSimd<T, SIMDD>; NLANE]);
+pub struct Blk<T: Copy, const NLANE: usize>(pub [Aligned64<T, SIMDD>; NLANE]);
 
 #[allow(non_camel_case_types)]
 pub type f64blk<const NLANE: usize> = Blk<f64, NLANE>;
@@ -290,14 +113,14 @@ impl<T: Zero + Copy, const NLANE: usize> Blk<T, NLANE> {
     /// Returns a block with all elements set to `val`.
     #[inline(always)]
     pub const fn splat(val: T) -> Self {
-        Blk([FpSimd::splat(val); NLANE])
+        Blk([Aligned64::splat(val); NLANE])
     }
 
     /// Sets all elements to `val`.
     #[inline(always)]
     pub fn fill(&mut self, val: T) {
         for i in 0..NLANE {
-            self.0[i] = FpSimd::splat(val);
+            self.0[i] = Aligned64::splat(val);
         }
     }
 
@@ -309,7 +132,7 @@ impl<T: Zero + Copy, const NLANE: usize> Blk<T, NLANE> {
     #[inline(always)]
     pub unsafe fn read_ensure(&mut self, src: &[T]) {
         for i in 0..NLANE {
-            self.0[i] = FpSimd([
+            self.0[i] = Aligned64([
                 src[i * SIMDD],
                 src[i * SIMDD + 1],
                 src[i * SIMDD + 2],
@@ -374,27 +197,27 @@ impl<T: Zero + Copy, const NLANE: usize> Blk<T, NLANE> {
 impl<T: Copy, const NLANE: usize> Blk<T, NLANE> {
     /// Returns a slice of SIMD (double float) blocks view of this block.
     #[inline(always)]
-    pub const fn as_simdd_slice(&self) -> &[FpSimd<T, SIMDD>; NLANE] {
+    pub const fn as_simdd_slice(&self) -> &[Aligned64<T, SIMDD>; NLANE] {
         &self.0
     }
 
     /// Returns a mutable slice of SIMD (double float) blocks view of this
     /// block.
     #[inline(always)]
-    pub fn as_simdd_slice_mut(&mut self) -> &mut [FpSimd<T, SIMDD>; NLANE] {
+    pub fn as_simdd_slice_mut(&mut self) -> &mut [Aligned64<T, SIMDD>; NLANE] {
         &mut self.0
     }
 
     /// Gets the SIMD (double float) block at `index`.
     #[inline(always)]
-    pub const fn get_simdd(&self, index: usize) -> FpSimd<T, SIMDD> {
+    pub const fn get_simdd(&self, index: usize) -> Aligned64<T, SIMDD> {
         let slice = self.as_simdd_slice();
         slice[index]
     }
 
     /// Gets a mutable reference to the SIMD (double float) block at `index`.
     #[inline(always)]
-    pub fn get_simdd_mut(&mut self, index: usize) -> &mut FpSimd<T, SIMDD> {
+    pub fn get_simdd_mut(&mut self, index: usize) -> &mut Aligned64<T, SIMDD> {
         let slice = self.as_simdd_slice_mut();
         &mut slice[index]
     }
@@ -520,15 +343,15 @@ pub fn gto_l_iter(l: usize) -> Box<dyn Iterator<Item = (usize, usize, usize)>> {
 /// # PySCF equivalent
 ///
 /// `libcgto.so`: `void GTOnabla1`
-pub fn gto_nabla1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, alpha: f64) {
-    let a2 = FpSimd::<f64>::splat(-2.0 * alpha);
+pub fn gto_nabla1_simdd(f1: &mut [[f64x8; 3]], f0: &[[f64x8; 3]], l: usize, alpha: f64) {
+    let a2 = f64x8::splat(-2.0 * alpha);
     // first derivative
     f1[0][X] = a2 * f0[1][X];
     f1[0][Y] = a2 * f0[1][Y];
     f1[0][Z] = a2 * f0[1][Z];
     // recursive derivatives
     for i in 1..=l {
-        let i_f64 = FpSimd::<f64>::splat(i as f64);
+        let i_f64 = f64x8::splat(i as f64);
         f1[i][X] = i_f64 * f0[i - 1][X] + a2 * f0[i + 1][X];
         f1[i][Y] = i_f64 * f0[i - 1][Y] + a2 * f0[i + 1][Y];
         f1[i][Z] = i_f64 * f0[i - 1][Z] + a2 * f0[i + 1][Z];
@@ -587,10 +410,10 @@ pub fn gto_nabla1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, 
 /// # PySCF equivalent
 ///
 /// `libcgto.so`: `void GTOx1`
-pub fn gto_x1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, ri: [f64; 3]) {
-    let ri_x = f64simd::splat(ri[X]);
-    let ri_y = f64simd::splat(ri[Y]);
-    let ri_z = f64simd::splat(ri[Z]);
+pub fn gto_x1_simdd(f1: &mut [[f64x8; 3]], f0: &[[f64x8; 3]], l: usize, ri: [f64; 3]) {
+    let ri_x = f64x8::splat(ri[X]);
+    let ri_y = f64x8::splat(ri[Y]);
+    let ri_z = f64x8::splat(ri[Z]);
     for i in 0..=l {
         f1[i][X] = f0[i][X].mul_add(ri_x, f0[i + 1][X]);
         f1[i][Y] = f0[i][Y].mul_add(ri_y, f0[i + 1][Y]);
@@ -636,7 +459,7 @@ pub fn gto_x1_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize, ri: 
 /// # PySCF equivalent
 ///
 /// `grid_ao_drv.h`: macro `GTO_R_I`
-pub fn gto_r_simdd(f1: &mut [[f64simd; 3]], f0: &[[f64simd; 3]], l: usize) {
+pub fn gto_r_simdd(f1: &mut [[f64x8; 3]], f0: &[[f64x8; 3]], l: usize) {
     for i in 0..=l {
         f1[i][X] = f0[i + 1][X];
         f1[i][Y] = f0[i + 1][Y];

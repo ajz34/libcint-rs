@@ -18,12 +18,12 @@ pub fn gto_shell_eval_grid_cart_ipsp<const NLANE: usize>(
     let [nctr, nprim] = shl_shape;
     let ncart = (l + 1) * (l + 2) / 2;
     let nao_to_set = nctr * ncart;
-    let mut f0 = [[f64simd::zero(); 3]; ANG_MAX + 3];
-    let mut f1 = [[f64simd::zero(); 3]; ANG_MAX + 3];
-    let mut f2 = [[f64simd::zero(); 3]; ANG_MAX + 3];
-    let mut f3 = [[f64simd::zero(); 3]; ANG_MAX + 3];
-    let mut s = [[f64simd::zero(); 3]; 3];
-    let mut buf = [f64simd::zero(); COMP_NUM];
+    let mut f0 = [[f64x8::zero(); 3]; ANG_MAX + 3];
+    let mut f1 = [[f64x8::zero(); 3]; ANG_MAX + 3];
+    let mut f2 = [[f64x8::zero(); 3]; ANG_MAX + 3];
+    let mut f3 = [[f64x8::zero(); 3]; ANG_MAX + 3];
+    let mut s = [[f64x8::zero(); 3]; 3];
+    let mut buf = [f64x8::zero(); COMP_NUM];
     let mut gto = gto.chunks_exact_mut(nao_to_set).collect_vec();
 
     // zero out the output buffer
@@ -45,9 +45,9 @@ pub fn gto_shell_eval_grid_cart_ipsp<const NLANE: usize>(
             if e.is_gto_zero() {
                 continue;
             }
-            f0[0][X] = f64simd::splat(1.0);
-            f0[0][Y] = f64simd::splat(1.0);
-            f0[0][Z] = f64simd::splat(1.0);
+            f0[0][X] = f64x8::splat(1.0);
+            f0[0][Y] = f64x8::splat(1.0);
+            f0[0][Z] = f64x8::splat(1.0);
             for ll in 1..=l + 2 {
                 f0[ll][X] = f0[ll - 1][X] * x;
                 f0[ll][Y] = f0[ll - 1][Y] * y;
@@ -70,18 +70,18 @@ pub fn gto_shell_eval_grid_cart_ipsp<const NLANE: usize>(
                 buf[0] = -s[X][X];
                 buf[1] = -s[X][Y];
                 buf[2] = -s[X][Z];
-                buf[3] = f64simd::zero();
+                buf[3] = f64x8::zero();
                 buf[4] = -s[Y][X];
                 buf[5] = -s[Y][Y];
                 buf[6] = -s[Y][Z];
-                buf[7] = f64simd::zero();
+                buf[7] = f64x8::zero();
                 buf[8] = -s[Z][X];
                 buf[9] = -s[Z][Y];
                 buf[10] = -s[Z][Z];
-                buf[11] = f64simd::zero();
+                buf[11] = f64x8::zero();
 
                 for k in 0..nctr {
-                    let c = f64simd::splat(coeff[k * nprim + p]);
+                    let c = f64x8::splat(coeff[k * nprim + p]);
                     for icomp in 0..COMP_NUM {
                         gto[icomp][k * ncart + icart].get_simdd_mut(g).fma_from(c, buf[icomp]);
                     }
