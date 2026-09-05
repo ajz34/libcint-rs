@@ -650,7 +650,8 @@ impl CInt {
             },
         }
 
-        // Every shell in shls_slice must be within the range of number of shells.
+        // Every shell in shls_slice must be within the range of number of
+        // shells.
         let nbas = self.nbas() as c_int;
         for (i, shl) in shls_slice.iter().enumerate() {
             if !(0 <= shl[0] && shl[0] <= shl[1] && shl[1] <= nbas) {

@@ -130,8 +130,8 @@ impl CIntMol {
     pub fn from_json_f(json: &str) -> Result<Self, CIntError> {
         let input: CIntMolInput = serde_json::from_str(json).map_err(|e| cint_error!(ParseError, "Failed to parse JSON: {e}"))?;
 
-        // Check if basis/ecp are "custom" strings (JSON doesn't support custom table
-        // mechanism)
+        // Check if basis/ecp are "custom" strings (JSON doesn't support custom
+        // table mechanism)
         if let BasisSpec::Uniform(BasisInput::String(s)) = &input.basis {
             if s == "custom" {
                 return cint_raise!(ParseError, "JSON format does not support 'basis = \"custom\"' with separate custom table. Use inline dict format instead: `{{\"basis\": {{\"O\": \"STO-3G\"}}}}`");
@@ -389,7 +389,8 @@ fn make_ecp_env(
                     assert_eq!(coefficients[1].len(), exponents.len());
                 }
 
-                // Check for SO-ECP (if coefficients array has more than 1 inner vec)
+                // Check for SO-ECP (if coefficients array has more than 1 inner
+                // vec)
                 let has_so_ecp = coefficients.len() > 1;
 
                 // pyscf special handle: UL ECP -> -1
@@ -418,8 +419,9 @@ fn make_ecp_env(
                     cint.env.extend(&ecp_coef);
                     ptr += ecp_coef.len();
 
-                    // Create ecpbas entry: [atom_id, l, nexp, rorder, so_type, ptr_exp, ptr_coeff,
-                    // 0] atom_id will be filled later when iterating through atoms
+                    // Create ecpbas entry: [atom_id, l, nexp, rorder, so_type,
+                    // ptr_exp, ptr_coeff, 0] atom_id will
+                    // be filled later when iterating through atoms
                     // so_type = 0 for scalar ECP
                     ecp0.push([0, l, nexp, *r_order, 0, ptr_exp, ptr_coeff, 0]);
 
@@ -476,8 +478,8 @@ fn normalize_shell(l: i32, exponents: &[f64], coefficients: &[f64]) -> Vec<f64> 
 
     // Apply primitive normalization to raw coefficients
     // cs = einsum('pi,p->pi', cs, gto_norm)
-    // For coefficients in contraction-first layout: coeff[i*nprim + j] for contr i,
-    // prim j
+    // For coefficients in contraction-first layout: coeff[i*nprim + j] for
+    // contr i, prim j
     let prim_normalized: Vec<f64> = (0..nprim * nctr)
         .map(|idx| {
             let i = idx / nprim; // contraction index
@@ -493,8 +495,9 @@ fn normalize_shell(l: i32, exponents: &[f64], coefficients: &[f64]) -> Vec<f64> 
     let mut normalized: Vec<f64> = Vec::with_capacity(coefficients.len());
 
     for i in 0..nctr {
-        // Calculate contraction integral: sum over j,k: cs[j,i] * ee[j,k] * cs[k,i]
-        // Using contraction-first layout: prim_normalized[i*nprim + j]
+        // Calculate contraction integral: sum over j,k: cs[j,i] * ee[j,k] *
+        // cs[k,i] Using contraction-first layout:
+        // prim_normalized[i*nprim + j]
         let mut contr_int = 0.0;
         for j in 0..nprim {
             for k in 0..nprim {

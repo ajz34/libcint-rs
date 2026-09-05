@@ -299,7 +299,8 @@ impl CInt {
         let mut out_vec = match out {
             Some(_) => None,
             None => {
-                // rust is fast on zero-value allocation, so we always allocate zeroed vec here
+                // rust is fast on zero-value allocation, so we always allocate
+                // zeroed vec here
                 // also see `alloc::alloc::__rust_alloc_zeroed` or C `calloc`
                 fill_zero = false;
                 Some(vec![0.0; out_size])
@@ -604,11 +605,13 @@ impl CInt {
         let mut out_vec = match out {
             Some(_) => None,
             None => {
-                // rust is fast on zero-value allocation, so we always allocate zeroed vec here
+                // rust is fast on zero-value allocation, so we always allocate
+                // zeroed vec here
                 // also see `alloc::alloc::__rust_alloc_zeroed` or C `calloc`
                 fill_zero = false;
-                // for complex, note that `Complex::<f64>::zero()` may not be optimized by
-                // rust's zeroed allocation, so need a transmute here
+                // for complex, note that `Complex::<f64>::zero()` may not be
+                // optimized by rust's zeroed allocation, so
+                // need a transmute here
                 let vec = vec![[0.0_f64, 0.0_f64]; out_size];
                 Some(unsafe { transmute::<Vec<[f64; 2]>, Vec<Complex<f64>>>(vec) })
             },

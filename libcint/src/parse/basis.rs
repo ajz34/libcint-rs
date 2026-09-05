@@ -48,7 +48,8 @@ impl<'de> Deserialize<'de> for BasisInput {
                 }
             },
             serde_json::Value::Object(obj) => {
-                // Try to deserialize as BseBasisElement first (most common for inline)
+                // Try to deserialize as BseBasisElement first (most common for
+                // inline)
                 if obj.contains_key("electron_shells") || obj.contains_key("ecp_electrons") {
                     let elem: BseBasisElement = serde_json::from_value(serde_json::Value::Object(obj)).map_err(serde::de::Error::custom)?;
                     Ok(BasisInput::Element(Box::new(elem)))
@@ -276,7 +277,9 @@ pub fn resolve_basis(
     // step 1: generate the dictionary and atom label list first
     let mut result = BTreeMap::new();
     let mut name_list: Vec<String> = Vec::new(); // list of parsed
-    let mut name_map: BTreeMap<&str, String> = BTreeMap::new(); // atom.label -> parsed
+
+    // atom.label -> parsed
+    let mut name_map: BTreeMap<&str, String> = BTreeMap::new();
 
     for atom in atoms.iter() {
         // skip if label already processed
@@ -316,8 +319,8 @@ pub fn resolve_basis(
             bse::sort::sort_potentials(ecp_potentials);
         }
 
-        // check if the result have already have this basis (by parsed name), if so,
-        // check if the basis data is the same, otherwise raise.
+        // check if the result have already have this basis (by parsed name), if
+        // so, check if the basis data is the same, otherwise raise.
         if let Some(existing) = result.get(&parsed_name) {
             if existing != &basis_data {
                 cint_raise!(ParseError, "The basis parsing seems to give two different results with the same entry {parsed_name}.")?
@@ -376,7 +379,8 @@ fn resolve_basis_for_atom(atom: &AtomInfo, spec: &BasisSpec) -> Result<(BseBasis
             cint_raise!(ParseError, "No matching basis in list for element '{}'", atom.symbol)
         },
         BasisSpec::Dict(map) => {
-            // match by label, then identifier, then symbol, then default, then error
+            // match by label, then identifier, then symbol, then default, then
+            // error
             if let Some(input) = map.get(&atom.label) {
                 Ok((resolve_basis_input(input, &atom.symbol)?, atom.label.clone()))
             } else if let Some(input) = map.get(&atom.identifier) {

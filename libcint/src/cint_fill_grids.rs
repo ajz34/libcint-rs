@@ -86,8 +86,10 @@ impl CInt {
         }; // number of components for intor
 
         // n_center must be 2 for int1e_grids
-        let cgto_shape = self.cgto_shape_s1(shls_slice); // AO shape, without intor component
-        let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
+        // AO shape, without intor component
+        let cgto_shape = self.cgto_shape_s1(shls_slice);
+        // AO relative locations mapped to shells, 0-indexed
+        let cgto_locs = self.cgto_locs(shls_slice);
         let n_grids = self.ngrids();
         let mut grid_locs = (0..n_grids).step_by(BLKSIZE).collect_vec();
         grid_locs.push(n_grids);
@@ -172,8 +174,10 @@ impl CInt {
         }; // number of components for intor
 
         // n_center must be 2 for int1e_grids
-        let cgto_shape = self.cgto_shape_s1(shls_slice); // AO shape, without intor component
-        let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
+        // AO shape, without intor component
+        let cgto_shape = self.cgto_shape_s1(shls_slice);
+        // AO relative locations mapped to shells, 0-indexed
+        let cgto_locs = self.cgto_locs(shls_slice);
         let n_grids = self.ngrids();
         let mut grid_locs = (0..n_grids).step_by(BLKSIZE).collect_vec();
         grid_locs.push(n_grids);

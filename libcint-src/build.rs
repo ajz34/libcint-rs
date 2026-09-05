@@ -4,9 +4,10 @@ use std::path::PathBuf;
 
 fn build_libcint() {
     // read environment variables
-    // - CINT_SRC: source of libcint (should be git repository URL or path to local
-    //   source)
-    // - CINT_VER: version of libcint (`v6.1.2` for example, should start with `v`)
+    // - CINT_SRC: source of libcint (should be git repository URL or path to
+    //   local source)
+    // - CINT_VER: version of libcint (`v6.1.2` for example, should start with
+    //   `v`)
 
     let cint_src = std::env::var("CINT_SRC").unwrap_or({
         if cfg!(feature = "qcint") {
@@ -104,10 +105,10 @@ fn link_cint() {
 
     if cfg!(feature = "static") {
         println!("cargo:rustc-link-lib=static=cint");
-        // It seems that quadmath is usually not linked by libcint on macOS (at least
-        // for conda shipped versions).
-        // Anyway, if encountered any problem, the API user should try dynamic linking
-        // or manually write build.rs.
+        // It seems that quadmath is usually not linked by libcint on macOS (at
+        // least for conda shipped versions).
+        // Anyway, if encountered any problem, the API user should try dynamic
+        // linking or manually write build.rs.
         #[cfg(not(target_os = "macos"))]
         println!("cargo:rustc-link-lib=quadmath");
     } else {

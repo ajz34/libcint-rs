@@ -864,7 +864,8 @@ mod tests_llm_assist {
     #[test]
     fn test_parse_zmatrix_water() {
         // Water molecule: O at origin, H at bond distance, H with angle
-        // PySCF convention: H1 along x-axis, H2 at angle from x-axis in xz-plane
+        // PySCF convention: H1 along x-axis, H2 at angle from x-axis in
+        // xz-plane
         let atoms = parse_zmatrix("O\nH 1 0.94\nH 1 0.94 2 104.5", Unit::Angstrom).unwrap();
         assert_eq!(atoms.len(), 3);
         assert_eq!(atoms[0].symbol, "O");
@@ -878,7 +879,8 @@ mod tests_llm_assist {
         // Bond distance from O (origin), not from H1
         let bond_bohr = 0.94 * ANG_TO_BOHR;
         let angle_rad = 104.5 * std::f64::consts::PI / 180.0;
-        let expected_x = bond_bohr * angle_rad.cos(); // negative (second quadrant)
+        // negative (second quadrant)
+        let expected_x = bond_bohr * angle_rad.cos();
         let expected_z = bond_bohr * angle_rad.sin(); // positive
         assert_relative_eq!(atoms[2].coords[0], expected_x, epsilon = 1e-6);
         assert_relative_eq!(atoms[2].coords[1], 0.0, epsilon = 1e-6);
@@ -948,8 +950,8 @@ mod test_zmat {
     fn test_parse_zmatrix_collinear() {
         // Test collinear atoms: first three atoms on a line
         // This tests the n_norm < TOL case
-        // Atom1 at origin, Atom2 along x-axis, Atom3 also along x-axis (collinear)
-        // Atom4 needs special handling for dihedral
+        // Atom1 at origin, Atom2 along x-axis, Atom3 also along x-axis
+        // (collinear) Atom4 needs special handling for dihedral
         let token = "H\nH 1 1.0\nH 1 2.0 2 0.0\nH 1 1.5 2 90.0 3 45.0";
         let atoms = parse_zmatrix(token, Unit::Angstrom).unwrap();
 
@@ -1131,11 +1133,11 @@ mod test_zmat {
 
     #[test]
     fn test_cart2zmat_roundtrip_non_pyscf_convention() {
-        // Test that cart2zmat -> zmat2cart does NOT recover original coordinates
-        // when atoms don't follow PySCF convention.
-        // This is EXPECTED behavior matching PySCF - z-matrix loses orientation info.
-        // PySCF convention requires: Atom 1 at origin, Atom 2 along x-axis, Atom 3 in
-        // xz-plane (y=0)
+        // Test that cart2zmat -> zmat2cart does NOT recover original
+        // coordinates when atoms don't follow PySCF convention.
+        // This is EXPECTED behavior matching PySCF - z-matrix loses orientation
+        // info. PySCF convention requires: Atom 1 at origin, Atom 2
+        // along x-axis, Atom 3 in xz-plane (y=0)
         let coords: Vec<[f64; 3]> = vec![
             [0.0, 0.0, 0.0],
             [1.0, 0.0, 0.0],
@@ -1157,8 +1159,9 @@ mod test_zmat {
         assert_relative_eq!(coords[1][1], recovered[1][1], epsilon = 1e-6);
         assert_relative_eq!(coords[1][2], recovered[1][2], epsilon = 1e-6);
 
-        // Third atom: distance and angle preserved, but y becomes 0 (PySCF convention)
-        // PySCF places atom 3 in xz-plane, so recovered[3][1] = 0
+        // Third atom: distance and angle preserved, but y becomes 0 (PySCF
+        // convention) PySCF places atom 3 in xz-plane, so
+        // recovered[3][1] = 0
         let orig_dist = norm3([coords[2][0] - coords[0][0], coords[2][1] - coords[0][1], coords[2][2] - coords[0][2]]);
         let rec_dist = norm3([recovered[2][0] - recovered[0][0], recovered[2][1] - recovered[0][1], recovered[2][2] - recovered[0][2]]);
         assert_relative_eq!(orig_dist, rec_dist, epsilon = 1e-6);
@@ -1183,7 +1186,8 @@ mod test_zmat {
     #[test]
     fn test_cart2zmat_roundtrip() {
         // Test that cart2zmat -> zmat2cart recovers original coordinates
-        // IMPORTANT: Roundtrip only works for coordinates following PySCF convention:
+        // IMPORTANT: Roundtrip only works for coordinates following PySCF
+        // convention:
         // - Atom 1 at origin
         // - Atom 2 along x-axis
         // - Atom 3 in xz-plane (y = 0)

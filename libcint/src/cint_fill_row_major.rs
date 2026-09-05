@@ -51,8 +51,11 @@ impl CInt {
             Spinor => integrator.n_spinor_comp(),
         }; // number of components for intor
         let n_center = integrator.n_center(); // atom center number for intor
-        let cgto_shape = self.cgto_shape_s1(shls_slice); // AO shape, without intor component
-        let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
+
+        // AO shape, without intor component
+        let cgto_shape = self.cgto_shape_s1(shls_slice);
+        // AO relative locations mapped to shells, 0-indexed
+        let cgto_locs = self.cgto_locs(shls_slice);
 
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
@@ -202,8 +205,11 @@ impl CInt {
             Spinor => integrator.n_spinor_comp(),
         }; // number of components for intor
         let n_center = integrator.n_center(); // atom center number for intor
-        let cgto_shape = self.cgto_shape_s2ij(shls_slice); // AO shape, without intor component
-        let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
+
+        // AO shape, without intor component
+        let cgto_shape = self.cgto_shape_s2ij(shls_slice);
+        // AO relative locations mapped to shells, 0-indexed
+        let cgto_locs = self.cgto_locs(shls_slice);
 
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
@@ -224,7 +230,8 @@ impl CInt {
         const L: usize = 3; // index of fourth shell
 
         let nidx_i = (shls_slice[I][1] - shls_slice[I][0]) as usize;
-        let nidx_ij = nidx_i * (nidx_i + 1) / 2; // number of unique (i, j) pairs
+        // number of unique (i, j) pairs
+        let nidx_ij = nidx_i * (nidx_i + 1) / 2;
 
         match n_center {
             2 => {
@@ -357,9 +364,12 @@ impl CInt {
             Spheric | Cartesian => integrator.n_comp(),
             Spinor => integrator.n_spinor_comp(),
         }; // number of components for intor
-           // n_center must be 4 for S2kl symmetry, checked in `check_shls_slice`
-        let cgto_shape = self.cgto_shape_s2kl(shls_slice); // AO shape, without intor component
-        let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
+
+        // n_center must be 4 for S2kl symmetry, checked in `check_shls_slice`
+        // AO shape, without intor component
+        let cgto_shape = self.cgto_shape_s2kl(shls_slice);
+        // AO relative locations mapped to shells, 0-indexed
+        let cgto_locs = self.cgto_locs(shls_slice);
 
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
@@ -384,7 +394,8 @@ impl CInt {
         let nidx_i = (shls_slice[I][1] - shls_slice[I][0]) as usize;
         let nidx_j = (shls_slice[J][1] - shls_slice[J][0]) as usize;
         let nidx_k = (shls_slice[K][1] - shls_slice[K][0]) as usize;
-        let nidx_kl = nidx_k * (nidx_k + 1) / 2; // number of unique (k, l) pairs
+        // number of unique (k, l) pairs
+        let nidx_kl = nidx_k * (nidx_k + 1) / 2;
         let iter_layout = [nidx_i, nidx_j, nidx_kl].c();
         let iter_indices = IndexedIterLayout::new(&iter_layout, RowMajor).unwrap();
         let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
@@ -447,9 +458,12 @@ impl CInt {
             Spheric | Cartesian => integrator.n_comp(),
             Spinor => integrator.n_spinor_comp(),
         }; // number of components for intor
-           // n_center must be 4 for S4 symmetry, checked in `check_shls_slice`
-        let cgto_shape = self.cgto_shape_s4(shls_slice); // AO shape, without intor component
-        let cgto_locs = self.cgto_locs(shls_slice); // AO relative locations mapped to shells, 0-indexed
+
+        // n_center must be 4 for S4 symmetry, checked in `check_shls_slice`
+        // AO shape, without intor component
+        let cgto_shape = self.cgto_shape_s4(shls_slice);
+        // AO relative locations mapped to shells, 0-indexed
+        let cgto_locs = self.cgto_locs(shls_slice);
 
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
@@ -473,8 +487,10 @@ impl CInt {
 
         let nidx_i = (shls_slice[I][1] - shls_slice[I][0]) as usize;
         let nidx_k = (shls_slice[K][1] - shls_slice[K][0]) as usize;
-        let nidx_ij = nidx_i * (nidx_i + 1) / 2; // number of unique (i, j) pairs
-        let nidx_kl = nidx_k * (nidx_k + 1) / 2; // number of unique (k, l) pairs
+        // number of unique (i, j) pairs
+        let nidx_ij = nidx_i * (nidx_i + 1) / 2;
+        // number of unique (k, l) pairs
+        let nidx_kl = nidx_k * (nidx_k + 1) / 2;
         let iter_layout = [nidx_ij, nidx_kl].c();
         let iter_indices = IndexedIterLayout::new(&iter_layout, RowMajor).unwrap();
         let iter_par = iter_indices.into_par_iter().with_min_len(RAYON_PAR_MIN);
@@ -530,8 +546,8 @@ impl CInt {
         // then simply transpose col-major output; otherwise, it is only one
         // dimension and row/col-major is the same.
         //
-        // And since inplace-function only writes out buffer, so simply call col-major
-        // should work.
+        // And since inplace-function only writes out buffer, so simply call
+        // col-major should work.
 
         self.integral_s8_inplace(integrator, out, shls_slice, cint_opt)
     }

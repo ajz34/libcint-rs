@@ -841,8 +841,10 @@ pub fn aligned_alloc(numbytes: usize, alignment: usize) -> Option<NonNull<()>> {
 /// Nevertheless, if `T` is some type of `MaybeUninit`, then this will not UB.
 #[inline]
 pub unsafe fn aligned_uninitialized_vec<T>(size: usize) -> Vec<T> {
-    const MIN_ALIGN: usize = 64; // minimal number of elements in vector to be aligned
-    const ALIGNMENT: usize = 64; // 64 bytes alignment (minimal requirement for AVX-512)
+    // minimal number of elements in vector to be aligned
+    const MIN_ALIGN: usize = 64;
+    // 64 bytes alignment (minimal requirement for AVX-512)
+    const ALIGNMENT: usize = 64;
 
     if size == 0 {
         vec![]
