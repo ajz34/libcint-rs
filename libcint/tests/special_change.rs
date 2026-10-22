@@ -37,6 +37,25 @@ mod tests {
     }
 
     #[test]
+    fn test_concat_frac_charge() {
+        use libcint::ffi::cint_ffi;
+        use std::ffi::c_int;
+        const NUC_MOD_OF: usize = cint_ffi::NUC_MOD_OF as usize;
+        const PTR_FRAC_CHARGE: usize = cint_ffi::PTR_FRAC_CHARGE as usize;
+
+        let mol1 = init_h2o_def2_tzvp();
+        let mut mol2 = init_h2o_def2_tzvp();
+        mol2.atm[0][NUC_MOD_OF] = cint_ffi::FRAC_CHARGE_NUC as c_int;
+        mol2.atm[0][PTR_FRAC_CHARGE] = mol2.env.len() as c_int;
+        mol2.env.push(-0.834);
+        assert_eq!(mol2.atom_charge(0), -0.834);
+
+        let mol = &mol1 + &mol2;
+        assert_eq!(mol.atom_charges()[..3], mol1.atom_charges()[..]);
+        assert_eq!(mol.atom_charges()[3..], mol2.atom_charges()[..]);
+    }
+
+    #[test]
     fn test_fakemol_for_charges() {
         let coords = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 1.5, 2.3], [3.0, 4.0, 5.0]];
         let exponent = 0.5;
