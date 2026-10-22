@@ -169,10 +169,16 @@
 //!   of `libcint.so` and `libcint.a`. This crate will try to find if this
 //!   library is in directory root, or `directory_root/lib`. May override the
 //!   library built by cargo feature `build_from_source`.
-//! - `CINT_SRC`: Source of libcint or qcint (must be a git repository). Only
+//! - `CINT_SRC`: Source of libcint or qcint: a git repository (URL or local
+//!   path), a source archive (local path, or URL ending in `.tar.gz`, `.tgz`,
+//!   `.tar.bz2`, `.tar.xz` or `.zip`), or an unpacked source directory. Only
 //!   works with cargo feature `build_from_source`.
-//! - `CINT_VIR`: Version of libcint or qcint (e.g. `v6.1.2`, must starts with
-//!   `v` prefix). Only works with cargo feature `build_from_source`.
+//! - `CINT_VER`: Version of libcint or qcint (e.g. `v6.1.2`, must starts with
+//!   `v` prefix), as a git tag. Only works with cargo feature
+//!   `build_from_source` and a git `CINT_SRC`.
+//! - `CINT_SRC_SHA256`: Expected SHA256 of the `CINT_SRC` archive; the build
+//!   fails on a mismatch. Only works with cargo feature `build_from_source` and
+//!   an archive `CINT_SRC`.
 //!
 //! # 50 lines RHF with Rust
 //!
