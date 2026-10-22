@@ -564,8 +564,14 @@ impl CInt {
     }
 
     /// Check whether the `CInt` instance has been merged with ECP data.
+    ///
+    /// A merged instance holds `ecpbas` both in its own field and at the end
+    /// of `bas`, starting at offset `env[AS_ECPBAS_OFFSET]`. Nonzero
+    /// `env[AS_ECPBAS_OFFSET]` alone is not enough: PySCF leaves it set in
+    /// `Mole._env` after any ECP integral, while `Mole._bas` stays unmerged.
     pub fn is_ecp_merged(&self) -> bool {
-        self.env[cecp_ffi::AS_ECPBAS_OFFSET as usize] != 0.0
+        let offset = self.env[cecp_ffi::AS_ECPBAS_OFFSET as usize];
+        offset != 0.0 && self.bas.get(offset as usize..) == Some(self.ecpbas.as_slice())
     }
 }
 

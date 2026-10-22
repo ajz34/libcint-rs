@@ -51,4 +51,30 @@ mod tests {
         assert_relative_eq!(cint_fingerprint(&out), 0.3218956097258599, max_relative = 1e-10);
         assert_eq!(shape, [43, 4]);
     }
+
+    #[test]
+    fn test_stale_ecpbas_offset() {
+        use libcint::ffi::cecp_ffi;
+        const AS_ECPBAS_OFFSET: usize = cecp_ffi::AS_ECPBAS_OFFSET as usize;
+        const AS_NECPBAS: usize = cecp_ffi::AS_NECPBAS as usize;
+
+        let mol = init_sb2me4_cc_pvtz();
+        let merged = mol.merge_ecpbas();
+        assert!(!mol.is_ecp_merged());
+        assert!(merged.is_ecp_merged());
+
+        // PySCF's `Mole._env` after an ECP integral: offset slots set, `_bas`
+        // unmerged
+        let mut stale = mol.clone();
+        stale.env[AS_ECPBAS_OFFSET] = mol.bas.len() as f64;
+        stale.env[AS_NECPBAS] = mol.ecpbas.len() as f64;
+        assert!(!stale.is_ecp_merged());
+        assert_eq!(stale.nbas(), mol.nbas());
+        assert_eq!(stale.decopule_ecpbas().ecpbas, mol.ecpbas);
+        assert_eq!(stale.merge_ecpbas(), merged);
+        let (out, shape) = stale.integrate("int1e_ovlp", None, None).into();
+        let (out_ref, shape_ref) = mol.integrate("int1e_ovlp", None, None).into();
+        assert_eq!(shape, shape_ref);
+        assert_eq!(out, out_ref);
+    }
 }
