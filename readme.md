@@ -100,7 +100,7 @@ If access to github is not available, you can use environment variable `CINT_SRC
 
 ### Shell environment variables
 
-- `CINT_DIR`, `LD_LIBRARY_PATH`, `REST_EXT_DIR`: Your compiled library path of `libcint.so` and `libcint.a`. This crate will try to find if this library is in directory root, or `directory_root/lib`. May override the library built by cargo feature `build_from_source`.
+- `CINT_DIR`, `LD_LIBRARY_PATH`, `REST_EXT_DIR`: Your compiled library path of `libcint.so` and `libcint.a`. This crate will try to find if this library is in directory root, or `directory_root/lib`. Not searched with cargo feature `build_from_source`, which links the library it built.
 - `CINT_SRC`: Source of libcint or qcint (must be a git repository). Only works with cargo feature `build_from_source`.
 - `CINT_VIR`: Version of libcint or qcint (e.g. `v6.1.2`, must starts with `v` prefix). Only works with cargo feature `build_from_source`.
 
