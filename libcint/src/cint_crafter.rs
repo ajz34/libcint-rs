@@ -45,6 +45,48 @@ pub(crate) fn opt_requirement(integrator: &dyn Integrator) -> OptRequirement {
     }
 }
 
+/// Strip a `_sph` / `_cart` / `_spinor` suffix from an integrator name.
+///
+/// The optimizer itself is representation-independent, so the optimizer
+/// constructors and the drivers accept the same suffixed names.
+fn strip_cint_type_suffix(intor: &str) -> &str {
+    intor.strip_suffix("_sph").or_else(|| intor.strip_suffix("_cart")).or_else(|| intor.strip_suffix("_spinor")).unwrap_or(intor)
+}
+
+/// Resolve the integrator of a cross integral and check the molecule count.
+fn cross_integrator(intor: &str, mols: &[&CInt]) -> Result<Box<dyn Integrator>, CIntError> {
+    let integrator = crate::cint::get_integrator_f(strip_cint_type_suffix(intor))?;
+    let n_center = integrator.n_center();
+    if mols.len() != n_center {
+        cint_raise!(InvalidValue, "Number of molecules ({}) does not match number of centers ({n_center})", mols.len())?;
+    }
+    Ok(integrator)
+}
+
+/// Concatenate the molecules of a cross integral for evaluation.
+///
+/// Identical molecules are de-duplicated in first-appearance order, matching
+/// what [`CInt::integrate_cross`] evaluates. Returns the concatenated molecule
+/// and, for each input molecule, the shell offset its block starts at.
+///
+/// `mols` must be non-empty; callers check the length against the integrator's
+/// number of centres first.
+fn cross_concat(mols: &[&CInt]) -> (CInt, Vec<usize>) {
+    let mut offsets = vec![0; mols.len()];
+    let mut unique: Vec<&CInt> = vec![mols[0]];
+    let mut concat = mols[0].clone();
+    for (i, &mol) in mols.iter().enumerate().skip(1) {
+        if let Some(pos) = unique.iter().position(|&m| m == mol) {
+            offsets[i] = offsets[pos];
+        } else {
+            offsets[i] = concat.nbas();
+            concat = &concat + mol;
+            unique.push(mol);
+        }
+    }
+    (concat, offsets)
+}
+
 /// Implementation of integral at higher API level (for advanced user usage).
 impl CInt {
     /// Obtain integrator optimizer.
@@ -109,6 +151,47 @@ impl CInt {
         Ok(self.build_cint_opt(&*integrator))
     }
 
+    /// Build the optimizer that [`CInt::integrate_cross`] needs.
+    ///
+    /// [`CInt::integrate_cross`] concatenates `mols` internally, de-duplicating
+    /// identical molecules in first-appearance order. This constructor builds
+    /// the optimizer for exactly that layout, so the handle can be passed to
+    /// [`IntorCrossArgs::cintopt`] without reconstructing the concatenation by
+    /// hand (`&a + &b` only matches when the molecules are distinct).
+    ///
+    /// For three-center integrals (`int3c2e*`), an optimizer built from the bra
+    /// pair alone is also valid and cheaper (`bra.get_cintopt("int3c2e")`);
+    /// this constructor always builds the optimizer of the full concatenation.
+    ///
+    /// `_sph` / `_cart` / `_spinor` suffixed names are accepted as well, since
+    /// the optimizer is representation-independent.
+    ///
+    /// # Panics
+    ///
+    /// - integrator not found
+    /// - `mols.len()` does not match the integrator's number of centres
+    ///
+    /// # See also
+    ///
+    /// - [`CInt::get_cintopt`]: optimizer for a single molecule
+    pub fn get_cintopt_cross<'l>(intor: &str, mols: impl AsRef<[&'l CInt]>) -> CIntOpt {
+        Self::get_cintopt_cross_f(intor, mols).cint_unwrap()
+    }
+
+    /// Build the optimizer that [`CInt::integrate_cross`] needs.
+    ///
+    /// This function is failable.
+    ///
+    /// # See also
+    ///
+    /// [`CInt::get_cintopt_cross`]
+    pub fn get_cintopt_cross_f<'l>(intor: &str, mols: impl AsRef<[&'l CInt]>) -> Result<CIntOpt, CIntError> {
+        let mols = mols.as_ref();
+        let integrator = cross_integrator(intor, mols)?;
+        let (concat, _) = cross_concat(mols);
+        Ok(concat.build_cint_opt(&*integrator))
+    }
+
     /// Check that an integrator can be optimized, and return it.
     ///
     /// The dummy shell slice only exists so that the integrator name and
@@ -116,9 +199,7 @@ impl CInt {
     fn cintopt_integrator(&self, intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
         // accept the same `_sph` / `_cart` / `_spinor` suffixed names as the
         // integral drivers; the optimizer itself is representation-independent.
-        let intor =
-            intor.strip_suffix("_sph").or_else(|| intor.strip_suffix("_cart")).or_else(|| intor.strip_suffix("_spinor")).unwrap_or(intor);
-        let integrator = crate::cint::get_integrator_f(intor)?;
+        let integrator = crate::cint::get_integrator_f(strip_cint_type_suffix(intor))?;
         // make dummy shell slices and symms, only for checking
         let n_center = integrator.n_center();
         let cint_symm = CIntSymm::S1;
@@ -430,11 +511,8 @@ impl CInt {
     {
         let IntorCrossArgs { intor, mols, shls_slice, aosym, out, row_major, cintopt } = args;
 
-        let integrator = CInt::get_integrator_f(intor)?;
+        let integrator = cross_integrator(intor, mols)?;
         let n_center = integrator.n_center();
-        if mols.len() != n_center {
-            cint_raise!(InvalidValue, "Number of molecules ({}) does not match number of centers ({n_center})", mols.len())?;
-        }
         let mut shls_slice = if shls_slice.is_empty() {
             mols.iter().map(|mol| [0, mol.nbas()]).collect_vec()
         } else {
@@ -453,30 +531,12 @@ impl CInt {
             shls_slice.to_vec()
         };
 
-        // vec of [mol_to_concate, nbas_offset]
-        let mut to_concate = vec![(&mols[0], 0)];
-        let mut mol_concate = mols[0].clone();
-
+        // Concatenate the distinct molecules (first-appearance order) and shift
+        // each slice to the concatenated shell numbering.
+        let (mol_concate, offsets) = cross_concat(mols);
         for i in 1..n_center {
-            let mut has_equal = false;
-            for &(&mol_to_concate, nbas_offset) in to_concate.iter() {
-                if mols[i] == mol_to_concate {
-                    has_equal = true;
-                    // update nbas_offset
-                    shls_slice[i][0] += nbas_offset;
-                    shls_slice[i][1] += nbas_offset;
-                    break;
-                }
-            }
-            if !has_equal {
-                // add new molecule to concatenate
-                let nbas_offset = mol_concate.nbas();
-                mol_concate = &mol_concate + mols[i];
-                to_concate.push((&mols[i], nbas_offset));
-                // update shls_slice
-                shls_slice[i][0] += nbas_offset;
-                shls_slice[i][1] += nbas_offset;
-            }
+            shls_slice[i][0] += offsets[i];
+            shls_slice[i][1] += offsets[i];
         }
 
         // Four-centre cross integrals read optimizer data for all four centres

@@ -392,6 +392,89 @@ mod test {
         assert_eq!(reused, auto);
     }
 
+    /// `get_cintopt_cross` reproduces the internal de-duplicated concatenation
+    /// (`[a, a, b, b]` -> `a + b`), so a four-centre cross can reuse it.
+    #[test]
+    fn get_cintopt_cross_int2e_matches_concat() {
+        let a = init_h2o_def2_tzvp();
+        let b = init_h2o_def2_jk();
+        let mols = [&a, &a, &b, &b];
+
+        let opt = CInt::get_cintopt_cross("int2e", mols);
+        assert_eq!(opt.intor(), "int2e");
+        assert_eq!(opt.nbas(), a.nbas() + b.nbas());
+
+        let slices = [[0, a.nbas()], [0, a.nbas()], [0, b.nbas()], [0, b.nbas()]];
+        let (auto, shape) = CInt::integrate_cross("int2e", mols, "s1", slices).into();
+        let args = a.integrate_cross_args_builder().intor("int2e").mols(&mols).shls_slice(&slices).cintopt(&opt).build().unwrap();
+        let (reused, shape2) = CInt::integrate_cross_with_args(args).into();
+        assert_eq!(shape, shape2);
+        assert_eq!(reused, auto);
+    }
+
+    /// For three-center cross integrals both the full-concatenation optimizer
+    /// and the cheaper bra-only one are valid and must give the same numbers.
+    #[test]
+    fn get_cintopt_cross_int3c2e_matches_bra_opt() {
+        let h2o = init_h2o_def2_tzvp();
+        let jk = init_h2o_def2_jk();
+        let mols = [&h2o, &h2o, &jk];
+
+        let full = CInt::get_cintopt_cross("int3c2e", mols);
+        let bra = h2o.get_cintopt("int3c2e");
+        assert_eq!(full.nbas(), h2o.nbas() + jk.nbas());
+        assert_eq!(bra.nbas(), h2o.nbas());
+
+        let slices = [[0, h2o.nbas()], [0, h2o.nbas()], [0, jk.nbas()]];
+        let (key, _) = CInt::integrate_cross("int3c2e", mols, "s2ij", slices).into();
+        for opt in [&full, &bra] {
+            let args = h2o
+                .integrate_cross_args_builder()
+                .intor("int3c2e")
+                .mols(&mols)
+                .aosym("s2ij")
+                .shls_slice(&slices)
+                .cintopt(opt)
+                .build()
+                .unwrap();
+            let (out, _) = CInt::integrate_cross_with_args(args).into();
+            assert_eq!(out, key);
+        }
+    }
+
+    /// Cross integrals accept representation-suffixed names, and the optimizer
+    /// built for them is representation-independent.
+    #[test]
+    fn get_cintopt_cross_spinor_suffix() {
+        let a = init_h2o_def2_tzvp();
+        let b = init_h2o_def2_jk();
+        let mols = [&a, &b];
+        let slices = [[0, a.nbas()], [0, b.nbas()]];
+
+        let opt = CInt::get_cintopt_cross("int2c2e_spinor", mols);
+        assert_eq!(opt.intor(), "int2c2e");
+
+        let (auto, shape) = CInt::integrate_cross_spinor("int2c2e_spinor", mols, "s1", slices).into();
+        let args =
+            a.integrate_cross_args_builder_spinor().intor("int2c2e_spinor").mols(&mols).shls_slice(&slices).cintopt(&opt).build().unwrap();
+        let (reused, shape2) = CInt::integrate_cross_with_args_spinor(args).into();
+        assert_eq!(shape, shape2);
+        assert_eq!(reused, auto);
+    }
+
+    #[test]
+    fn get_cintopt_cross_errors() {
+        let a = init_h2o_def2_tzvp();
+        let b = init_h2o_def2_jk();
+
+        let err = CInt::get_cintopt_cross_f("int2e_nonexistent", [&a; 4]).unwrap_err();
+        assert!(matches!(err.kind, CIntErrorBase::IntegratorNotFound(_)), "{err:?}");
+
+        // wrong number of molecules for a three-center integrator
+        let err = CInt::get_cintopt_cross_f("int3c2e", [&a, &b]).unwrap_err();
+        assert!(matches!(err.kind, CIntErrorBase::InvalidValue(_)), "{err:?}");
+    }
+
     #[test]
     #[ignore = "timing only; run with `cargo test --release -- --ignored --nocapture`"]
     fn optimizer_reuse_bench() {

@@ -371,6 +371,7 @@ pub struct IntorCrossArgs<'l, F> {
     /// molecules in first-appearance order (that is the layout evaluated, and
     /// the one produced by `&a + &b`); the optimizer must be built from that
     /// de-duplicated concatenation, not from a literal fold of the `mols` list.
+    /// [`CInt::get_cintopt_cross`] builds it from the same `mols` list.
     ///
     /// A valid leading prefix is accepted for three-center integrals
     /// (`int3c2e*`), which only read optimizer data for the first two centres:
@@ -901,6 +902,8 @@ impl CInt {
     ///   type integrals.
     /// - [`integrate_cross_with_args`](Self::integrate_cross_with_args) for
     ///   more advanced usage (full arguments that this crate supports).
+    /// - [`get_cintopt_cross`](Self::get_cintopt_cross) to build a reusable
+    ///   optimizer for repeated cross evaluations.
     pub fn integrate_cross<'l>(
         intor: &str,
         mols: impl AsRef<[&'l CInt]>,

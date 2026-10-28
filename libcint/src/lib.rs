@@ -24,7 +24,8 @@
 //!   function with arguments builder (advanced options).
 //! - [`CInt::get_cintopt`], [`CIntOpt`]: build a reusable libcint optimizer and
 //!   pass it through [`IntegrateArgs::cintopt`] / [`IntorCrossArgs::cintopt`]
-//!   instead of rebuilding it on every call.
+//!   instead of rebuilding it on every call. For cross integrals,
+//!   [`CInt::get_cintopt_cross`] builds it from the same `mols` list.
 //! - [`CIntMol`] (feature `bse`): molecule builder from TOML/JSON, a weaker
 //!   version of PySCF's `Mole` class (handling only atom coordinates and basis
 //!   sets).
