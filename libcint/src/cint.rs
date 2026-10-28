@@ -196,11 +196,12 @@ pub enum CIntOptimizer {
 ///
 /// libcint's optimizers hold prescreening tables (`pairdata`, nonzero
 /// contraction maps, angular-momentum index arrays) that cost O(nbas²) to
-/// build and can be tens of MB for high angular momentum. Build one with
-/// [`CInt::get_cintopt`] and pass it by reference to
+/// build. Build one with [`CInt::get_cintopt`] and pass it by reference to
 /// [`IntegrateArgs::cintopt`] / [`IntorCrossArgs::cintopt`] instead of letting
 /// the engine rebuild it on every call — the typical case is J/K build that
 /// evaluates the same integral in many shell batches.
+///
+/// # Validity
 ///
 /// The handle is only valid for the molecule and integrator it was built from:
 /// rebuild it after any change of `atm`, `bas`, `ecpbas` or `env`. It is
@@ -211,6 +212,7 @@ pub struct CIntOpt {
     pub(crate) intor: &'static str,
     pub(crate) nbas: usize,
     pub(crate) max_l: c_int,
+    pub(crate) necpbas: usize,
 }
 
 impl CIntOpt {
@@ -365,10 +367,18 @@ pub struct IntorCrossArgs<'l, F> {
 
     /// Pre-built optimizer for the concatenated molecule (see [`CIntOpt`]).
     ///
-    /// Cross integrals concatenate `mols` internally, so the optimizer must be
-    /// built from that same concatenation, or from a valid leading prefix of
-    /// it. For the common `[bra, bra, aux]` three-center case, an optimizer
-    /// built from `bra` alone is valid (`bra.get_cintopt("int3c2e")`).
+    /// Cross integrals concatenate `mols` internally, de-duplicating identical
+    /// molecules in first-appearance order (that is the layout evaluated, and
+    /// the one produced by `&a + &b`); the optimizer must be built from that
+    /// de-duplicated concatenation, not from a literal fold of the `mols` list.
+    ///
+    /// A valid leading prefix is accepted for three-center integrals
+    /// (`int3c2e*`), which only read optimizer data for the first two centres:
+    /// for the common `[bra, bra, aux]` case, an optimizer built from `bra`
+    /// alone is valid (`bra.get_cintopt("int3c2e")`). Four-center integrals
+    /// (`int2e*`) read optimizer data for all four centres (prescreening pair
+    /// tables depend on the shell layout), so they require the optimizer of the
+    /// exact de-duplicated concatenation; a different layout is rejected.
     #[builder(default, setter(strip_option))]
     pub cintopt: Option<&'l CIntOpt>,
 }

@@ -56,8 +56,9 @@ impl CInt {
     /// # Panics
     ///
     /// - integrator not found
-    /// - `env` field not properly initialized for ECP integrator (should call
-    ///   `merge_ecpbas` before this function)
+    ///
+    /// ECP data is merged internally when needed, so an unmerged molecule is
+    /// accepted.
     pub fn optimizer(&self, intor: &str) -> CIntOptimizer {
         self.optimizer_f(intor).cint_unwrap()
     }
@@ -89,8 +90,9 @@ impl CInt {
     /// # Panics
     ///
     /// - integrator not found
-    /// - `env` field not properly initialized for ECP integrator (should call
-    ///   `merge_ecpbas` before this function)
+    ///
+    /// ECP data is merged internally when needed, so an unmerged molecule is
+    /// accepted.
     pub fn get_cintopt(&self, intor: &str) -> CIntOpt {
         self.get_cintopt_f(intor).cint_unwrap()
     }
@@ -129,22 +131,31 @@ impl CInt {
     ///
     /// `nbas` mirrors the shell count that [`CInt::get_optimizer`] hands to the
     /// C constructor (`Int` kind: the molecule's own basis; `Ecp`: the merged
-    /// basis). `max_l` is the largest angular momentum of that basis and is
-    /// only consulted for `int2c2e` (the one family without an on-the-fly
-    /// fallback for missing index arrays).
+    /// basis). `max_l` is the largest angular momentum of that basis.
+    /// `necpbas` is the number of ECP shells the ECP optimizer is built for
+    /// (zero for `Int`-kind integrators).
     pub(crate) fn build_cint_opt(&self, integrator: &dyn Integrator) -> CIntOpt {
-        let nbas = match integrator.kind() {
-            CIntKind::Int => self.bas.len(),
+        let (nbas, necpbas) = match integrator.kind() {
+            CIntKind::Int => (self.bas.len(), 0),
             CIntKind::Ecp => {
-                if self.is_ecp_merged() {
-                    self.bas.len()
-                } else {
-                    self.bas.len() + self.ecpbas.len()
-                }
+                let nbas = if self.is_ecp_merged() { self.bas.len() } else { self.bas.len() + self.ecpbas.len() };
+                (nbas, self.cintopt_necpbas())
             },
         };
         let max_l = self.bas.iter().map(|b| b[cint_ffi::ANG_OF as usize]).max().unwrap_or(0);
-        CIntOpt { optimizer: self.get_optimizer(integrator), intor: integrator.name(), nbas, max_l }
+        CIntOpt { optimizer: self.get_optimizer(integrator), intor: integrator.name(), nbas, max_l, necpbas }
+    }
+
+    /// Number of ECP shells an ECP optimizer for this molecule is built for.
+    ///
+    /// The C constructor reads this count from `env` of the merged molecule, so
+    /// mirror that once merged and fall back to the `ecpbas` field otherwise.
+    fn cintopt_necpbas(&self) -> usize {
+        if self.is_ecp_merged() {
+            self.env[cecp_ffi::AS_NECPBAS as usize] as usize
+        } else {
+            self.ecpbas.len()
+        }
     }
 
     /// Perform integral by arguments from builder.
@@ -465,6 +476,26 @@ impl CInt {
                 // update shls_slice
                 shls_slice[i][0] += nbas_offset;
                 shls_slice[i][1] += nbas_offset;
+            }
+        }
+
+        // Four-centre cross integrals read optimizer data for all four centres
+        // and their `pairdata` depends on the shell layout, so a leading prefix
+        // is not a valid substitute: require the optimizer of this exact
+        // de-duplicated concatenation. (Three-centre integrals keep the
+        // leading-prefix rule, enforced by `check_cint_opt`.) Both the
+        // de-coupled and the merged shell count are accepted, because an
+        // optimizer built from either representation of the same concatenation
+        // is valid.
+        if let Some(opt) = cintopt {
+            let nbas = mol_concate.nbas();
+            let nbas_merged = mol_concate.bas.len();
+            if opt_requirement(&*integrator) == OptRequirement::FourCenter && opt.nbas() != nbas && opt.nbas() != nbas_merged {
+                cint_raise!(
+                    InvalidValue,
+                    "Four-centre cross integrals need an optimizer built from the de-duplicated concatenation of `mols` ({nbas} shells), but this optimizer was built for {} shells",
+                    opt.nbas()
+                )?;
             }
         }
 
@@ -902,15 +933,25 @@ impl CInt {
     /// the shell slices being evaluated.
     ///
     /// Stricter than [`CInt::check_optimizer`] (which only separates `Int` from
-    /// `Ecp`): it also rejects an optimizer built for another integrator, for a
-    /// basis that does not cover the shells read by the optimizer, and — for
-    /// `int2c2e`, which has no on-the-fly fallback for its angular-momentum
-    /// index table — for a basis with insufficient angular momentum.
+    /// `Ecp`). It rejects an optimizer built for:
+    ///
+    /// - another integrator (exact name match);
+    /// - a basis that does not cover the shell indices read by the optimizer
+    ///   (`int2e*` reads all four centres, `int3c2e*` the first two);
+    /// - a basis with insufficient maximum angular momentum. libcint's
+    ///   `index_xyz_array` is a pointer table sized by the optimizer basis'
+    ///   maximum angular momentum but indexed with the evaluation molecule's
+    ///   angular momenta; the C-side `NULL` fallback only covers entries that
+    ///   are inside the table, and `int2c2e*` has no fallback at all, so a
+    ///   smaller maximum angular momentum would index out of bounds;
+    /// - a different number of ECP shells (`ECPOpt::u_ecp` is sized per ECP
+    ///   shell, not per basis shell).
     ///
     /// Optimizers built from a leading prefix of the molecule are accepted for
     /// three-center integrals, because `int3c2e*` only reads optimizer data for
-    /// the first two centers; this is the pattern used for three-center cross
-    /// integrals (`bra.get_cintopt("int3c2e")`).
+    /// the first two centers (the third center is computed on the fly, so its
+    /// angular momentum may exceed the optimizer's); this is the pattern used
+    /// for three-center cross integrals (`bra.get_cintopt("int3c2e")`).
     pub fn check_cint_opt(&self, integrator: &dyn Integrator, cintopt: &CIntOpt, shls_slice: &[[c_int; 2]]) -> Result<(), CIntError> {
         self.check_optimizer(integrator, cintopt.as_raw())?;
 
@@ -924,33 +965,56 @@ impl CInt {
             )?;
         }
 
-        match opt_requirement(integrator) {
-            OptRequirement::NotUsed | OptRequirement::Ecp => {},
-            OptRequirement::FourCenter => {
-                let required = shls_slice.iter().take(4).map(|slc| slc[1]).max().unwrap_or(0);
-                self.check_cintopt_nbas(cintopt, required)?;
-            },
-            OptRequirement::ThreeCenter2e => {
-                let required = shls_slice.iter().take(2).map(|slc| slc[1]).max().unwrap_or(0);
-                self.check_cintopt_nbas(cintopt, required)?;
-            },
-            OptRequirement::TwoCenter2e => {
-                let max_l_used = shls_slice
-                    .iter()
-                    .take(2)
-                    .flat_map(|slc| slc[0].max(0)..slc[1])
-                    .filter_map(|shl| self.bas.get(shl as usize))
-                    .map(|b| b[cint_ffi::ANG_OF as usize])
-                    .max()
-                    .unwrap_or(0);
-                if max_l_used > cintopt.max_l {
-                    cint_raise!(
-                        InvalidValue,
-                        "Optimizer was built for a basis with maximum angular momentum {}, but `int2c2e` needs {max_l_used}; build it from the same molecule",
-                        cintopt.max_l
-                    )?;
-                }
-            },
+        // `n_centers` is the number of centres whose optimizer data is read:
+        // all four for `int2e*`, the first two for `int3c2e*` (the auxiliary
+        // centre is recomputed on the fly), and both for `int2c2e*`.
+        let requirement = opt_requirement(integrator);
+        if requirement == OptRequirement::Ecp {
+            let required = self.cintopt_necpbas();
+            if cintopt.necpbas < required {
+                cint_raise!(
+                    InvalidValue,
+                    "Optimizer was built for {} ECP shells, but the integral needs {required}; build it from the same molecule",
+                    cintopt.necpbas
+                )?;
+            }
+            return Ok(());
+        }
+        let n_centers = match requirement {
+            OptRequirement::NotUsed => return Ok(()),
+            OptRequirement::TwoCenter2e => 2,
+            OptRequirement::ThreeCenter2e => 2,
+            OptRequirement::FourCenter => 4,
+            OptRequirement::Ecp => unreachable!(),
+        };
+
+        // `int2c2e*` reads only angular-momentum-indexed tables, so a smaller
+        // basis with enough angular momentum is valid; the other families index
+        // per-shell prescreening tables and need the shell count as well.
+        if requirement != OptRequirement::TwoCenter2e {
+            let required = shls_slice.iter().take(n_centers).map(|slc| slc[1]).max().unwrap_or(0);
+            self.check_cintopt_nbas(cintopt, required)?;
+        }
+        self.check_cintopt_max_l(cintopt, shls_slice, n_centers)
+    }
+
+    /// Check that the optimizer's angular-momentum index table covers the
+    /// shells of the first `n_centers` slices.
+    fn check_cintopt_max_l(&self, cintopt: &CIntOpt, shls_slice: &[[c_int; 2]], n_centers: usize) -> Result<(), CIntError> {
+        let max_l_used = shls_slice
+            .iter()
+            .take(n_centers)
+            .flat_map(|slc| slc[0].max(0)..slc[1])
+            .filter_map(|shl| self.bas.get(shl as usize))
+            .map(|b| b[cint_ffi::ANG_OF as usize])
+            .max()
+            .unwrap_or(0);
+        if max_l_used > cintopt.max_l {
+            cint_raise!(
+                InvalidValue,
+                "Optimizer was built for a basis with maximum angular momentum {}, but the integral needs {max_l_used}; build it from the same molecule or from a covering leading prefix",
+                cintopt.max_l
+            )?;
         }
         Ok(())
     }
@@ -1439,6 +1503,27 @@ impl CInt {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    /// Pin the build policy: only these families consume the optimizer, and
+    /// each maps to the number of centres whose data is read.
+    #[test]
+    fn opt_requirement_classification() {
+        let classify = |intor: &str| opt_requirement(&*CInt::get_integrator(intor));
+        for intor in ["int1e_ovlp", "int1e_kin", "int1e_grids", "int1e_ipovlp", "int3c1e", "int3c1e_ip1"] {
+            assert_eq!(classify(intor), OptRequirement::NotUsed, "{intor}");
+        }
+        for intor in ["int2e", "int2e_ip1", "int2e_ipip1"] {
+            assert_eq!(classify(intor), OptRequirement::FourCenter, "{intor}");
+        }
+        for intor in ["int3c2e", "int3c2e_ip1", "int3c2e_ip2"] {
+            assert_eq!(classify(intor), OptRequirement::ThreeCenter2e, "{intor}");
+        }
+        for intor in ["int2c2e", "int2c2e_ip1"] {
+            assert_eq!(classify(intor), OptRequirement::TwoCenter2e, "{intor}");
+        }
+        assert_eq!(classify("ECPscalar"), OptRequirement::Ecp);
+        assert_eq!(classify("ECPso"), OptRequirement::Ecp);
+    }
 
     #[test]
     fn playground() {

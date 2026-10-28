@@ -205,6 +205,193 @@ mod test {
         assert_relative_eq!(cint_fp(&out), 0.8338209486794069, epsilon = 1e-10);
     }
 
+    /// `int2e` indexes `index_xyz_array` with the evaluation molecule's angular
+    /// momenta, and the table is sized by the optimizer basis' maximum. A basis
+    /// with enough shells but too small a maximum angular momentum must be
+    /// rejected instead of reading the pointer table out of bounds.
+    #[test]
+    fn int2e_insufficient_max_l_is_rejected() {
+        let s_only = fakemol_for_charges(&[[0.0, 0.0, 0.0]; 11], 1.0);
+        let data = init_h2o_def2_tzvp();
+        let opt = s_only.get_cintopt("int2e");
+        assert_eq!(opt.nbas(), 11);
+
+        // the shell count covers the slices, but water shells 0..11 have l > 0
+        let slices = [[0, 11], [0, 11], [0, 11], [0, 11]];
+        let args = data.integrate_args_builder().intor("int2e").shls_slice(&slices).cintopt(&opt).build().unwrap();
+        let err = match data.integrate_with_args_f(args) {
+            Ok(_) => panic!("expected InvalidValue"),
+            Err(err) => err,
+        };
+        assert!(matches!(err.kind, CIntErrorBase::InvalidValue(_)), "{err:?}");
+    }
+
+    /// Same angular-momentum guard for three-center integrals (only the first
+    /// two centres read the optimizer's per-shell tables).
+    #[test]
+    fn int3c2e_insufficient_max_l_is_rejected() {
+        let s_only = fakemol_for_charges(&[[0.0, 0.0, 0.0]; 11], 1.0);
+        let data = init_h2o_def2_tzvp();
+        let opt = s_only.get_cintopt("int3c2e");
+
+        let slices = [[0, 11], [0, 11], [0, 11]];
+        let args = data.integrate_args_builder().intor("int3c2e").shls_slice(&slices).cintopt(&opt).build().unwrap();
+        let err = match data.integrate_with_args_f(args) {
+            Ok(_) => panic!("expected InvalidValue"),
+            Err(err) => err,
+        };
+        assert!(matches!(err.kind, CIntErrorBase::InvalidValue(_)), "{err:?}");
+    }
+
+    /// The ECP optimizer is sized per ECP shell (not per basis shell), so an
+    /// optimizer built from a molecule without ECP data must not reach C.
+    #[test]
+    fn ecp_opt_from_other_molecule_is_rejected() {
+        let no_ecp = init_h2o_def2_tzvp();
+        let opt = no_ecp.get_cintopt("ECPscalar");
+        let data = init_sb2me4_cc_pvtz();
+
+        let args = data.integrate_args_builder().intor("ECPscalar").cintopt(&opt).build().unwrap();
+        let err = match data.integrate_with_args_f(args) {
+            Ok(_) => panic!("expected InvalidValue"),
+            Err(err) => err,
+        };
+        assert!(matches!(err.kind, CIntErrorBase::InvalidValue(_)), "{err:?}");
+    }
+
+    /// An ECP optimizer built from the unmerged molecule is valid on the merged
+    /// one: `nbas()` records the merged count and the C constructor merges the
+    /// same way.
+    #[test]
+    fn reuse_ecp_across_merged_and_unmerged() {
+        let data = init_sb2me4_cc_pvtz();
+        let opt = data.get_cintopt("ECPscalar");
+        assert_eq!(opt.nbas(), data.bas.len() + data.ecpbas.len());
+
+        let merged = data.merge_ecpbas();
+        let (auto, shape) = merged.integrate("ECPscalar", "s1", None).into();
+        let args = merged.integrate_args_builder().intor("ECPscalar").cintopt(&opt).build().unwrap();
+        let (reused, shape2) = merged.integrate_with_args(args).into();
+        assert_eq!(shape, shape2);
+        assert_eq!(reused, auto);
+    }
+
+    /// Four-centre cross integrals must use the optimizer of the internally
+    /// de-duplicated concatenation (`&a + &b`), which is the layout evaluated.
+    #[test]
+    fn reuse_cross_int2e_with_concat_opt() {
+        let a = init_h2o_def2_tzvp();
+        let b = init_h2o_def2_jk();
+        let concat = &a + &b;
+        let opt = concat.get_cintopt("int2e");
+        assert_eq!(opt.nbas(), a.nbas() + b.nbas());
+
+        let mols = [&a, &a, &b, &b];
+        let slices = [[0, a.nbas()], [0, a.nbas()], [0, b.nbas()], [0, b.nbas()]];
+        let (auto, shape) = CInt::integrate_cross("int2e", mols, "s1", slices).into();
+        let args = a.integrate_cross_args_builder().intor("int2e").mols(&mols).shls_slice(&slices).cintopt(&opt).build().unwrap();
+        let (reused, shape2) = CInt::integrate_cross_with_args(args).into();
+        assert_eq!(shape, shape2);
+        assert_eq!(reused, auto);
+    }
+
+    /// Folding the literal `mols` list (`a + a + b + b`) gives a different
+    /// shell layout than the de-duplicated concatenation, and silently
+    /// wrong `pairdata`; it must be rejected rather than accepted by the
+    /// shell-count prefix rule.
+    #[test]
+    fn cross_int2e_opt_not_from_deduped_concat_is_rejected() {
+        let a = init_h2o_def2_tzvp();
+        let b = init_h2o_def2_jk();
+        let aa = &a + &a;
+        let aab = &aa + &b;
+        let folded = &aab + &b;
+        let opt = folded.get_cintopt("int2e");
+
+        let mols = [&a, &a, &b, &b];
+        let slices = [[0, a.nbas()], [0, a.nbas()], [0, b.nbas()], [0, b.nbas()]];
+        let args = a.integrate_cross_args_builder().intor("int2e").mols(&mols).shls_slice(&slices).cintopt(&opt).build().unwrap();
+        let err = match CInt::integrate_cross_with_args_f::<f64>(args) {
+            Ok(_) => panic!("expected InvalidValue"),
+            Err(err) => err,
+        };
+        assert!(matches!(err.kind, CIntErrorBase::InvalidValue(_)), "{err:?}");
+    }
+
+    /// A supplied optimizer is accepted for families that ignore it, and the
+    /// NULL-versus-provided path stays numerically identical.
+    #[test]
+    fn supplied_opt_for_ignored_family_is_accepted() {
+        let data = init_h2o_def2_tzvp();
+        let opt = data.get_cintopt("int1e_kin");
+        let (auto, shape) = data.integrate("int1e_kin", "s1", None).into();
+        let args = data.integrate_args_builder().intor("int1e_kin").cintopt(&opt).build().unwrap();
+        let (reused, shape2) = data.integrate_with_args(args).into();
+        assert_eq!(shape, shape2);
+        assert_eq!(reused, auto);
+    }
+
+    /// The row-major driver shares the same optimizer plumbing.
+    #[test]
+    fn reuse_with_row_major_output() {
+        let h2o = init_h2o_def2_tzvp();
+        let jk = init_h2o_def2_jk();
+        let merged = &h2o + &jk;
+        let nbas_bra = h2o.nbas();
+        let nbas = merged.nbas();
+        let slices = [[0, nbas_bra], [0, nbas_bra], [nbas_bra, nbas]];
+        let opt = merged.get_cintopt("int3c2e");
+
+        let (auto, shape) = merged.integrate_row_major("int3c2e", "s2ij", slices).into();
+        let args = merged
+            .integrate_args_builder()
+            .intor("int3c2e")
+            .aosym("s2ij")
+            .shls_slice(&slices)
+            .row_major(true)
+            .cintopt(&opt)
+            .build()
+            .unwrap();
+        let (reused, shape2) = merged.integrate_with_args(args).into();
+        assert_eq!(shape, shape2);
+        assert_eq!(reused, auto);
+    }
+
+    #[test]
+    fn get_cintopt_f_unknown_intor_errors() {
+        let data = init_h2o_def2_tzvp();
+        let err = data.get_cintopt_f("int2e_nonexistent").unwrap_err();
+        assert!(matches!(err.kind, CIntErrorBase::IntegratorNotFound(_)), "{err:?}");
+    }
+
+    /// The handle owns its C allocation: it must stay usable after the molecule
+    /// it was built from is dropped.
+    #[test]
+    fn optimizer_outlives_source_molecule() {
+        let opt = init_h2o_def2_tzvp().get_cintopt("int2e");
+        let data = init_h2o_def2_tzvp();
+        let slices = [[0, 4], [0, 4], [0, 4], [0, 4]];
+        let (auto, _) = data.integrate("int2e", "s1", slices).into();
+        let args = data.integrate_args_builder().intor("int2e").shls_slice(&slices).cintopt(&opt).build().unwrap();
+        let (reused, _) = data.integrate_with_args(args).into();
+        assert_eq!(reused, auto);
+    }
+
+    /// Representation suffixes are accepted by `get_cintopt` and normalized:
+    /// the optimizer itself is representation-independent.
+    #[test]
+    fn get_cintopt_strips_representation_suffix() {
+        let data = init_h2o_def2_tzvp();
+        let opt = data.get_cintopt("int2e_cart");
+        assert_eq!(opt.intor(), "int2e");
+
+        let slices = [[0, 4], [0, 4], [0, 4], [0, 4]];
+        let (auto, _) = data.integrate("int2e", "s1", slices).into();
+        let args = data.integrate_args_builder().intor("int2e").shls_slice(&slices).cintopt(&opt).build().unwrap();
+        let (reused, _) = data.integrate_with_args(args).into();
+        assert_eq!(reused, auto);
+    }
+
     #[test]
     #[ignore = "timing only; run with `cargo test --release -- --ignored --nocapture`"]
     fn optimizer_reuse_bench() {
