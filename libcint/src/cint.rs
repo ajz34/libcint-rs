@@ -180,11 +180,72 @@ pub enum CIntSymm {
     S8,
 }
 
-/// Optimizer to be used in integral evaluation (not intended for user).
+/// Optimizer to be used in integral evaluation (low-level handle).
+///
+/// This is the raw owning handle produced by [`CInt::optimizer`] and consumed
+/// by [`CInt::integral_block`]. For reuse across many integral calls, prefer
+/// [`CIntOpt`] (built by [`CInt::get_cintopt`]), which also records the
+/// integrator and basis size it was built for and can be validated.
 #[derive(Debug, PartialEq)]
 pub enum CIntOptimizer {
     Int(*mut CINTOpt),
     Ecp(*mut ECPOpt),
+}
+
+/// A built libcint optimizer with provenance, suitable for reuse.
+///
+/// libcint's optimizers hold prescreening tables (`pairdata`, nonzero
+/// contraction maps, angular-momentum index arrays) that cost O(nbas²) to
+/// build and can be tens of MB for high angular momentum. Build one with
+/// [`CInt::get_cintopt`] and pass it by reference to
+/// [`IntegrateArgs::cintopt`] / [`IntorCrossArgs::cintopt`] instead of letting
+/// the engine rebuild it on every call — the typical case is J/K build that
+/// evaluates the same integral in many shell batches.
+///
+/// The handle is only valid for the molecule and integrator it was built from:
+/// rebuild it after any change of `atm`, `bas`, `ecpbas` or `env`. It is
+/// `Send` and `Sync` (libcint only reads it during evaluation); wrap it in
+/// [`std::sync::Arc`] if it must be shared between several owners.
+pub struct CIntOpt {
+    pub(crate) optimizer: CIntOptimizer,
+    pub(crate) intor: &'static str,
+    pub(crate) nbas: usize,
+    pub(crate) max_l: c_int,
+}
+
+impl CIntOpt {
+    /// Integrator name this optimizer was built for, e.g. `"int2e_ip1"`.
+    #[inline]
+    pub fn intor(&self) -> &'static str {
+        self.intor
+    }
+
+    /// Number of shells the optimizer was built for.
+    ///
+    /// For ECP-bearing molecules this is the merged shell count (basis plus ECP
+    /// shells), i.e. what the C constructor saw.
+    #[inline]
+    pub fn nbas(&self) -> usize {
+        self.nbas
+    }
+
+    /// Low-level handle, e.g. for [`CInt::integral_block`].
+    #[inline]
+    pub fn as_raw(&self) -> &CIntOptimizer {
+        &self.optimizer
+    }
+
+    /// Raw pointer to the underlying `CINTOpt` / `ECPOpt`.
+    #[inline]
+    pub fn as_ptr(&self) -> *const c_void {
+        self.optimizer.as_ptr()
+    }
+}
+
+impl Debug for CIntOpt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CIntOpt").field("intor", &self.intor).field("nbas", &self.nbas).finish_non_exhaustive()
+    }
 }
 
 /// Output of the integral evaluation (output buffer with col-major shape).
@@ -248,6 +309,15 @@ pub struct IntegrateArgs<'l, F> {
     /// Grids setting for `int1e_grids` and related integrators.
     #[builder(default, setter(strip_option))]
     pub grids: Option<&'l [[f64; 3]]>,
+
+    /// Pre-built optimizer to reuse (see [`CIntOpt`] / [`CInt::get_cintopt`]).
+    ///
+    /// If `None`, an optimizer is built internally for the integral families
+    /// that use one (`int2e*`, `int3c2e*`, `int2c2e*` and ECP); other families
+    /// ignore it. Reuse one handle across calls (e.g. across shell batches) to
+    /// avoid rebuilding the O(nbas²) prescreening tables every time.
+    #[builder(default, setter(strip_option))]
+    pub cintopt: Option<&'l CIntOpt>,
 }
 
 /// Integrate arguments for function [`CInt::integrate_cross_with_args`] and
@@ -292,6 +362,15 @@ pub struct IntorCrossArgs<'l, F> {
     ///   row-major.
     #[builder(default = false)]
     pub row_major: bool,
+
+    /// Pre-built optimizer for the concatenated molecule (see [`CIntOpt`]).
+    ///
+    /// Cross integrals concatenate `mols` internally, so the optimizer must be
+    /// built from that same concatenation, or from a valid leading prefix of
+    /// it. For the common `[bra, bra, aux]` three-center case, an optimizer
+    /// built from `bra` alone is valid (`bra.get_cintopt("int3c2e")`).
+    #[builder(default, setter(strip_option))]
+    pub cintopt: Option<&'l CIntOpt>,
 }
 
 /* #endregion */
@@ -655,6 +734,8 @@ impl CInt {
     /// - [`integrate_with_args`](Self::integrate_with_args) and
     ///   [`integrate_cross_with_args`](Self::integrate_cross_with_args) for
     ///   more advanced usage (full arguments that this crate supports).
+    /// - [`get_cintopt`](Self::get_cintopt) and [`CIntOpt`] for reusing a
+    ///   pre-built optimizer across many calls (e.g. shell batches).
     pub fn integrate(&self, intor: &str, aosym: impl Into<CIntSymm>, shls_slice: impl Into<ShlsSlice>) -> CIntOutput<f64> {
         self.integrate_f(intor, aosym, shls_slice.into()).cint_unwrap()
     }

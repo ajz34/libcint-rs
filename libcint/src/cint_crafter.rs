@@ -5,6 +5,46 @@
 use crate::cint::{IntegrateArgsBuilder, IntorCrossArgs};
 use crate::prelude::*;
 
+/// Which optimizer data an integral family actually reads.
+///
+/// libcint only consumes the optimizer for `int2e*`, `int3c2e*`, `int2c2e*`
+/// (and ECP integrals); everything else ignores it. This classification drives
+/// both the implicit-build policy and the compatibility check of a supplied
+/// [`CIntOpt`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OptRequirement {
+    /// The integrator ignores the optimizer.
+    NotUsed,
+    /// `int2c2e*`: reads the angular-momentum index table for both centers.
+    TwoCenter2e,
+    /// `int3c2e*`: reads optimizer data for the first two centers only.
+    ThreeCenter2e,
+    /// `int2e*`: reads optimizer data for all four centers.
+    FourCenter,
+    /// ECP integrals (`ECPOpt`).
+    Ecp,
+}
+
+/// Classify an integrator by the optimizer data it reads.
+///
+/// `int2e*` also matches `int2e_stg*`, `int2e_yp*` and `int2e_breit*`, which
+/// all consume the optimizer as well.
+pub(crate) fn opt_requirement(integrator: &dyn Integrator) -> OptRequirement {
+    if integrator.kind() == CIntKind::Ecp {
+        return OptRequirement::Ecp;
+    }
+    let name = integrator.name();
+    if name.starts_with("int2c2e") {
+        OptRequirement::TwoCenter2e
+    } else if name.starts_with("int3c2e") {
+        OptRequirement::ThreeCenter2e
+    } else if name.starts_with("int2e") {
+        OptRequirement::FourCenter
+    } else {
+        OptRequirement::NotUsed
+    }
+}
+
 /// Implementation of integral at higher API level (for advanced user usage).
 impl CInt {
     /// Obtain integrator optimizer.
@@ -30,13 +70,81 @@ impl CInt {
     ///
     /// [`CInt::optimizer`]
     pub fn optimizer_f(&self, intor: &str) -> Result<CIntOptimizer, CIntError> {
+        let integrator = self.cintopt_integrator(intor)?;
+        Ok(self.get_optimizer(&*integrator))
+    }
+
+    /// Build a reusable optimizer with provenance ([`CIntOpt`]).
+    ///
+    /// Prefer this over [`CInt::optimizer`] when the same optimizer will be
+    /// passed to several integral calls (e.g. each shell batch of a J/K
+    /// build): build once, then pass it by reference via
+    /// [`IntegrateArgs::cintopt`] / [`IntorCrossArgs::cintopt`].
+    ///
+    /// # PySCF equivalent
+    ///
+    /// `cintopt = gto.moleintor.make_cintopt(...)`, reused across `getints`
+    /// calls.
+    ///
+    /// # Panics
+    ///
+    /// - integrator not found
+    /// - `env` field not properly initialized for ECP integrator (should call
+    ///   `merge_ecpbas` before this function)
+    pub fn get_cintopt(&self, intor: &str) -> CIntOpt {
+        self.get_cintopt_f(intor).cint_unwrap()
+    }
+
+    /// Build a reusable optimizer with provenance ([`CIntOpt`]).
+    ///
+    /// This function is failable.
+    ///
+    /// # See also
+    ///
+    /// [`CInt::get_cintopt`]
+    pub fn get_cintopt_f(&self, intor: &str) -> Result<CIntOpt, CIntError> {
+        let integrator = self.cintopt_integrator(intor)?;
+        Ok(self.build_cint_opt(&*integrator))
+    }
+
+    /// Check that an integrator can be optimized, and return it.
+    ///
+    /// The dummy shell slice only exists so that the integrator name and
+    /// availability are checked consistently with integral evaluation.
+    fn cintopt_integrator(&self, intor: &str) -> Result<Box<dyn Integrator>, CIntError> {
+        // accept the same `_sph` / `_cart` / `_spinor` suffixed names as the
+        // integral drivers; the optimizer itself is representation-independent.
+        let intor =
+            intor.strip_suffix("_sph").or_else(|| intor.strip_suffix("_cart")).or_else(|| intor.strip_suffix("_spinor")).unwrap_or(intor);
         let integrator = crate::cint::get_integrator_f(intor)?;
         // make dummy shell slices and symms, only for checking
         let n_center = integrator.n_center();
         let cint_symm = CIntSymm::S1;
         let shls_slice = vec![[0, 0]; n_center];
         self.check_shls_slice(&*integrator, &shls_slice, cint_symm)?;
-        Ok(self.get_optimizer(&*integrator))
+        Ok(integrator)
+    }
+
+    /// Build a [`CIntOpt`] for an already-resolved integrator.
+    ///
+    /// `nbas` mirrors the shell count that [`CInt::get_optimizer`] hands to the
+    /// C constructor (`Int` kind: the molecule's own basis; `Ecp`: the merged
+    /// basis). `max_l` is the largest angular momentum of that basis and is
+    /// only consulted for `int2c2e` (the one family without an on-the-fly
+    /// fallback for missing index arrays).
+    pub(crate) fn build_cint_opt(&self, integrator: &dyn Integrator) -> CIntOpt {
+        let nbas = match integrator.kind() {
+            CIntKind::Int => self.bas.len(),
+            CIntKind::Ecp => {
+                if self.is_ecp_merged() {
+                    self.bas.len()
+                } else {
+                    self.bas.len() + self.ecpbas.len()
+                }
+            },
+        };
+        let max_l = self.bas.iter().map(|b| b[cint_ffi::ANG_OF as usize]).max().unwrap_or(0);
+        CIntOpt { optimizer: self.get_optimizer(integrator), intor: integrator.name(), nbas, max_l }
     }
 
     /// Perform integral by arguments from builder.
@@ -47,6 +155,8 @@ impl CInt {
     ///   buffer will be allocated.
     /// - `row_major`: whether the output is in row-major order (default is
     ///   false, which means column-major order).
+    /// - `cintopt`: a pre-built optimizer (see [`CInt::get_cintopt`]) to reuse
+    ///   across calls instead of rebuilding it every time.
     ///
     /// This function is not very convenient to use, since rust does not allow
     /// named arguments.
@@ -177,12 +287,30 @@ impl CInt {
             shls_slice = vec![[0, data.nbas() as c_int]; integrator.n_center()];
         }
         let aosym = args.aosym;
-        let cint_opt = data.get_optimizer(&*integrator);
+
+        // Optimizer: reuse the caller's handle when supplied, otherwise build
+        // one only for the integral families where libcint actually consumes it
+        // (`int2e*`, `int3c2e*`, `int2c2e*`, ECP). Other families ignore the
+        // optimizer, so passing NULL is equivalent and avoids a wasted build.
+        let provided_cintopt = args.cintopt;
+        let built_cintopt;
+        let cint_opt: Option<&CIntOptimizer> = match provided_cintopt {
+            Some(cintopt) => Some(cintopt.as_raw()),
+            None => match opt_requirement(&*integrator) {
+                OptRequirement::NotUsed => None,
+                _ => {
+                    built_cintopt = data.build_cint_opt(&*integrator);
+                    Some(built_cintopt.as_raw())
+                },
+            },
+        };
 
         // perform most checks
         data.check_float_type::<F>()?;
         data.check_shls_slice(&*integrator, &shls_slice, aosym)?;
-        data.check_optimizer(&*integrator, &cint_opt)?;
+        if let Some(cintopt) = provided_cintopt {
+            data.check_cint_opt(&*integrator, cintopt, &shls_slice)?;
+        }
 
         // prepare output and check size of output
         let mut out_shape = data.cgto_shape(&shls_slice, aosym);
@@ -218,19 +346,19 @@ impl CInt {
         match (has_grids, args.row_major) {
             (false, false) => {
                 // col-major, output is [shl0, shl1, ..., comp]
-                data.integral_inplace(&*integrator, out, &shls_slice, Some(&cint_opt), aosym)?;
+                data.integral_inplace(&*integrator, out, &shls_slice, cint_opt, aosym)?;
             },
             (false, true) => {
                 // row-major, output is [comp, shl0, shl1, ...]
-                data.integral_row_major_inplace(&*integrator, out, &shls_slice, Some(&cint_opt), aosym)?;
+                data.integral_row_major_inplace(&*integrator, out, &shls_slice, cint_opt, aosym)?;
             },
             (true, false) => {
                 // col-major with grids, output is [grids, shl0, shl1, comp]
-                data.integral_grids_inplace(&*integrator, out, &shls_slice, Some(&cint_opt))?;
+                data.integral_grids_inplace(&*integrator, out, &shls_slice, cint_opt)?;
             },
             (true, true) => {
                 // row-major with grids, output is [comp, grids, shl0, shl1]
-                data.integral_grids_row_major_inplace(&*integrator, out, &shls_slice, Some(&cint_opt))?;
+                data.integral_grids_row_major_inplace(&*integrator, out, &shls_slice, cint_opt)?;
             },
         };
 
@@ -289,7 +417,7 @@ impl CInt {
     where
         F: ComplexFloat + Send + Sync,
     {
-        let IntorCrossArgs { intor, mols, shls_slice, aosym, out, row_major } = args;
+        let IntorCrossArgs { intor, mols, shls_slice, aosym, out, row_major, cintopt } = args;
 
         let integrator = CInt::get_integrator_f(intor)?;
         let n_center = integrator.n_center();
@@ -340,11 +468,11 @@ impl CInt {
             }
         }
 
-        let args = if let Some(out) = out {
-            IntegrateArgsBuilder::default().intor(intor).aosym(aosym).shls_slice(&shls_slice).row_major(row_major).out(out).build()?
-        } else {
-            IntegrateArgsBuilder::default().intor(intor).aosym(aosym).shls_slice(&shls_slice).row_major(row_major).build()?
-        };
+        let mut args_builder = IntegrateArgsBuilder::default().intor(intor).aosym(aosym).shls_slice(&shls_slice).row_major(row_major);
+        if let Some(cintopt) = cintopt {
+            args_builder = args_builder.cintopt(cintopt);
+        }
+        let args = if let Some(out) = out { args_builder.out(out).build()? } else { args_builder.build()? };
 
         mol_concate.integrate_with_args_inner(args)
     }
@@ -510,8 +638,11 @@ impl CInt {
         }
         let out_size = out_shape.iter().product();
         let mut out = unsafe { aligned_uninitialized_vec::<F>(out_size) };
-        let cint_opt = data.get_optimizer(&integrator);
-        data.integral_inplace(&integrator, &mut out, shls_slice, Some(&cint_opt), aosym).cint_unwrap();
+        let cint_opt = match opt_requirement(&integrator) {
+            OptRequirement::NotUsed => None,
+            _ => Some(data.build_cint_opt(&integrator)),
+        };
+        data.integral_inplace(&integrator, &mut out, shls_slice, cint_opt.as_ref().map(CIntOpt::as_raw), aosym).cint_unwrap();
         (out, out_shape)
     }
 }
@@ -763,6 +894,74 @@ impl CInt {
                     cint_raise!(InvalidValue, "Optimizer is for Ecp, but integrator is {:?}", integrator.kind())?;
                 }
             },
+        }
+        Ok(())
+    }
+
+    /// Check that a reusable optimizer is compatible with the integrator and
+    /// the shell slices being evaluated.
+    ///
+    /// Stricter than [`CInt::check_optimizer`] (which only separates `Int` from
+    /// `Ecp`): it also rejects an optimizer built for another integrator, for a
+    /// basis that does not cover the shells read by the optimizer, and — for
+    /// `int2c2e`, which has no on-the-fly fallback for its angular-momentum
+    /// index table — for a basis with insufficient angular momentum.
+    ///
+    /// Optimizers built from a leading prefix of the molecule are accepted for
+    /// three-center integrals, because `int3c2e*` only reads optimizer data for
+    /// the first two centers; this is the pattern used for three-center cross
+    /// integrals (`bra.get_cintopt("int3c2e")`).
+    pub fn check_cint_opt(&self, integrator: &dyn Integrator, cintopt: &CIntOpt, shls_slice: &[[c_int; 2]]) -> Result<(), CIntError> {
+        self.check_optimizer(integrator, cintopt.as_raw())?;
+
+        if cintopt.intor != integrator.name() {
+            cint_raise!(
+                InvalidValue,
+                "Optimizer was built for `{}`, but the integrator is `{}`; build it with `CInt::get_cintopt(\"{}\")`",
+                cintopt.intor,
+                integrator.name(),
+                integrator.name()
+            )?;
+        }
+
+        match opt_requirement(integrator) {
+            OptRequirement::NotUsed | OptRequirement::Ecp => {},
+            OptRequirement::FourCenter => {
+                let required = shls_slice.iter().take(4).map(|slc| slc[1]).max().unwrap_or(0);
+                self.check_cintopt_nbas(cintopt, required)?;
+            },
+            OptRequirement::ThreeCenter2e => {
+                let required = shls_slice.iter().take(2).map(|slc| slc[1]).max().unwrap_or(0);
+                self.check_cintopt_nbas(cintopt, required)?;
+            },
+            OptRequirement::TwoCenter2e => {
+                let max_l_used = shls_slice
+                    .iter()
+                    .take(2)
+                    .flat_map(|slc| slc[0].max(0)..slc[1])
+                    .filter_map(|shl| self.bas.get(shl as usize))
+                    .map(|b| b[cint_ffi::ANG_OF as usize])
+                    .max()
+                    .unwrap_or(0);
+                if max_l_used > cintopt.max_l {
+                    cint_raise!(
+                        InvalidValue,
+                        "Optimizer was built for a basis with maximum angular momentum {}, but `int2c2e` needs {max_l_used}; build it from the same molecule",
+                        cintopt.max_l
+                    )?;
+                }
+            },
+        }
+        Ok(())
+    }
+
+    fn check_cintopt_nbas(&self, cintopt: &CIntOpt, required: c_int) -> Result<(), CIntError> {
+        if required > 0 && (cintopt.nbas as c_int) < required {
+            cint_raise!(
+                InvalidValue,
+                "Optimizer was built for {} shells, but the integral needs {required}; build it from the same molecule or from a covering leading prefix",
+                cintopt.nbas
+            )?;
         }
         Ok(())
     }

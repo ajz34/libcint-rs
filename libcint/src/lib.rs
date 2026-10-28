@@ -22,6 +22,9 @@
 //!   useful for integral with auxiliary basis sets.
 //! - [`CInt::integrate_with_args`], [`CInt::integrate_args_builder`]: integrate
 //!   function with arguments builder (advanced options).
+//! - [`CInt::get_cintopt`], [`CIntOpt`]: build a reusable libcint optimizer and
+//!   pass it through [`IntegrateArgs::cintopt`] / [`IntorCrossArgs::cintopt`]
+//!   instead of rebuilding it on every call.
 //! - [`CIntMol`] (feature `bse`): molecule builder from TOML/JSON, a weaker
 //!   version of PySCF's `Mole` class (handling only atom coordinates and basis
 //!   sets).
