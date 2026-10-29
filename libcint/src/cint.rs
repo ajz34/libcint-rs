@@ -1286,4 +1286,16 @@ mod tests {
             println!("int2e opt inner {:?}", unsafe { opt.read() });
         }
     }
+
+    #[cfg(feature = "api-v6_2")]
+    #[test]
+    fn test_api_v6_2_integrator_available() {
+        assert!(get_cint_integrator("int3c1e_ipip1").is_some());
+    }
+
+    #[cfg(not(feature = "api-v6_2"))]
+    #[test]
+    fn test_api_v6_2_integrator_disabled() {
+        assert!(get_cint_integrator("int3c1e_ipip1").is_none());
+    }
 }

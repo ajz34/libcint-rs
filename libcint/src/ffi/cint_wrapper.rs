@@ -389,7 +389,7 @@ impl_integrator!(
     "int3c1e_r6_origk",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int3c1e_ip1_r2_origk,
     int3c1e_ip1_r2_origk_optimizer,
@@ -407,7 +407,7 @@ impl_integrator!(
     "int3c1e_ip1_r2_origk",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int3c1e_ip1_r4_origk,
     int3c1e_ip1_r4_origk_optimizer,
@@ -425,7 +425,7 @@ impl_integrator!(
     "int3c1e_ip1_r4_origk",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int3c1e_ip1_r6_origk,
     int3c1e_ip1_r6_origk_optimizer,
@@ -513,7 +513,7 @@ impl_integrator!(
     "int1e_r4_origi",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_r2_origi_ip2,
     int1e_r2_origi_ip2_optimizer,
@@ -531,7 +531,7 @@ impl_integrator!(
     "int1e_r2_origi_ip2",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_r4_origi_ip2,
     int1e_r4_origi_ip2_optimizer,
@@ -598,6 +598,82 @@ impl_integrator!(
     vec![0, 1, 0, 0, 1, 1, 1, 3],
     "int1e",
     "int1e_ovlpip",
+    CIntKind::Int
+);
+#[cfg(feature = "api-v6_2")]
+#[cfg(not(feature = "qcint"))]
+impl_integrator!(
+    int1e_ipr_origj,
+    int1e_ipr_origj_optimizer,
+    int1e_ipr_origj_sph,
+    int1e_ipr_origj_cart,
+    int1e_ipr_origj_spinor,
+    true,
+    true,
+    true,
+    9,
+    9,
+    2,
+    vec![1, 1, 0, 0, 2, 1, 1, 9],
+    "int1e",
+    "int1e_ipr_origj",
+    CIntKind::Int
+);
+#[cfg(feature = "api-v6_2")]
+#[cfg(not(feature = "qcint"))]
+impl_integrator!(
+    int1e_r_origj_ip,
+    int1e_r_origj_ip_optimizer,
+    int1e_r_origj_ip_sph,
+    int1e_r_origj_ip_cart,
+    int1e_r_origj_ip_spinor,
+    true,
+    true,
+    true,
+    9,
+    9,
+    2,
+    vec![0, 2, 0, 0, 2, 1, 1, 9],
+    "int1e",
+    "int1e_r_origj_ip",
+    CIntKind::Int
+);
+#[cfg(feature = "api-v6_2")]
+#[cfg(not(feature = "qcint"))]
+impl_integrator!(
+    int1e_iprr_origj,
+    int1e_iprr_origj_optimizer,
+    int1e_iprr_origj_sph,
+    int1e_iprr_origj_cart,
+    int1e_iprr_origj_spinor,
+    true,
+    true,
+    true,
+    27,
+    27,
+    2,
+    vec![1, 2, 0, 0, 3, 1, 1, 27],
+    "int1e",
+    "int1e_iprr_origj",
+    CIntKind::Int
+);
+#[cfg(feature = "api-v6_2")]
+#[cfg(not(feature = "qcint"))]
+impl_integrator!(
+    int1e_rr_origj_ip,
+    int1e_rr_origj_ip_optimizer,
+    int1e_rr_origj_ip_sph,
+    int1e_rr_origj_ip_cart,
+    int1e_rr_origj_ip_spinor,
+    true,
+    true,
+    true,
+    27,
+    27,
+    2,
+    vec![0, 3, 0, 0, 3, 1, 1, 27],
+    "int1e",
+    "int1e_rr_origj_ip",
     CIntKind::Int
 );
 impl_integrator!(
@@ -736,7 +812,7 @@ impl_integrator!(
     "int1e_ipprinvp",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_ipipipnuc,
     int1e_ipipipnuc_optimizer,
@@ -754,7 +830,7 @@ impl_integrator!(
     "int1e_ipipipnuc",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_ipipiprinv,
     int1e_ipipiprinv_optimizer,
@@ -772,7 +848,7 @@ impl_integrator!(
     "int1e_ipipiprinv",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_ipipnucip,
     int1e_ipipnucip_optimizer,
@@ -790,7 +866,7 @@ impl_integrator!(
     "int1e_ipipnucip",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_ipiprinvip,
     int1e_ipiprinvip_optimizer,
@@ -1046,7 +1122,79 @@ impl_integrator!(
     "int3c1e_ip1",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(feature = "api-v6_2")]
+impl_integrator!(
+    int3c1e_ipip1,
+    int3c1e_ipip1_optimizer,
+    int3c1e_ipip1_sph,
+    int3c1e_ipip1_cart,
+    int3c1e_ipip1_spinor,
+    true,
+    true,
+    true,
+    9,
+    9,
+    3,
+    vec![2, 0, 0, 0, 2, 1, 1, 9],
+    "int3c1e",
+    "int3c1e_ipip1",
+    CIntKind::Int
+);
+#[cfg(feature = "api-v6_2")]
+impl_integrator!(
+    int3c1e_ip1ip2,
+    int3c1e_ip1ip2_optimizer,
+    int3c1e_ip1ip2_sph,
+    int3c1e_ip1ip2_cart,
+    int3c1e_ip1ip2_spinor,
+    true,
+    true,
+    true,
+    9,
+    9,
+    3,
+    vec![1, 0, 1, 0, 2, 1, 1, 9],
+    "int3c1e",
+    "int3c1e_ip1ip2",
+    CIntKind::Int
+);
+#[cfg(feature = "api-v6_2")]
+impl_integrator!(
+    int3c1e_ipvip1,
+    int3c1e_ipvip1_optimizer,
+    int3c1e_ipvip1_sph,
+    int3c1e_ipvip1_cart,
+    int3c1e_ipvip1_spinor,
+    true,
+    true,
+    true,
+    9,
+    9,
+    3,
+    vec![1, 1, 0, 0, 2, 1, 1, 9],
+    "int3c1e",
+    "int3c1e_ipvip1",
+    CIntKind::Int
+);
+#[cfg(feature = "api-v6_2")]
+impl_integrator!(
+    int3c1e_ipip2,
+    int3c1e_ipip2_optimizer,
+    int3c1e_ipip2_sph,
+    int3c1e_ipip2_cart,
+    int3c1e_ipip2_spinor,
+    true,
+    true,
+    true,
+    9,
+    9,
+    3,
+    vec![0, 0, 2, 0, 2, 1, 1, 9],
+    "int3c1e",
+    "int3c1e_ipip2",
+    CIntKind::Int
+);
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_iprinvr,
     int1e_iprinvr_optimizer,
@@ -1064,7 +1212,7 @@ impl_integrator!(
     "int1e_iprinvr",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_iprinviprip,
     int1e_iprinviprip_optimizer,
@@ -1082,7 +1230,7 @@ impl_integrator!(
     "int1e_iprinviprip",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_rinvipiprip,
     int1e_rinvipiprip_optimizer,
@@ -1100,7 +1248,7 @@ impl_integrator!(
     "int1e_rinvipiprip",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_ipiprinvrip,
     int1e_ipiprinvrip_optimizer,
@@ -3039,7 +3187,7 @@ impl_integrator!(
     "int2e_ipvip1ipvip2",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_ipiprinvipip,
     int1e_ipiprinvipip_optimizer,
@@ -3057,7 +3205,7 @@ impl_integrator!(
     "int1e_ipiprinvipip",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_ipipiprinvip,
     int1e_ipipiprinvip_optimizer,
@@ -3075,7 +3223,7 @@ impl_integrator!(
     "int1e_ipipiprinvip",
     CIntKind::Int
 );
-#[cfg(not(feature = "qcint"))]
+#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
 impl_integrator!(
     int1e_ipipipiprinv,
     int1e_ipipipiprinv_optimizer,
@@ -3801,11 +3949,11 @@ pub fn get_cint_integrator(name: &str) -> Option<Box<dyn Integrator>> {
         "int3c1e_r2_origk" => Some(Box::new(int3c1e_r2_origk)),
         "int3c1e_r4_origk" => Some(Box::new(int3c1e_r4_origk)),
         "int3c1e_r6_origk" => Some(Box::new(int3c1e_r6_origk)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int3c1e_ip1_r2_origk" => Some(Box::new(int3c1e_ip1_r2_origk)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int3c1e_ip1_r4_origk" => Some(Box::new(int3c1e_ip1_r4_origk)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int3c1e_ip1_r6_origk" => Some(Box::new(int3c1e_ip1_r6_origk)),
         "int1e_grids" => Some(Box::new(int1e_grids)),
         #[cfg(feature = "with_4c1e")]
@@ -3813,13 +3961,25 @@ pub fn get_cint_integrator(name: &str) -> Option<Box<dyn Integrator>> {
         "int4c1e" => Some(Box::new(int4c1e)),
         "int1e_r2_origi" => Some(Box::new(int1e_r2_origi)),
         "int1e_r4_origi" => Some(Box::new(int1e_r4_origi)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_r2_origi_ip2" => Some(Box::new(int1e_r2_origi_ip2)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_r4_origi_ip2" => Some(Box::new(int1e_r4_origi_ip2)),
         "int2e" => Some(Box::new(int2e)),
         "int1e_ipovlp" => Some(Box::new(int1e_ipovlp)),
         "int1e_ovlpip" => Some(Box::new(int1e_ovlpip)),
+        #[cfg(not(feature = "qcint"))]
+        #[cfg(feature = "api-v6_2")]
+        "int1e_ipr_origj" => Some(Box::new(int1e_ipr_origj)),
+        #[cfg(not(feature = "qcint"))]
+        #[cfg(feature = "api-v6_2")]
+        "int1e_r_origj_ip" => Some(Box::new(int1e_r_origj_ip)),
+        #[cfg(not(feature = "qcint"))]
+        #[cfg(feature = "api-v6_2")]
+        "int1e_iprr_origj" => Some(Box::new(int1e_iprr_origj)),
+        #[cfg(not(feature = "qcint"))]
+        #[cfg(feature = "api-v6_2")]
+        "int1e_rr_origj_ip" => Some(Box::new(int1e_rr_origj_ip)),
         "int1e_ipkin" => Some(Box::new(int1e_ipkin)),
         "int1e_kinip" => Some(Box::new(int1e_kinip)),
         "int1e_ipnuc" => Some(Box::new(int1e_ipnuc)),
@@ -3828,13 +3988,13 @@ pub fn get_cint_integrator(name: &str) -> Option<Box<dyn Integrator>> {
         "int1e_ipsprinvsp" => Some(Box::new(int1e_ipsprinvsp)),
         "int1e_ippnucp" => Some(Box::new(int1e_ippnucp)),
         "int1e_ipprinvp" => Some(Box::new(int1e_ipprinvp)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_ipipipnuc" => Some(Box::new(int1e_ipipipnuc)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_ipipiprinv" => Some(Box::new(int1e_ipipiprinv)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_ipipnucip" => Some(Box::new(int1e_ipipnucip)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_ipiprinvip" => Some(Box::new(int1e_ipiprinvip)),
         "int1e_spspsp" => Some(Box::new(int1e_spspsp)),
         "int1e_spnuc" => Some(Box::new(int1e_spnuc)),
@@ -3850,13 +4010,21 @@ pub fn get_cint_integrator(name: &str) -> Option<Box<dyn Integrator>> {
         "int3c1e_p2" => Some(Box::new(int3c1e_p2)),
         "int3c1e_iprinv" => Some(Box::new(int3c1e_iprinv)),
         "int3c1e_ip1" => Some(Box::new(int3c1e_ip1)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(feature = "api-v6_2")]
+        "int3c1e_ipip1" => Some(Box::new(int3c1e_ipip1)),
+        #[cfg(feature = "api-v6_2")]
+        "int3c1e_ip1ip2" => Some(Box::new(int3c1e_ip1ip2)),
+        #[cfg(feature = "api-v6_2")]
+        "int3c1e_ipvip1" => Some(Box::new(int3c1e_ipvip1)),
+        #[cfg(feature = "api-v6_2")]
+        "int3c1e_ipip2" => Some(Box::new(int3c1e_ipip2)),
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_iprinvr" => Some(Box::new(int1e_iprinvr)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_iprinviprip" => Some(Box::new(int1e_iprinviprip)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_rinvipiprip" => Some(Box::new(int1e_rinvipiprip)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_ipiprinvrip" => Some(Box::new(int1e_ipiprinvrip)),
         "int1e_grids_ip" => Some(Box::new(int1e_grids_ip)),
         "int1e_grids_ipvip" => Some(Box::new(int1e_grids_ipvip)),
@@ -3971,11 +4139,11 @@ pub fn get_cint_integrator(name: &str) -> Option<Box<dyn Integrator>> {
         "int1e_ipsprinvspip" => Some(Box::new(int1e_ipsprinvspip)),
         "int2e_ipip1ipip2" => Some(Box::new(int2e_ipip1ipip2)),
         "int2e_ipvip1ipvip2" => Some(Box::new(int2e_ipvip1ipvip2)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_ipiprinvipip" => Some(Box::new(int1e_ipiprinvipip)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_ipipiprinvip" => Some(Box::new(int1e_ipipiprinvip)),
-        #[cfg(not(feature = "qcint"))]
+        #[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]
         "int1e_ipipipiprinv" => Some(Box::new(int1e_ipipipiprinv)),
         "int2e_spsp1" => Some(Box::new(int2e_spsp1)),
         "int2e_spsp1spsp2" => Some(Box::new(int2e_spsp1spsp2)),

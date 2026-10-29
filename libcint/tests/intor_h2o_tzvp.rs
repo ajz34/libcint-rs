@@ -140,7 +140,9 @@ mod test {
 
         cint_data.with_cint_type(Cartesian, |cint_data| {
             let (out, shape) = cint_data.integrate(intor, aosym, shls_slice).into();
-            assert_relative_eq!(ref_fp, cint_fp(&out), epsilon = 1e-12);
+            // Rayon sums `cint_fp` in nondeterministic order, so allow a
+            // relative deviation on top of the absolute epsilon (~9e2 here).
+            assert_relative_eq!(ref_fp, cint_fp(&out), epsilon = 1e-12, max_relative = 1e-12);
             assert_eq!(shape, ref_shape.as_ref());
         });
     }

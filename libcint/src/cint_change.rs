@@ -17,6 +17,9 @@ impl Add for &CInt {
 
         const PTR_COORD: usize = cint_ffi::PTR_COORD as usize;
         const PTR_ZETA: usize = cint_ffi::PTR_ZETA as usize;
+        const NUC_MOD_OF: usize = cint_ffi::NUC_MOD_OF as usize;
+        const PTR_FRAC_CHARGE: usize = cint_ffi::PTR_FRAC_CHARGE as usize;
+        const FRAC_CHARGE_NUC: c_int = cint_ffi::FRAC_CHARGE_NUC as c_int;
         const ATOM_OF: usize = cint_ffi::ATOM_OF as usize;
         const PTR_EXP: usize = cint_ffi::PTR_EXP as usize;
         const PTR_COEFF: usize = cint_ffi::PTR_COEFF as usize;
@@ -31,6 +34,9 @@ impl Add for &CInt {
                 let mut v = *v;
                 v[PTR_COORD] += offset_env;
                 v[PTR_ZETA] += offset_env;
+                if v[NUC_MOD_OF] == FRAC_CHARGE_NUC {
+                    v[PTR_FRAC_CHARGE] += offset_env;
+                }
                 v
             })
             .collect_vec();
