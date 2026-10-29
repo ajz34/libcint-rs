@@ -4,10 +4,16 @@ use std::path::PathBuf;
 
 fn build_libcint() {
     // read environment variables
-    // - CINT_SRC: source of libcint (should be git repository URL or path to
-    //   local source)
-    // - CINT_VER: version of libcint (`v6.1.2` for example, should start with
-    //   `v`)
+    // - CINT_SRC: source of libcint: git repository (URL or local path), source
+    //   archive (local path or URL), or unpacked source directory
+    // - CINT_VER: version of libcint or qcint (default `v6.2.0`; git sources
+    //   only); should start with `v`
+    // - CINT_SRC_SHA256: expected SHA256 of the source archive; archive sources
+    //   only
+    for var in ["CINT_SRC", "CINT_VER", "CINT_SRC_SHA256"] {
+        println!("cargo:rerun-if-env-changed={var}");
+    }
+    println!("cargo:rerun-if-changed=external_deps/CMakeLists.txt");
 
     let cint_src = std::env::var("CINT_SRC").unwrap_or({
         if cfg!(feature = "qcint") {
@@ -16,7 +22,17 @@ fn build_libcint() {
             "https://github.com/sunqm/libcint.git".into()
         }
     });
-    let cint_ver = std::env::var("CINT_VER").unwrap_or("v6.1.2".into());
+    // libcint and qcint share the same release tags
+    let cint_ver = std::env::var("CINT_VER").unwrap_or("v6.2.0".into());
+    let cint_src_sha256 = std::env::var("CINT_SRC_SHA256").unwrap_or_default();
+    // CMake needs an absolute path for a local source
+    let cint_src = match std::fs::canonicalize(&cint_src) {
+        Ok(path) => {
+            println!("cargo:rerun-if-changed={}", path.display());
+            path.display().to_string()
+        },
+        Err(_) => cint_src,
+    };
 
     if cfg!(feature = "build_from_source") {
         let flag_shared = if cfg!(feature = "static") { "OFF" } else { "ON" };
@@ -26,6 +42,7 @@ fn build_libcint() {
         let dst = cmake::Config::new("external_deps")
             .define("BUILD_SHARED_LIBS", flag_shared)
             .define("CINT_SRC", cint_src)
+            .define("CINT_SRC_SHA256", cint_src_sha256)
             .define("CINT_VER", cint_ver)
             .define("WITH_F12", with_f12)
             .define("WITH_4C1E", with_4c1e)
@@ -98,11 +115,15 @@ fn path_candidates(env_candidates: &[&str]) -> impl Iterator<Item = PathBuf> {
 }
 
 fn link_cint() {
-    let env_candidates = ["CINT_DIR", "REST_EXT_DIR", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "PATH"];
-    // minimal rerun-if-env-changed to avoid unnecessary rebuilds
-    println!("cargo:rerun-if-env-changed=CINT_DIR");
-    for path in path_candidates(&env_candidates) {
-        println!("cargo:rustc-link-search=native={}", path.display());
+    // With `build_from_source`, `build_libcint` has already added the install
+    // directory of the library it built; search nowhere else.
+    if !cfg!(feature = "build_from_source") {
+        let env_candidates = ["CINT_DIR", "REST_EXT_DIR", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "PATH"];
+        // minimal rerun-if-env-changed to avoid unnecessary rebuilds
+        println!("cargo:rerun-if-env-changed=CINT_DIR");
+        for path in path_candidates(&env_candidates) {
+            println!("cargo:rustc-link-search=native={}", path.display());
+        }
     }
 
     if cfg!(feature = "static") {
