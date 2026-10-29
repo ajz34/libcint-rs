@@ -113,11 +113,15 @@ fn path_candidates(env_candidates: &[&str]) -> impl Iterator<Item = PathBuf> {
 }
 
 fn link_cint() {
-    let env_candidates = ["CINT_DIR", "REST_EXT_DIR", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "PATH"];
-    // minimal rerun-if-env-changed to avoid unnecessary rebuilds
-    println!("cargo:rerun-if-env-changed=CINT_DIR");
-    for path in path_candidates(&env_candidates) {
-        println!("cargo:rustc-link-search=native={}", path.display());
+    // With `build_from_source`, `build_libcint` has already added the install
+    // directory of the library it built; search nowhere else.
+    if !cfg!(feature = "build_from_source") {
+        let env_candidates = ["CINT_DIR", "REST_EXT_DIR", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "PATH"];
+        // minimal rerun-if-env-changed to avoid unnecessary rebuilds
+        println!("cargo:rerun-if-env-changed=CINT_DIR");
+        for path in path_candidates(&env_candidates) {
+            println!("cargo:rustc-link-search=native={}", path.display());
+        }
     }
 
     if cfg!(feature = "static") {
