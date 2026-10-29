@@ -18,7 +18,7 @@ CINT_DEV=1
 
 Alternatively, `cargo test --features="build_from_source"` builds the C
 library from source via CMake. See `readme.md` for all environment
-variables (`CINT_DIR`, `CINT_SRC`, `CINT_VIR`) and cargo features.
+variables (`CINT_DIR`, `CINT_SRC`, `CINT_VER`) and cargo features.
 
 ## Important notices to AI code agent
 

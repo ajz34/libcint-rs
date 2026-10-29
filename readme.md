@@ -8,8 +8,8 @@ This project contains libcint (C language) FFI bindings, wrapper and build-from-
 |--|--|
 | Crate | [![Crate](https://img.shields.io/crates/v/libcint.svg)](https://crates.io/crates/libcint) |
 | API Document | [![API Documentation](https://docs.rs/libcint/badge.svg)](https://docs.rs/libcint) |
-| FFI Binding (libcint) | [v6.1.2](https://github.com/sunqm/libcint/tree/v6.1.2) |
-| FFI Binding (qcint) | [v6.1.2](https://github.com/sunqm/qcint/tree/v6.1.2) |
+| FFI Binding (libcint) | [v6.2.0](https://github.com/sunqm/libcint/tree/v6.2.0) |
+| FFI Binding (qcint) | [v6.2.0](https://github.com/sunqm/qcint/tree/v6.2.0) |
 | ECP Source Code (PySCF) | [v2.9.0](https://github.com/pyscf/pyscf/tree/v2.9.0) |
 
 This crate is not official bindgen project, neither [libcint](https://github.com/sunqm/libcint), [PySCF](https://github.com/pyscf/pyscf), nor [REST](https://gitee.com/RESTGroup/rest). It is originally intended to be some pioneer work for possible future development of [rest_libcint](https://gitee.com/RESTGroup/rest_libcint) wrapper.
@@ -85,12 +85,13 @@ libcint = { version = "0.1", features = ["build_from_source", "static"] }
 
 The source code will be automatically downloaded from github, and cargo will handle the building process.
 
-If access to github is not available, you can use environment variable `CINT_SRC` to specify source mirror of [sunqm/libcint](https://github.com/sunqm/libcint) or [sunqm/qcint](https://github.com/sunqm/qcint).
+If github is not accessible (offline builds, vendored sources), `CINT_SRC` also accepts a local source directory, a source archive file, or the URL of a source archive of [sunqm/libcint](https://github.com/sunqm/libcint) or [sunqm/qcint](https://github.com/sunqm/qcint); pin an archive with `CINT_SRC_SHA256`. A git URL or local repository still works as a source mirror (`CINT_VER` selects the tag). Relative paths are resolved against the `libcint-src` package directory, and a local git repository is cloned at `CINT_VER`, so use a non-git directory to build modified sources.
 
 ### Cargo features
 
 - Default features: `bse` (molecule builder from TOML/JSON with Basis Set Exchange support).
 - `bse`: Enable [`CIntMol::from_toml`] and [`CIntMol::from_json`] for building molecules from text input. Requires `bse` crate for basis set data.
+- `api-v6_2`: Enable integrals added in libcint v6.2.0 (`int1e_ipr_origj`, `int1e_r_origj_ip`, `int1e_iprr_origj`, `int1e_rr_origj_ip`, `int3c1e_ipip1`, `int3c1e_ip1ip2`, `int3c1e_ipvip1`, `int3c1e_ipip2`). This feature is **not** enabled by default, so the default API stays compatible with libcint/qcint v6.1.2; enable it (e.g. `features = ["api-v6_2"]`) when using v6.2.0 and needing these integrals. With `qcint`, it additionally enables the integrals that qcint gained in v6.2.0. For a v6.1.2 source build, set `CINT_VER=v6.1.2`.
 - `build_from_source`: Trigger of C language library libcint building. This performs by CMake; source code will be automatically downloaded from github (if environment variable `CINT_SRC` not specified).
 - `static`: Use static library for linking. This will require static link `libcint.a`, and dynamic link `libquadmath.so`.
 - `qcint`: Use [sunqm/qcint](https://github.com/sunqm/qcint) instead of [sunqm/libcint](https://github.com/sunqm/libcint). Some integrals will not be available if `qcint` does not supports that. This will also change URL source if cargo feature `build_from_source` specified.
@@ -101,8 +102,9 @@ If access to github is not available, you can use environment variable `CINT_SRC
 ### Shell environment variables
 
 - `CINT_DIR`, `LD_LIBRARY_PATH`, `REST_EXT_DIR`: Your compiled library path of `libcint.so` and `libcint.a`. This crate will try to find if this library is in directory root, or `directory_root/lib`. Not searched with cargo feature `build_from_source`, which links the library it built.
-- `CINT_SRC`: Source of libcint or qcint (must be a git repository). Only works with cargo feature `build_from_source`.
-- `CINT_VIR`: Version of libcint or qcint (e.g. `v6.1.2`, must starts with `v` prefix). Only works with cargo feature `build_from_source`.
+- `CINT_SRC`: Source of libcint or qcint: a git repository (URL or local path), a source archive (local path, or URL ending in `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz` or `.zip`), or an unpacked source directory. Only works with cargo feature `build_from_source`.
+- `CINT_VER`: Version of libcint or qcint (default `v6.2.0`; must start with `v` prefix), as a git tag. Only works with cargo feature `build_from_source` and a git `CINT_SRC`.
+- `CINT_SRC_SHA256`: Expected SHA256 of the `CINT_SRC` archive; the build fails on a mismatch. Only works with cargo feature `build_from_source` and an archive `CINT_SRC`; a git source or an unpacked directory with this variable set is rejected.
 
 ## 50 lines RHF with Rust
 

@@ -7,9 +7,21 @@ on:
     branches: [main]
 
 jobs:
-  # this test also checks feature bse
+  # this test also checks feature bse and the CINT_VER/api-v6_2 matrix
   test-build-dynamic:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 6.1 API: api-v6_2 disabled
+          - cint_ver: v6.1.2
+            features: build_from_source
+          - cint_ver: v6.2.0
+            features: build_from_source
+          # 6.2 API: api-v6_2 enabled
+          - cint_ver: v6.2.0
+            features: "build_from_source api-v6_2"
     steps:
       - uses: actions/checkout@v4
       - name: Install Python
@@ -18,10 +30,12 @@ jobs:
           python-version: "3.x"
       - name: Install basis_set_exchange
         run: pip install basis_set_exchange
-      - name: test crate libcint
+      - name: test crate libcint (${{ matrix.cint_ver }}, ${{ matrix.features }})
+        env:
+          CINT_VER: ${{ matrix.cint_ver }}
         run: |
           cd libcint
-          cargo test --features="build_from_source"
+          cargo test --features="${{ matrix.features }}"
 
   test-custom-build:
     runs-on: ubuntu-latest
