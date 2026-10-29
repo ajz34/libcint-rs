@@ -6,8 +6,8 @@ fn build_libcint() {
     // read environment variables
     // - CINT_SRC: source of libcint (should be git repository URL or path to
     //   local source)
-    // - CINT_VER: version of libcint (`v6.1.2` for example, should start with
-    //   `v`)
+    // - CINT_VER: version of libcint or qcint (default `v6.2.0`); should start
+    //   with `v`
 
     let cint_src = std::env::var("CINT_SRC").unwrap_or({
         if cfg!(feature = "qcint") {
@@ -16,7 +16,8 @@ fn build_libcint() {
             "https://github.com/sunqm/libcint.git".into()
         }
     });
-    let cint_ver = std::env::var("CINT_VER").unwrap_or("v6.1.2".into());
+    // libcint and qcint share the same release tags
+    let cint_ver = std::env::var("CINT_VER").unwrap_or("v6.2.0".into());
 
     if cfg!(feature = "build_from_source") {
         let flag_shared = if cfg!(feature = "static") { "OFF" } else { "ON" };
