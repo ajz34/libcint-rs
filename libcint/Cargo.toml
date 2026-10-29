@@ -45,6 +45,7 @@ build_from_source = ["libcint-src/build_from_source"]
 static = ["libcint-src/static"]
 qcint = ["libcint-src/qcint"]
 no_linkage = ["libcint-src/no_linkage"]
+no_quadmath = ["libcint-src/no_quadmath"]
 
 [package.metadata.docs.rs]
 features = ["default"]

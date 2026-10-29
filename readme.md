@@ -93,11 +93,12 @@ If github is not accessible (offline builds, vendored sources), `CINT_SRC` also 
 - `bse`: Enable [`CIntMol::from_toml`] and [`CIntMol::from_json`] for building molecules from text input. Requires `bse` crate for basis set data.
 - `api-v6_2`: Enable integrals added in libcint v6.2.0 (`int1e_ipr_origj`, `int1e_r_origj_ip`, `int1e_iprr_origj`, `int1e_rr_origj_ip`, `int3c1e_ipip1`, `int3c1e_ip1ip2`, `int3c1e_ipvip1`, `int3c1e_ipip2`). This feature is **not** enabled by default, so the default API stays compatible with libcint/qcint v6.1.2; enable it (e.g. `features = ["api-v6_2"]`) when using v6.2.0 and needing these integrals. With `qcint`, it additionally enables the integrals that qcint gained in v6.2.0. For a v6.1.2 source build, set `CINT_VER=v6.1.2`.
 - `build_from_source`: Trigger of C language library libcint building. This performs by CMake; source code will be automatically downloaded from github (if environment variable `CINT_SRC` not specified).
-- `static`: Use static library for linking. This will require static link `libcint.a`, and dynamic link `libquadmath.so`.
+- `static`: Use static library for linking. This will require static link `libcint.a`, and dynamic link `libquadmath.so` on targets other than macOS (unless `no_quadmath`).
 - `qcint`: Use [sunqm/qcint](https://github.com/sunqm/qcint) instead of [sunqm/libcint](https://github.com/sunqm/libcint). Some integrals will not be available if `qcint` does not supports that. This will also change URL source if cargo feature `build_from_source` specified.
 - `with_f12`: Whether F12 integrals (`int2e_stg`, `int2e_yp`, etc.) are supported.
 - `with_4c1e`: Whether 4c1e integrals (`int4c1e`, etc.) are supported.
 - `no_linkage`: Disable automatic linkage of `libcint` in `build.rs`. By default, this crate will not activate this feature and handle linkage properly. This feature is useful when you want to link `libcint` manually or use `libcint` in a different way (probably beneficial to conda, @jeanwsr). However, notice that ECP part will still be built anyway, which will require `libcint` to be linked properly by your self.
+- `no_quadmath`: Do not link `libquadmath` with `static`, and with `build_from_source` build libcint without it (libcint then uses `long double` where it would use `__float128`). Needed for targets without libquadmath, such as aarch64 Linux.
 
 ### Shell environment variables
 
