@@ -6,8 +6,8 @@ fn build_libcint() {
     // read environment variables
     // - CINT_SRC: source of libcint: git repository (URL or local path), source
     //   archive (local path or URL), or unpacked source directory
-    // - CINT_VER: version of libcint (`v6.1.2` for example, should start with
-    //   `v`); git sources only
+    // - CINT_VER: version of libcint or qcint (default `v6.2.0`; git sources
+    //   only); should start with `v`
     // - CINT_SRC_SHA256: expected SHA256 of the source archive; archive sources
     //   only
     for var in ["CINT_SRC", "CINT_VER", "CINT_SRC_SHA256"] {
@@ -22,7 +22,8 @@ fn build_libcint() {
             "https://github.com/sunqm/libcint.git".into()
         }
     });
-    let cint_ver = std::env::var("CINT_VER").unwrap_or("v6.1.2".into());
+    // libcint and qcint share the same release tags
+    let cint_ver = std::env::var("CINT_VER").unwrap_or("v6.2.0".into());
     let cint_src_sha256 = std::env::var("CINT_SRC_SHA256").unwrap_or_default();
     // CMake needs an absolute path for a local source
     let cint_src = match std::fs::canonicalize(&cint_src) {

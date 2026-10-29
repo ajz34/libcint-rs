@@ -21,7 +21,7 @@ endif()
 if(CINT_VER)
     message(STATUS "User specified version of library (libcint): ${CINT_VER}")
 else()
-    set(CINT_VER v6.1.2)
+    set(CINT_VER v6.2.0)
     message(STATUS "Download version of library (libcint): ${CINT_VER}")
 endif()
 
@@ -48,8 +48,10 @@ endif()
 ExternalProject_Add(cint
     ${CINT_DOWNLOAD}
     PREFIX ${PROJECT_BINARY_DIR}/deps
+    # libcint as a C library requires C99 (libcint v6.1.3+ sets this itself).
     CMAKE_ARGS
         -DCMAKE_BUILD_TYPE=RELEASE
+        -DCMAKE_C_STANDARD=99
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
         -DCMAKE_INSTALL_PREFIX:PATH=${PROJECT_BINARY_DIR}/deps
         -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
