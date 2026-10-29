@@ -1,4 +1,4 @@
-/* File from pyscf/pyscf: lib/gto/nr_ecp_deriv.c
+/* File from pyscf/pyscf v2.14.0: lib/gto/nr_ecp_deriv.c
 
    Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
   

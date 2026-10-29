@@ -11,13 +11,13 @@ import re
 
 # ## `bindgen` auto-generation
 
-with open("../src/cecp/nr_ecp.h", "r") as f:
+with open("../../libcint-src/src/cecp/nr_ecp.h", "r") as f:
     header = f.read()
 
 subprocess.run([
-    "bindgen", "../src/cecp/nr_ecp.h",
+    "bindgen", "../../libcint-src/src/cecp/nr_ecp.h",
     "-o", "cecp_ffi.rs",
-    "--allowlist-file", "../src/cecp/nr_ecp.h",
+    "--allowlist-file", "../../libcint-src/src/cecp/nr_ecp.h",
     "--no-layout-tests",
     "--merge-extern-blocks",
 ])
