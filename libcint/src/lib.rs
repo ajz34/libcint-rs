@@ -138,10 +138,14 @@
 //! The source code will be automatically downloaded from github, and cargo will
 //! handle the building process.
 //!
-//! If access to github is not available, you can use environment variable
-//! `CINT_SRC` to specify source mirror of
-//! [sunqm/libcint](https://github.com/sunqm/libcint)
-//! or [sunqm/qcint](https://github.com/sunqm/qcint).
+//! If github is not accessible (offline builds, vendored sources), `CINT_SRC`
+//! also accepts a local source directory, a source archive file, or the URL of
+//! a source archive of [sunqm/libcint](https://github.com/sunqm/libcint) or
+//! [sunqm/qcint](https://github.com/sunqm/qcint); pin an archive with
+//! `CINT_SRC_SHA256`. A git URL or local repository still works as a source
+//! mirror (`CINT_VER` selects the tag). Relative paths are resolved against the
+//! `libcint-src` package directory, and a local git repository is cloned at
+//! `CINT_VER`, so use a non-git directory to build modified sources.
 //!
 //! ## Cargo features
 //!
@@ -186,7 +190,8 @@
 //!   `build_from_source` and a git `CINT_SRC`.
 //! - `CINT_SRC_SHA256`: Expected SHA256 of the `CINT_SRC` archive; the build
 //!   fails on a mismatch. Only works with cargo feature `build_from_source` and
-//!   an archive `CINT_SRC`.
+//!   an archive `CINT_SRC`; a git source or an unpacked directory with this
+//!   variable set is rejected.
 //!
 //! # 50 lines RHF with Rust
 //!

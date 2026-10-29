@@ -31,6 +31,10 @@ endif()
 # archives only.
 if((EXISTS "${CINT_SRC}" AND NOT EXISTS "${CINT_SRC}/.git")
     OR CINT_SRC MATCHES "\\.(tar\\.gz|tgz|tar\\.bz2|tar\\.xz|zip)$")
+    # unpacked source directory is copied, not hashed; reject the hash test
+    if(IS_DIRECTORY "${CINT_SRC}" AND CINT_SRC_SHA256)
+        message(FATAL_ERROR "CINT_SRC_SHA256 applies to archive files only, not directories: ${CINT_SRC}")
+    endif()
     if(POLICY CMP0135)
         cmake_policy(SET CMP0135 NEW)
     endif()
