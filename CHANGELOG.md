@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.1 -- 2026-10-29
+
+Dependency Change:
+
+- Update ECP source code to PySCF v2.14.0. (ajz34/libcint-rs#19)
+
+Fixes:
+
+- Apply the PySCF v2.14 ECP fixes for high-`l` radial and spin-orbit projectors and adaptive radial quadrature convergence. (ajz34/libcint-rs#19)
+- Fix the `cecp` FFI header generator path after the ECP sources moved to `libcint-src`. (ajz34/libcint-rs#19)
+
 ## v0.5.0 -- 2026-10-29
 
 Dependency Change:
