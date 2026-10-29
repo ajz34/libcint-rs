@@ -150,6 +150,52 @@ def rule_with_4c1e(intor):
     return "int4c1e" in intor
 
 
+# integrals introduced in libcint v6.2.0; gated by cargo feature `api-v6_2`
+api_v6_2_intor = {
+    "int1e_ipr_origj",
+    "int1e_r_origj_ip",
+    "int1e_iprr_origj",
+    "int1e_rr_origj_ip",
+    "int3c1e_ipip1",
+    "int3c1e_ip1ip2",
+    "int3c1e_ipvip1",
+    "int3c1e_ipip2",
+}
+
+
+def rule_api_v6_2(intor):
+    return intor in api_v6_2_intor
+
+
+# integrals added to qcint in v6.2.0 but present in libcint since v6.1.x;
+# available for libcint any version, but for qcint only with `api-v6_2`.
+# Based on actual symbols/source, not qcint's installed header: qcint 6.1.2
+# declares the first four below in cint_funcs.h without exporting them, and
+# qcint 6.2.0 exports int3c2e and ~20 other integrals not declared by its header.
+qcint_v6_2_intor = {
+    "int1e_ipipipiprinv",
+    "int1e_ipipipnuc",
+    "int1e_ipipiprinv",
+    "int1e_ipipiprinvip",
+    "int1e_ipipnucip",
+    "int1e_ipiprinvip",
+    "int1e_ipiprinvipip",
+    "int1e_ipiprinvrip",
+    "int1e_iprinviprip",
+    "int1e_iprinvr",
+    "int1e_r2_origi_ip2",
+    "int1e_r4_origi_ip2",
+    "int1e_rinvipiprip",
+    "int3c1e_ip1_r2_origk",
+    "int3c1e_ip1_r4_origk",
+    "int3c1e_ip1_r6_origk",
+}
+
+
+def rule_qcint_v6_2(intor):
+    return intor in qcint_v6_2_intor
+
+
 # ## `bindgen` auto-generation
 
 # ### configure `cint.h`
@@ -351,9 +397,13 @@ def gen_impl_integrator(intor):
         token = '#[cfg(feature = "with_f12")]\n' + token
     if rule_with_4c1e(intor):
         token = '#[cfg(feature = "with_4c1e")]\n' + token
-    if rule_qcint_exclusion(intor):
+    if rule_qcint_v6_2(intor):
+        token = '#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]\n' + token
+    elif rule_qcint_exclusion(intor):
         token = '#[cfg(not(feature = "qcint"))]\n' + token
-        
+    if rule_api_v6_2(intor):
+        token = '#[cfg(feature = "api-v6_2")]\n' + token
+
     return token
 
 for intor in actual_intor:
@@ -373,9 +423,13 @@ for intor in actual_intor:
         token_wrapper += '#[cfg(feature = "with_f12")]\n'
     if rule_with_4c1e(intor):
         token_wrapper += '#[cfg(feature = "with_4c1e")]\n'
-    if rule_qcint_exclusion(intor):
+    if rule_qcint_v6_2(intor):
+        token_wrapper += '#[cfg(any(not(feature = "qcint"), feature = "api-v6_2"))]\n'
+    elif rule_qcint_exclusion(intor):
         token_wrapper += '#[cfg(not(feature = "qcint"))]\n'
-        
+    if rule_api_v6_2(intor):
+        token_wrapper += '#[cfg(feature = "api-v6_2")]\n'
+
     token_wrapper += f"""
         "{intor}" => Some(Box::new({intor})),
     """.strip()

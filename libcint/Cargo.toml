@@ -37,6 +37,7 @@ default = ["bse"]
 
 dispatch_more_blksize = []
 bse = ["dep:bse", "dep:toml"]
+api-v6_2 = []
 
 with_f12 = ["libcint-src/with_f12"]
 with_4c1e = ["libcint-src/with_4c1e"]
