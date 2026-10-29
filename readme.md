@@ -63,6 +63,18 @@ let mol = CIntMol::from_json(json).unwrap();
 
 Supported fields: `atom` (Cartesian/Z-matrix), `basis` (BSE name or custom), `ecp`, `unit`, `cart`, `ghost_ecp`. See [from_toml_docs.md](libcint/src/parse/from_toml_docs.md) for full specification.
 
+### Important parts
+
+- [`CInt`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html): basic struct defining a molecule (atoms, shells, environment) for electron integrals.
+- [`CInt::integrate`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.integrate): main integral driver, partly PySCF's `mol.intor` counterpart (column-major output).
+- [`CInt::eval_gto`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.eval_gto): evaluate GTO values on grids (PySCF's `mol.eval_ao` counterpart).
+- [`CInt::integrate_row_major`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.integrate_row_major): integral driver with row-major output (PySCF shape convention).
+- [`CInt::integrate_cross`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.integrate_cross): integrals between several [`CInt`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html) instances, useful with auxiliary basis sets.
+- [`CInt::integrate_with_args`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.integrate_with_args), [`CInt::integrate_args_builder`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.integrate_args_builder): integral driver with an arguments builder (advanced options such as `out`, `row_major` and `cintopt`).
+- [`CInt::get_cintopt`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.get_cintopt), [`CInt::get_cintopt_cross`](https://docs.rs/libcint/latest/libcint/cint/struct.CInt.html#method.get_cintopt_cross), [`CIntOpt`](https://docs.rs/libcint/latest/libcint/cint/struct.CIntOpt.html): build a reusable libcint optimizer (for a single molecule, or from the `mols` list of a cross integral) and pass it through `IntegrateArgs::cintopt` / `IntorCrossArgs::cintopt`, instead of rebuilding it for every call.
+- `CIntMol` (feature `bse`): molecule builder from TOML/JSON, a weaker version of PySCF's `Mole` class.
+- `ffi::cint_wrapper` and `ffi::cecp_wrapper`: supported integrators.
+
 ## Installation and Cargo Features
 
 ### Install with pre-compiled `libcint.so` (recommended)

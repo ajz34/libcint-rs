@@ -1,6 +1,6 @@
 //! Use `libcint::prelude::*` to import this crate.
 
-pub use crate::cint::{CInt, CIntKind, CIntOptimizer, CIntOutput, CIntSymm, CIntType};
+pub use crate::cint::{CInt, CIntKind, CIntOpt, CIntOptimizer, CIntOutput, CIntSymm, CIntType};
 pub use crate::cint_change::fakemol_for_charges;
 pub use crate::cint_result::{CIntError, CIntErrorBase};
 pub use crate::ffi::wrapper_traits::Integrator;
