@@ -65,6 +65,32 @@ basis = "6-31G"
     check_cint_mol(toml_input, reference);
 }
 
+// Plain `Xe` is element xenon, not ghost `X` + `E`; ghost xenon is `X-Xe`
+#[test]
+fn xenon_xyz_sto3g() {
+    let toml_input = r#"
+atom = "Xe 0 0 0; X-Xe 0 0 1"
+basis = "STO-3G"
+"#;
+    let mol = CIntMol::from_toml(toml_input);
+    assert_eq!(mol.atoms.len(), 2);
+
+    // Plain `Xe` is a real xenon atom.
+    assert_eq!(mol.atoms[0].symbol, "XE");
+    assert_eq!(mol.atoms[0].charge, 54);
+    assert!(!mol.atoms[0].is_ghost);
+
+    // `X-Xe` is a ghost xenon atom.
+    assert_eq!(mol.atoms[1].symbol, "XE");
+    assert_eq!(mol.atoms[1].charge, 0);
+    assert!(mol.atoms[1].is_ghost);
+
+    assert!(mol.basis_elements.contains_key("XE"));
+    assert!(mol.basis_elements.contains_key("X-XE"));
+    assert!(mol.cint.nbas() > 0);
+    assert!(mol.cint.nao() > 0);
+}
+
 // zmat for three atoms
 #[test]
 fn simple_h2o_zmat_def2tzvp() {

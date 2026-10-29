@@ -116,12 +116,9 @@ pub fn parse_atom_symbol(raw: &str) -> Result<(String, String, String, bool), CI
     //       AU   -> symbol
 
     // check and remove ghost prefix
-    let (identifier, is_ghost) = if let Some(stripped) = label.strip_prefix("GHOST") {
-        (stripped.trim_start_matches(|c: char| !c.is_alphanumeric()), true)
-    } else if let Some(stripped) = label.strip_prefix("X") {
-        (stripped.trim_start_matches(|c: char| !c.is_alphanumeric()), true)
-    } else {
-        (label.as_str(), false)
+    let (identifier, is_ghost) = match strip_ghost_prefix(&label) {
+        Some(stripped) => (stripped, true),
+        None => (label.as_str(), false),
     };
 
     // remove label suffix to get symbol
@@ -131,6 +128,23 @@ pub fn parse_atom_symbol(raw: &str) -> Result<(String, String, String, bool), CI
     let _ = symbol_to_charge(&symbol)?;
 
     Ok((label.to_string(), identifier.to_string(), symbol, is_ghost))
+}
+
+/// Strip a ghost-atom prefix (`GHOST` or `X`) from an uppercased atom label.
+///
+/// The prefix is only recognized when followed by a non-alphanumeric separator
+/// (e.g. `-`, `_`, `.`), as documented for ghost atoms. Requiring the separator
+/// keeps an element symbol such as `Xe` from being misparsed as ghost `X` +
+/// `E`; a ghost xenon is still written with the separator, e.g. `X-Xe`.
+fn strip_ghost_prefix(label: &str) -> Option<&str> {
+    for prefix in ["GHOST", "X"] {
+        if let Some(rest) = label.strip_prefix(prefix) {
+            if rest.chars().next().is_some_and(|c| !c.is_alphanumeric()) {
+                return Some(rest.trim_start_matches(|c: char| !c.is_alphanumeric()));
+            }
+        }
+    }
+    None
 }
 
 /// Get atomic number from element symbol using bse lookup.
@@ -769,10 +783,34 @@ mod tests_llm_assist {
     }
 
     #[test]
+    fn test_parse_atom_symbol_xenon_not_ghost() {
+        // `Xe` must be parsed as the element xenon, not as ghost `X` + `E`.
+        assert_eq!(parse_atom_symbol("Xe").unwrap(), ("XE".to_string(), "XE".to_string(), "XE".to_string(), false));
+        assert_eq!(parse_atom_symbol("xe").unwrap(), ("XE".to_string(), "XE".to_string(), "XE".to_string(), false));
+        assert_eq!(parse_atom_symbol("Xe1").unwrap(), ("XE1".to_string(), "XE1".to_string(), "XE".to_string(), false));
+        // A ghost prefix still requires the documented non-alphanumeric
+        // separator.
+        assert_eq!(parse_atom_symbol("X-Xe").unwrap(), ("X-XE".to_string(), "XE".to_string(), "XE".to_string(), true));
+    }
+
+    #[test]
+    fn test_parse_atom_string_xenon_not_ghost() {
+        let atoms = parse_atom_string("Xe 0 0 0; X-H 0 0 1", Unit::Angstrom).unwrap();
+        assert_eq!(atoms.len(), 2);
+        assert_eq!(atoms[0].symbol, "XE");
+        assert_eq!(atoms[0].charge, 54);
+        assert!(!atoms[0].is_ghost);
+        assert_eq!(atoms[1].symbol, "H");
+        assert_eq!(atoms[1].charge, 0);
+        assert!(atoms[1].is_ghost);
+    }
+
+    #[test]
     fn test_element_charge() {
         assert_eq!(symbol_to_charge("H").unwrap(), 1);
         assert_eq!(symbol_to_charge("O").unwrap(), 8);
         assert_eq!(symbol_to_charge("Au").unwrap(), 79);
+        assert_eq!(symbol_to_charge("Xe").unwrap(), 54);
         assert!(symbol_to_charge("X").is_err());
     }
 
