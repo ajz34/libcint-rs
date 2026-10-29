@@ -18,7 +18,7 @@ verification commands at the end.
 | File | Audience / role |
 | --- | --- |
 | `readme.md` (root) | project-facing single source of truth: scope, badges, minimal examples, installation, cargo features, env variables, 50-lines-RHF claim |
-| `CHANGELOG.md` (root) | per-release notes; prepended by release-plz from conventional commits (`release-plz.toml`, `.github/workflows/release-plz.yml`) |
+| `CHANGELOG.md` (root) | per-release notes; prepended by release-plz from conventional commits (`release-plz.toml`, `.github/workflows/release-plz.yml`); entries are descriptive, not explanatory: one-line bullets stating what changed, with PR refs, no rationale |
 | `libcint/src/lib.rs` crate docs | overview, "Quick Links", minimal-example doctest (manual mirror of `readme.md`), badge table (manual mirror), RHF example claim |
 | `libcint/src/cint*.rs` | rustdoc for the `CInt` API (`integrate`, `integrate_row_major`, `integrate_cross`, `eval_gto`, properties, builder) |
 | `libcint/src/parse/from_toml_docs.md` | normative spec of the TOML/JSON molecule input (feature `bse`); rendered into rustdoc on `CIntMol` via `libcint/src/parse/mole.rs` |

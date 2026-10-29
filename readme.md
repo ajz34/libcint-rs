@@ -83,7 +83,7 @@ If you have already compiled `libcint.so`, then put path of this shared library 
 
 ```toml
 [dependencies]
-libcint = { version = "0.1" }
+libcint = { version = "0.5" }
 ```
 
 ### Install and also build-from-source
@@ -92,7 +92,7 @@ If you have not compiled `libcint.so` or `libcint.a`, then you are suggested to 
 
 ```toml
 [dependencies]
-libcint = { version = "0.1", features = ["build_from_source", "static"] }
+libcint = { version = "0.5", features = ["build_from_source", "static"] }
 ```
 
 The source code will be automatically downloaded from github, and cargo will handle the building process.

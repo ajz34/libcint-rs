@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.5.0 -- 2026-10-29
+
+Dependency Change:
+
+- Update FFI binding to libcint/qcint v6.2.0 (default `build_from_source` tag `v6.2.0`). (ajz34/libcint-rs#15)
+
+Enhancements:
+
+- Added `CIntOpt`, `CInt::get_cintopt{,_f}`, `CInt::get_cintopt_cross{,_f}`, and the `cintopt` field of `IntegrateArgs` / `IntorCrossArgs` (struct literals need `cintopt: None`). (ajz34/libcint-rs#17)
+- `integrate_cross*` accepts `_sph` / `_cart` / `_spinor` suffixed intor names. (ajz34/libcint-rs#17)
+- `CINT_SRC` accepts source archives and unpacked source directories; added `CINT_SRC_SHA256`. (ajz34/libcint-rs#10)
+- `build_from_source` searches only the library it builds. (ajz34/libcint-rs#13)
+
+Cargo feature addition:
+
+- `api-v6_2`: integrals added in libcint/qcint v6.2.0 (not default). (ajz34/libcint-rs#15)
+- `no_quadmath`: skip `libquadmath` linkage and build. (ajz34/libcint-rs#14)
+
+Fixes:
+
+- Parse `Xe` as xenon, not ghost `X`. (ajz34/libcint-rs#18)
+- Offset `PTR_FRAC_CHARGE` when concatenating molecules. (ajz34/libcint-rs#11)
+- `CInt::is_ecp_merged` also checks ECP shells in `bas`. (ajz34/libcint-rs#12)
+- Honor `no_linkage` in `libcint/build.rs`. (ajz34/libcint-rs#9)
+- Link `libquadmath` by target OS, not build host OS. (ajz34/libcint-rs#14)
+
 ## v0.4.0 -- 2026-09-05
 
 Dependency Change:

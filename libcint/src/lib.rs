@@ -126,7 +126,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! libcint = { version = "0.1" }
+//! libcint = { version = "0.5" }
 //! ```
 //!
 //! ## Install and also build-from-source
@@ -136,7 +136,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! libcint = { version = "0.1", features = ["build_from_source", "static"] }
+//! libcint = { version = "0.5", features = ["build_from_source", "static"] }
 //! ```
 //!
 //! The source code will be automatically downloaded from github, and cargo will
