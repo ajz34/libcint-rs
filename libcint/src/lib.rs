@@ -138,10 +138,14 @@
 //! The source code will be automatically downloaded from github, and cargo will
 //! handle the building process.
 //!
-//! If access to github is not available, you can use environment variable
-//! `CINT_SRC` to specify source mirror of
-//! [sunqm/libcint](https://github.com/sunqm/libcint)
-//! or [sunqm/qcint](https://github.com/sunqm/qcint).
+//! If github is not accessible (offline builds, vendored sources), `CINT_SRC`
+//! also accepts a local source directory, a source archive file, or the URL of
+//! a source archive of [sunqm/libcint](https://github.com/sunqm/libcint) or
+//! [sunqm/qcint](https://github.com/sunqm/qcint); pin an archive with
+//! `CINT_SRC_SHA256`. A git URL or local repository still works as a source
+//! mirror (`CINT_VER` selects the tag). Relative paths are resolved against the
+//! `libcint-src` package directory, and a local git repository is cloned at
+//! `CINT_VER`, so use a non-git directory to build modified sources.
 //!
 //! ## Cargo features
 //!
@@ -177,10 +181,17 @@
 //!   of `libcint.so` and `libcint.a`. This crate will try to find if this
 //!   library is in directory root, or `directory_root/lib`. May override the
 //!   library built by cargo feature `build_from_source`.
-//! - `CINT_SRC`: Source of libcint or qcint (must be a git repository). Only
+//! - `CINT_SRC`: Source of libcint or qcint: a git repository (URL or local
+//!   path), a source archive (local path, or URL ending in `.tar.gz`, `.tgz`,
+//!   `.tar.bz2`, `.tar.xz` or `.zip`), or an unpacked source directory. Only
 //!   works with cargo feature `build_from_source`.
 //! - `CINT_VER`: Version of libcint or qcint (default `v6.2.0`; must start with
-//!   `v` prefix). Only works with cargo feature `build_from_source`.
+//!   `v` prefix), as a git tag. Only works with cargo feature
+//!   `build_from_source` and a git `CINT_SRC`.
+//! - `CINT_SRC_SHA256`: Expected SHA256 of the `CINT_SRC` archive; the build
+//!   fails on a mismatch. Only works with cargo feature `build_from_source` and
+//!   an archive `CINT_SRC`; a git source or an unpacked directory with this
+//!   variable set is rejected.
 //!
 //! # 50 lines RHF with Rust
 //!
