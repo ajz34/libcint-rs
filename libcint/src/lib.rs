@@ -151,6 +151,11 @@
 //! `libcint-src` package directory, and a local git repository is cloned at
 //! `CINT_VER`, so use a non-git directory to build modified sources.
 //!
+//! The nested libcint build inherits the CMake toolchain, C compiler and flags,
+//! linker flags, target and sysroot settings, and macOS architectures and
+//! deployment target from the outer build. This also preserves the compiler
+//! and flags selected by the `cmake` crate for Cargo cross-compilation.
+//!
 //! ## Cargo features
 //!
 //! - Default features: `bse` (molecule builder from TOML/JSON with Basis Set
