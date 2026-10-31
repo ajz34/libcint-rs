@@ -46,6 +46,7 @@ static = ["libcint-src/static"]
 qcint = ["libcint-src/qcint"]
 no_linkage = ["libcint-src/no_linkage"]
 no_quadmath = ["libcint-src/no_quadmath"]
+keep_going = ["libcint-src/keep_going"]
 
 [package.metadata.docs.rs]
 features = ["default"]

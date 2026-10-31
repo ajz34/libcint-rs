@@ -183,6 +183,10 @@
 //!   `build_from_source` build libcint without it (libcint then uses `long
 //!   double` where it would use `__float128`). Needed for targets without
 //!   libquadmath, such as aarch64 Linux.
+//! - `keep_going`: With `build_from_source`, enable libcint's `KEEP_GOING`
+//!   option so a Rys quadrature failure reports an error instead of exiting the
+//!   process. Callers must check the returned integrals for numerical failures.
+//!   Disabled by default; has no effect on prebuilt libraries.
 //!
 //! ## Shell environment variables
 //!
