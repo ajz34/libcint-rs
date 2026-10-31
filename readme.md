@@ -111,6 +111,7 @@ If github is not accessible (offline builds, vendored sources), `CINT_SRC` also 
 - `with_4c1e`: Whether 4c1e integrals (`int4c1e`, etc.) are supported.
 - `no_linkage`: Disable automatic linkage of `libcint` in `build.rs`. By default, this crate will not activate this feature and handle linkage properly. This feature is useful when you want to link `libcint` manually or use `libcint` in a different way (probably beneficial to conda, @jeanwsr). However, notice that ECP part will still be built anyway, which will require `libcint` to be linked properly by your self.
 - `no_quadmath`: Do not link `libquadmath` with `static`, and with `build_from_source` build libcint without it (libcint then uses `long double` where it would use `__float128`). Needed for targets without libquadmath, such as aarch64 Linux.
+- `keep_going`: With `build_from_source`, enable libcint's `KEEP_GOING` option so a Rys quadrature failure reports an error instead of exiting the process. Callers must check the returned integrals for numerical failures. Disabled by default; has no effect on prebuilt libraries.
 
 ### Shell environment variables
 
