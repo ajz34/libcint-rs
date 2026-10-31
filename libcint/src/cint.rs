@@ -186,8 +186,29 @@ pub enum CIntSymm {
 /// by [`CInt::integral_block`]. For reuse across many integral calls, prefer
 /// [`CIntOpt`] (built by [`CInt::get_cintopt`]), which also records the
 /// integrator and basis size it was built for and can be validated.
+///
+/// The handle owns its pointer and frees it on drop. Obtain one from
+/// [`CInt::optimizer`], or transfer a raw pointer with [`Self::from_raw_int`]
+/// or [`Self::from_raw_ecp`]. Use [`Self::kind`] to inspect its family.
+///
+/// Safe code cannot construct an owner from a borrowed pointer:
+///
+/// ```compile_fail
+/// use libcint::prelude::CIntOptimizer;
+/// let owner = CIntOptimizer::from_raw_int(std::ptr::null_mut());
+/// ```
+///
+/// ```compile_fail
+/// use libcint::prelude::CIntOptimizer;
+/// let owner = CIntOptimizer::from_raw_ecp(std::ptr::null_mut());
+/// ```
 #[derive(Debug, PartialEq)]
-pub enum CIntOptimizer {
+pub struct CIntOptimizer {
+    inner: CIntOptimizerInner,
+}
+
+#[derive(Debug, PartialEq)]
+enum CIntOptimizerInner {
     Int(*mut CINTOpt),
     Ecp(*mut ECPOpt),
 }
@@ -470,19 +491,55 @@ unsafe impl Sync for CIntOptimizer {}
 
 impl Drop for CIntOptimizer {
     fn drop(&mut self) {
-        match self {
-            Self::Int(opt) => unsafe { cint_ffi::CINTdel_optimizer(opt) },
-            Self::Ecp(opt) => unsafe { cecp_ffi::ECPdel_optimizer(opt) },
+        match &mut self.inner {
+            CIntOptimizerInner::Int(opt) => unsafe { cint_ffi::CINTdel_optimizer(opt) },
+            CIntOptimizerInner::Ecp(opt) => unsafe { cecp_ffi::ECPdel_optimizer(opt) },
         }
     }
 }
 
 impl CIntOptimizer {
+    /// Takes ownership of a libcint integral optimizer.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must be null or a live pointer returned by a libcint optimizer
+    /// constructor and suitable for `CINTdel_optimizer`. Ownership must be
+    /// exclusive: no other owner may free it or use it after this handle is
+    /// dropped.
+    pub unsafe fn from_raw_int(ptr: *mut CINTOpt) -> Self {
+        Self { inner: CIntOptimizerInner::Int(ptr) }
+    }
+
+    /// Takes ownership of a PySCF ECP optimizer.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must be null or a live pointer returned by an ECP optimizer
+    /// constructor and suitable for `ECPdel_optimizer`. Ownership must be
+    /// exclusive: no other owner may free it or use it after this handle is
+    /// dropped.
+    pub unsafe fn from_raw_ecp(ptr: *mut ECPOpt) -> Self {
+        Self { inner: CIntOptimizerInner::Ecp(ptr) }
+    }
+
+    /// Returns whether this handle owns an integral or ECP optimizer.
+    #[inline]
+    pub fn kind(&self) -> CIntKind {
+        match &self.inner {
+            CIntOptimizerInner::Int(_) => CIntKind::Int,
+            CIntOptimizerInner::Ecp(_) => CIntKind::Ecp,
+        }
+    }
+
+    /// Returns a borrowed pointer valid while this owner remains alive.
+    ///
+    /// The pointer must not be freed or used to create another owning handle.
     #[inline]
     pub fn as_ptr(&self) -> *const c_void {
-        match self {
-            Self::Int(opt) => *opt as *const c_void,
-            Self::Ecp(opt) => *opt as *const c_void,
+        match &self.inner {
+            CIntOptimizerInner::Int(opt) => *opt as *const c_void,
+            CIntOptimizerInner::Ecp(opt) => *opt as *const c_void,
         }
     }
 }
@@ -1282,9 +1339,8 @@ mod tests {
         let cint_data = init_h2o_def2_tzvp();
         let opt = cint_data.optimizer("int2e");
         println!("int2e opt: {opt:?}");
-        if let CIntOptimizer::Int(opt) = opt {
-            println!("int2e opt inner {:?}", unsafe { opt.read() });
-        }
+        assert_eq!(opt.kind(), CIntKind::Int);
+        assert!(!opt.as_ptr().is_null());
     }
 
     #[cfg(feature = "api-v6_2")]
