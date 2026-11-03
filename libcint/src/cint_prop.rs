@@ -177,20 +177,34 @@ impl CInt {
     /// kappa $\kappa$.
     ///
     /// - If $\kappa = 0$, it returns $4 l + 2$.
-    /// - If $\kappa > 0$, it returns $2 l + 2$.
-    /// - If $\kappa < 0$, it returns $2 l$.
+    /// - If $\kappa > 0$, it returns $2 l$.
+    /// - If $\kappa < 0$, it returns $2 l + 2$.
+    ///
+    /// The sign convention follows libcint and PySCF: $\kappa < 0$ corresponds
+    /// to $j = l + 1/2$, while $\kappa > 0$ corresponds to $j = l - 1/2$.
     ///
     /// # PySCF Equivalent
     ///
     /// Function `gto.mole.len_spinor`
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use libcint::prelude::*;
+    /// assert_eq!(CInt::len_spinor(0, 0), 2);
+    /// assert_eq!(CInt::len_spinor(0, -1), 2);
+    /// assert_eq!(CInt::len_spinor(1, -2), 4);
+    /// assert_eq!(CInt::len_spinor(1, 0), 6);
+    /// assert_eq!(CInt::len_spinor(1, 1), 2);
+    /// ```
     #[inline]
     pub fn len_spinor(l: i32, kappa: i32) -> usize {
         if kappa == 0 {
             (l * 4 + 2) as usize
         } else if kappa > 0 {
-            (l * 2 + 2) as usize
-        } else {
             (l * 2) as usize
+        } else {
+            (l * 2 + 2) as usize
         }
     }
 
