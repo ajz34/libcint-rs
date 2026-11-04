@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.6.0 -- 2026-11-04
+
+API Breaking Change:
+
+- `CIntOptimizer` is now an opaque owner: the `Int` / `Ecp` variants are removed, use `kind()` for the optimizer family, and `unsafe from_raw_int` / `from_raw_ecp` to take ownership of a raw pointer. This closes a double-free that safe code could trigger. (ajz34/libcint-rs#20)
+
+Enhancements:
+
+- `build_from_source` forwards the outer CMake toolchain, C compiler and flags, linker flags, sysroot and macOS settings to the nested libcint build; Cargo cross-compilation settings are preserved. (ajz34/libcint-rs#21)
+
+Cargo feature addition:
+
+- `keep_going`: build libcint with `KEEP_GOING`, so a Rys quadrature failure prints to stderr and continues instead of exiting the process. Not default; only applies with `build_from_source`. (ajz34/libcint-rs#23)
+
+Fixes:
+
+- Fix `CInt::len_spinor` for nonzero `kappa`: the sign branches were reversed, under-allocating `kappa < 0` shells and over-allocating `kappa > 0` shells. (ajz34/libcint-rs#24)
+- `build_from_source` installs only libcint's library directory into Cargo's output prefix, instead of copying the whole downloaded and built dependency tree. (ajz34/libcint-rs#22)
+
+Contributors:
+
+- @jevandezande for #20, #21, #22 and #23.
+- @ajz34 for #24.
+
 ## v0.5.1 -- 2026-10-29
 
 Dependency Change:
