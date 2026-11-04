@@ -97,6 +97,8 @@ libcint = { version = "0.5", features = ["build_from_source", "static"] }
 
 The source code will be automatically downloaded from github, and cargo will handle the building process.
 
+Build-from-source installs only libcint's library directory into Cargo's output prefix; downloaded sources and intermediate build files remain in the build directory.
+
 If github is not accessible (offline builds, vendored sources), `CINT_SRC` also accepts a local source directory, a source archive file, or the URL of a source archive of [sunqm/libcint](https://github.com/sunqm/libcint) or [sunqm/qcint](https://github.com/sunqm/qcint); pin an archive with `CINT_SRC_SHA256`. A git URL or local repository still works as a source mirror (`CINT_VER` selects the tag). Relative paths are resolved against the `libcint-src` package directory, and a local git repository is cloned at `CINT_VER`, so use a non-git directory to build modified sources.
 
 ### Cargo features

@@ -142,6 +142,10 @@
 //! The source code will be automatically downloaded from github, and cargo will
 //! handle the building process.
 //!
+//! Build-from-source installs only libcint's library directory into Cargo's
+//! output prefix; downloaded sources and intermediate build files remain in
+//! the build directory.
+//!
 //! If github is not accessible (offline builds, vendored sources), `CINT_SRC`
 //! also accepts a local source directory, a source archive file, or the URL of
 //! a source archive of [sunqm/libcint](https://github.com/sunqm/libcint) or
