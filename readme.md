@@ -97,6 +97,8 @@ libcint = { version = "0.5", features = ["build_from_source", "static"] }
 
 The source code will be automatically downloaded from github, and cargo will handle the building process.
 
+Build-from-source installs only libcint's library directory into Cargo's output prefix; downloaded sources and intermediate build files remain in the build directory.
+
 If github is not accessible (offline builds, vendored sources), `CINT_SRC` also accepts a local source directory, a source archive file, or the URL of a source archive of [sunqm/libcint](https://github.com/sunqm/libcint) or [sunqm/qcint](https://github.com/sunqm/qcint); pin an archive with `CINT_SRC_SHA256`. A git URL or local repository still works as a source mirror (`CINT_VER` selects the tag). Relative paths are resolved against the `libcint-src` package directory, and a local git repository is cloned at `CINT_VER`, so use a non-git directory to build modified sources.
 
 The nested libcint build inherits the CMake toolchain, C compiler and flags, linker flags, target and sysroot settings, and macOS architectures and deployment target from the outer build. This also preserves the compiler and flags selected by the `cmake` crate for Cargo cross-compilation.
@@ -113,6 +115,7 @@ The nested libcint build inherits the CMake toolchain, C compiler and flags, lin
 - `with_4c1e`: Whether 4c1e integrals (`int4c1e`, etc.) are supported.
 - `no_linkage`: Disable automatic linkage of `libcint` in `build.rs`. By default, this crate will not activate this feature and handle linkage properly. This feature is useful when you want to link `libcint` manually or use `libcint` in a different way (probably beneficial to conda, @jeanwsr). However, notice that ECP part will still be built anyway, which will require `libcint` to be linked properly by your self.
 - `no_quadmath`: Do not link `libquadmath` with `static`, and with `build_from_source` build libcint without it (libcint then uses `long double` where it would use `__float128`). Needed for targets without libquadmath, such as aarch64 Linux.
+- `keep_going`: With `build_from_source`, enable libcint's `KEEP_GOING` option so a Rys quadrature failure only reports an error on stderr and continues, instead of exiting the process. Callers must check the returned integrals for numerical failures. Disabled by default.
 
 ### Shell environment variables
 
@@ -120,6 +123,12 @@ The nested libcint build inherits the CMake toolchain, C compiler and flags, lin
 - `CINT_SRC`: Source of libcint or qcint: a git repository (URL or local path), a source archive (local path, or URL ending in `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz` or `.zip`), or an unpacked source directory. Only works with cargo feature `build_from_source`.
 - `CINT_VER`: Version of libcint or qcint (default `v6.2.0`; must start with `v` prefix), as a git tag. Only works with cargo feature `build_from_source` and a git `CINT_SRC`.
 - `CINT_SRC_SHA256`: Expected SHA256 of the `CINT_SRC` archive; the build fails on a mismatch. Only works with cargo feature `build_from_source` and an archive `CINT_SRC`; a git source or an unpacked directory with this variable set is rejected.
+
+### Low-level optimizer ownership
+
+`CIntOptimizer` is an opaque owner. Obtain it from `CInt::optimizer` or `CInt::get_optimizer`, inspect its family with `kind()`, and borrow its pointer with `as_ptr()`. For reuse across calls, prefer `CInt::get_cintopt` and `CIntOpt`.
+
+Migration: replace matches on the former `CIntOptimizer::Int` and `CIntOptimizer::Ecp` variants with `kind()`. Code transferring ownership of a raw optimizer must use `unsafe { CIntOptimizer::from_raw_int(ptr) }` or `unsafe { CIntOptimizer::from_raw_ecp(ptr) }` and uphold the documented ownership requirements. Constructing an owner from a borrowed pointer is invalid.
 
 ## 50 lines RHF with Rust
 
