@@ -119,6 +119,12 @@ If github is not accessible (offline builds, vendored sources), `CINT_SRC` also 
 - `CINT_VER`: Version of libcint or qcint (default `v6.2.0`; must start with `v` prefix), as a git tag. Only works with cargo feature `build_from_source` and a git `CINT_SRC`.
 - `CINT_SRC_SHA256`: Expected SHA256 of the `CINT_SRC` archive; the build fails on a mismatch. Only works with cargo feature `build_from_source` and an archive `CINT_SRC`; a git source or an unpacked directory with this variable set is rejected.
 
+### Low-level optimizer ownership
+
+`CIntOptimizer` is an opaque owner. Obtain it from `CInt::optimizer` or `CInt::get_optimizer`, inspect its family with `kind()`, and borrow its pointer with `as_ptr()`. For reuse across calls, prefer `CInt::get_cintopt` and `CIntOpt`.
+
+Migration: replace matches on the former `CIntOptimizer::Int` and `CIntOptimizer::Ecp` variants with `kind()`. Code transferring ownership of a raw optimizer must use `unsafe { CIntOptimizer::from_raw_int(ptr) }` or `unsafe { CIntOptimizer::from_raw_ecp(ptr) }` and uphold the documented ownership requirements. Constructing an owner from a borrowed pointer is invalid.
+
 ## 50 lines RHF with Rust
 
 This is a full example code to compute the RHF/def2-TZVP energy of H2O molecule, using

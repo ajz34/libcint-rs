@@ -980,13 +980,13 @@ impl CInt {
     /// This check only involves that ECP and general integrals have different
     /// optimizers.
     pub fn check_optimizer(&self, integrator: &dyn Integrator, optimizer: &CIntOptimizer) -> Result<(), CIntError> {
-        match optimizer {
-            CIntOptimizer::Int(_) => {
+        match optimizer.kind() {
+            CIntKind::Int => {
                 if integrator.kind() != CIntKind::Int {
                     cint_raise!(InvalidValue, "Optimizer is for Int, but integrator is {:?}", integrator.kind())?;
                 }
             },
-            CIntOptimizer::Ecp(_) => {
+            CIntKind::Ecp => {
                 if integrator.kind() != CIntKind::Ecp {
                     cint_raise!(InvalidValue, "Optimizer is for Ecp, but integrator is {:?}", integrator.kind())?;
                 }
@@ -1445,7 +1445,9 @@ impl CInt {
                 unsafe {
                     integrator.optimizer(&mut c_opt_ptr as *mut *mut CINTOpt as *mut *mut c_void, atm_ptr, n_atm, bas_ptr, n_bas, env_ptr);
                 };
-                CIntOptimizer::Int(c_opt_ptr)
+                // SAFETY: the constructor returned a fresh optimizer owned only
+                // here.
+                unsafe { CIntOptimizer::from_raw_int(c_opt_ptr) }
             },
             CIntKind::Ecp => {
                 // Check if this cint_data has been merged with ECP data
@@ -1459,7 +1461,9 @@ impl CInt {
                 unsafe {
                     integrator.optimizer(&mut c_opt_ptr as *mut *mut ECPOpt as *mut *mut c_void, atm_ptr, n_atm, bas_ptr, n_bas, env_ptr);
                 };
-                CIntOptimizer::Ecp(c_opt_ptr)
+                // SAFETY: the constructor returned a fresh optimizer owned only
+                // here.
+                unsafe { CIntOptimizer::from_raw_ecp(c_opt_ptr) }
             },
         }
     }
