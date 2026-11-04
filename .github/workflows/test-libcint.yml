@@ -73,4 +73,4 @@ jobs:
       - name: test crate libcint
         run: |
           cd libcint
-          cargo test --no-default-features --features="build_from_source static qcint"
+          cargo test --no-default-features --features="build_from_source static qcint keep_going"
