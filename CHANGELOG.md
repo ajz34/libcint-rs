@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.1 -- 2026-11-05
+
+Enhancements:
+
+- Add the Breit spinor-only integrators `int2e_breit_{ssp1ssp2,ssp1sps2,sps1ssp2,sps1sps2}`, which libcint/qcint implement but omit from `cint_funcs.h`. (ajz34/libcint-rs#25)
+
 ## v0.6.0 -- 2026-11-04
 
 API Breaking Change:
