@@ -1354,4 +1354,18 @@ mod tests {
     fn test_api_v6_2_integrator_disabled() {
         assert!(get_cint_integrator("int3c1e_ipip1").is_none());
     }
+
+    #[test]
+    fn test_breit_ssp_integrators_spinor_only() {
+        for name in ["int2e_breit_ssp1ssp2", "int2e_breit_ssp1sps2", "int2e_breit_sps1ssp2", "int2e_breit_sps1sps2"] {
+            let integrator = get_cint_integrator(name).unwrap_or_else(|| panic!("{name} is not registered"));
+            assert_eq!(integrator.name(), name);
+            assert!(integrator.is_spinor_available(), "{name}");
+            assert!(!integrator.is_sph_available(), "{name}");
+            assert!(!integrator.is_cart_available(), "{name}");
+            assert_eq!(integrator.n_center(), 4, "{name}");
+            assert_eq!(integrator.n_comp(), 16, "{name}");
+            assert_eq!(integrator.n_spinor_comp(), 1, "{name}");
+        }
+    }
 }

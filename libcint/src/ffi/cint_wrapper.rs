@@ -9,7 +9,7 @@ use core::any::Any;
 use core::ffi::{c_int, c_void};
 
 #[allow(unused_imports)]
-use crate::ffi::wrapper_traits::{panic_cart, panic_spinor};
+use crate::ffi::wrapper_traits::{panic_cart, panic_sph, panic_spinor};
 
 impl_integrator!(
     int2e_breit_r1p2,
@@ -3904,6 +3904,74 @@ impl_integrator!(
     "int2c2e_ip1ip2",
     CIntKind::Int
 );
+impl_integrator!(
+    int2e_breit_ssp1ssp2,
+    int2e_breit_ssp1ssp2_optimizer,
+    panic_sph,
+    panic_cart,
+    int2e_breit_ssp1ssp2_spinor,
+    false,
+    false,
+    true,
+    16,
+    1,
+    4,
+    vec![0, 1, 0, 1, 2, 4, 4, 1],
+    "int2e",
+    "int2e_breit_ssp1ssp2",
+    CIntKind::Int
+);
+impl_integrator!(
+    int2e_breit_ssp1sps2,
+    int2e_breit_ssp1sps2_optimizer,
+    panic_sph,
+    panic_cart,
+    int2e_breit_ssp1sps2_spinor,
+    false,
+    false,
+    true,
+    16,
+    1,
+    4,
+    vec![0, 1, 1, 0, 2, 4, 4, 1],
+    "int2e",
+    "int2e_breit_ssp1sps2",
+    CIntKind::Int
+);
+impl_integrator!(
+    int2e_breit_sps1ssp2,
+    int2e_breit_sps1ssp2_optimizer,
+    panic_sph,
+    panic_cart,
+    int2e_breit_sps1ssp2_spinor,
+    false,
+    false,
+    true,
+    16,
+    1,
+    4,
+    vec![1, 0, 0, 1, 2, 4, 4, 1],
+    "int2e",
+    "int2e_breit_sps1ssp2",
+    CIntKind::Int
+);
+impl_integrator!(
+    int2e_breit_sps1sps2,
+    int2e_breit_sps1sps2_optimizer,
+    panic_sph,
+    panic_cart,
+    int2e_breit_sps1sps2_spinor,
+    false,
+    false,
+    true,
+    16,
+    1,
+    4,
+    vec![1, 0, 1, 0, 2, 4, 4, 1],
+    "int2e",
+    "int2e_breit_sps1sps2",
+    CIntKind::Int
+);
 
 pub fn get_cint_integrator(name: &str) -> Option<Box<dyn Integrator>> {
     match name {
@@ -4184,6 +4252,10 @@ pub fn get_cint_integrator(name: &str) -> Option<Box<dyn Integrator>> {
         "int3c2e_ip1ip2" => Some(Box::new(int3c2e_ip1ip2)),
         "int2c2e_ipip1" => Some(Box::new(int2c2e_ipip1)),
         "int2c2e_ip1ip2" => Some(Box::new(int2c2e_ip1ip2)),
+        "int2e_breit_ssp1ssp2" => Some(Box::new(int2e_breit_ssp1ssp2)),
+        "int2e_breit_ssp1sps2" => Some(Box::new(int2e_breit_ssp1sps2)),
+        "int2e_breit_sps1ssp2" => Some(Box::new(int2e_breit_sps1ssp2)),
+        "int2e_breit_sps1sps2" => Some(Box::new(int2e_breit_sps1sps2)),
         _ => None,
     }
 }

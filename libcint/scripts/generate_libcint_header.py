@@ -38,17 +38,25 @@ qcint_src_paths = [f"{dir_qcint_src}/{f}" for f in files]
 # +
 # -- configure list of integrals known to source code, autocode included --
 # all intor generated in source code (autocode included)
-# pattern: 
+# pattern:
 #   CACHE_SIZE_T <intor>(...
 #   FINT ng[] = {...};
 # pattern rule:
 #   <intor> ends with _sph, _cart, _spinor; no # in <intor>
+#
+# `BREIT0(X, ncomp_tensor)` in breit.c expands to
+# `int2e_breit_X_spinor` and `int2e_breit_X_optimizer`; these names never
+# appear literally in the source, so add them after the direct scan.
 
-actual_intor = {}
-valid_suffix = ("_sph", "_cart", "_spinor")
-for src_path in list(qcint_src_paths):
-    with open(src_path, "r") as f:
-        lines = f.readlines()
+def scan_intor_defs(src_paths):
+    actual = {}
+    valid_suffix = ("_sph", "_cart", "_spinor")
+    texts = []
+    for src_path in src_paths:
+        with open(src_path, "r") as f:
+            text = f.read()
+        texts.append(text)
+        lines = text.splitlines()
         for n, line in enumerate(lines):
             if line.startswith("CACHE_SIZE_T int"):
                 # match pattern for intor
@@ -58,7 +66,7 @@ for src_path in list(qcint_src_paths):
                     if intor.endswith(suffix):
                         intor = intor.replace(suffix, "")
                         is_intor_valid = True
-                if "#" in intor or intor in actual_intor or not is_intor_valid:
+                if "#" in intor or intor in actual or not is_intor_valid:
                     continue
                 # match pattern for ng
                 ng = None
@@ -67,10 +75,32 @@ for src_path in list(qcint_src_paths):
                         ng = [int(i) for i in l.strip().replace(";", "").replace("}", "").split("{")[-1].split(",")]
                 if ng is None:
                     raise ValueError(f"{intor}")
-                actual_intor[intor] = ng
-# -
+                actual[intor] = ng
 
-actual_intor_qcint = actual_intor
+    spinor_only = set()
+    for text in texts:
+        for line in text.splitlines():
+            if line.lstrip().startswith("#define"):
+                continue
+            m = re.search(r"\bBREIT0\(\s*(\w+)\s*,", line)
+            if m is None:
+                continue
+            intor = f"int2e_breit_{m.group(1)}"
+            if intor in actual:
+                continue
+            # The Breit driver calls the gaunt/gauge components; use the gaunt
+            # component's ng metadata for the wrapper.
+            base = f"int2e_{m.group(1)}"
+            if base not in actual:
+                raise ValueError(f"BREIT0 component {base} is not an integral")
+            actual[intor] = actual[base]
+            spinor_only.add(intor)
+
+    return actual, spinor_only
+
+
+actual_intor_qcint, _ = scan_intor_defs(qcint_src_paths)
+# -
 
 # ## Preparasion
 
@@ -100,36 +130,15 @@ known_intor = sorted(set(known_intor))
 # +
 # -- configure list of integrals known to source code, autocode included --
 # all intor generated in source code (autocode included)
-# pattern: 
+# pattern:
 #   CACHE_SIZE_T <intor>(...
 #   FINT ng[] = {...};
 # pattern rule:
 #   <intor> ends with _sph, _cart, _spinor; no # in <intor>
 
-actual_intor = {}
-valid_suffix = ("_sph", "_cart", "_spinor")
-for src_path in list(glob.iglob(f"{dir_libcint_src}/src/**/*.c", recursive=True)):
-    with open(src_path, "r") as f:
-        lines = f.readlines()
-        for n, line in enumerate(lines):
-            if line.startswith("CACHE_SIZE_T int"):
-                # match pattern for intor
-                intor = line.split("(")[0].split()[-1].strip()
-                is_intor_valid = False
-                for suffix in valid_suffix:
-                    if intor.endswith(suffix):
-                        intor = intor.replace(suffix, "")
-                        is_intor_valid = True
-                if "#" in intor or intor in actual_intor or not is_intor_valid:
-                    continue
-                # match pattern for ng
-                ng = None
-                for l in lines[n:n+5]:
-                    if l.strip().startswith("FINT ng[]") or l.strip().startswith("int ng[]"):
-                        ng = [int(i) for i in l.strip().replace(";", "").replace("}", "").split("{")[-1].split(",")]
-                if ng is None:
-                    raise ValueError(f"{intor}")
-                actual_intor[intor] = ng
+actual_intor, spinor_only_intor = scan_intor_defs(
+    glob.iglob(f"{dir_libcint_src}/src/**/*.c", recursive=True)
+)
 # -
 
 # assert known intors are all included in all intors
@@ -240,7 +249,7 @@ typedef CACHE_SIZE_T CINTIntegralFunctionComplex(
 """
 
 # for unknown intors (mostly not in autocode, but in main source code), generate signature for header
-# exclusion (F12): _stg_, _yp_
+# exclusion (F12): _stg_, _yp_; spinor-only: BREIT0
 token = """
 extern CINTOptimizerFunction       {0:}_optimizer;
 extern CINTIntegralFunctionReal    {0:}_cart;
@@ -250,7 +259,7 @@ extern CINTIntegralFunctionComplex {0:}_spinor;
 cint_funcs = cint_funcs + "".join([
     token.format(intor)
     for intor in sorted(set(actual_intor))
-    if not rule_with_f12(intor)])
+    if not rule_with_f12(intor) and intor not in spinor_only_intor])
 cint_funcs = cint_funcs.replace("#include <cint.h>", "#include \"cint.h\"")
 
 # for unknown intors (mostly not in autocode, but in main source code), generate signature for header
@@ -263,6 +272,16 @@ cint_funcs = cint_funcs + "".join([
     token.format(intor)
     for intor in sorted(set(actual_intor))
     if rule_with_f12(intor)])
+cint_funcs = cint_funcs.replace("#include <cint.h>", "#include \"cint.h\"")
+
+# BREIT0 spinor-only intors: only `_optimizer` and `_spinor` are defined
+token = """
+extern CINTOptimizerFunction       {0:}_optimizer;
+extern CINTIntegralFunctionComplex {0:}_spinor;
+"""
+cint_funcs = cint_funcs + "".join([
+    token.format(intor)
+    for intor in sorted(spinor_only_intor)])
 cint_funcs = cint_funcs.replace("#include <cint.h>", "#include \"cint.h\"")
 
 # ### Merge `cint.h` and `cint_funcs.h`
@@ -331,7 +350,7 @@ use core::any::Any;
 use core::ffi::{c_int, c_void};
 
 #[allow(unused_imports)]
-use crate::ffi::wrapper_traits::{panic_cart, panic_spinor};
+use crate::ffi::wrapper_traits::{panic_cart, panic_sph, panic_spinor};
 
 """
 
@@ -364,6 +383,11 @@ def gen_impl_integrator(intor):
         is_spinor_available = "false"
         func_integral_cart = "panic_cart"
         func_integral_spinor = "panic_spinor"
+    if intor in spinor_only_intor:
+        is_sph_available = "false"
+        is_cart_available = "false"
+        func_integral_sph = "panic_sph"
+        func_integral_cart = "panic_cart"
 
     # counting numbers
     intor_center = intor[:5]

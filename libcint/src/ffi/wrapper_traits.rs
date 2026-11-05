@@ -214,6 +214,22 @@ pub(crate) unsafe fn panic_cart(
 }
 
 #[allow(dead_code)]
+pub(crate) unsafe fn panic_sph(
+    _out: *mut f64,
+    _dims: *const c_int,
+    _shls: *const c_int,
+    _atm: *const c_int,
+    _natm: c_int,
+    _bas: *const c_int,
+    _nbas: c_int,
+    _env: *const f64,
+    _opt: *const c_void,
+    _cache: *mut f64,
+) -> c_int {
+    panic!("Integral for sph is not implemented for this integrator.")
+}
+
+#[allow(dead_code)]
 pub(crate) unsafe fn panic_spinor(
     _out: *mut c_void,
     _dims: *const c_int,
