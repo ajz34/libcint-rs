@@ -9220,4 +9220,84 @@ unsafe extern "C" {
         opt: *const CINTOpt,
         cache: *mut f64,
     ) -> c_int;
+    pub fn int2e_breit_sps1sps2_optimizer(
+        opt: *mut *mut CINTOpt,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+    );
+    pub fn int2e_breit_sps1sps2_spinor(
+        out: *mut __BindgenComplex<f64>,
+        dims: *const c_int,
+        shls: *const c_int,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+        opt: *const CINTOpt,
+        cache: *mut f64,
+    ) -> c_int;
+    pub fn int2e_breit_sps1ssp2_optimizer(
+        opt: *mut *mut CINTOpt,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+    );
+    pub fn int2e_breit_sps1ssp2_spinor(
+        out: *mut __BindgenComplex<f64>,
+        dims: *const c_int,
+        shls: *const c_int,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+        opt: *const CINTOpt,
+        cache: *mut f64,
+    ) -> c_int;
+    pub fn int2e_breit_ssp1sps2_optimizer(
+        opt: *mut *mut CINTOpt,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+    );
+    pub fn int2e_breit_ssp1sps2_spinor(
+        out: *mut __BindgenComplex<f64>,
+        dims: *const c_int,
+        shls: *const c_int,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+        opt: *const CINTOpt,
+        cache: *mut f64,
+    ) -> c_int;
+    pub fn int2e_breit_ssp1ssp2_optimizer(
+        opt: *mut *mut CINTOpt,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+    );
+    pub fn int2e_breit_ssp1ssp2_spinor(
+        out: *mut __BindgenComplex<f64>,
+        dims: *const c_int,
+        shls: *const c_int,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+        opt: *const CINTOpt,
+        cache: *mut f64,
+    ) -> c_int;
 }
