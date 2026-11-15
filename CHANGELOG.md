@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.6.2 -- 2026-11-15
+
+Enhancements:
+
+- Add the `int3c2e_{sph,spinor,spsp1_spinor}_ssc` integrators (Cartesian auxiliary center), which libcint implements but omits from `cint_funcs.h`, and which qcint does not export. (ajz34/libcint-rs#26)
+- Add `CIntIntegralLayout`, `Integrator::center_layout` and `CInt::cgto_shape_for` for integrators that do not use one `CIntType` for all centers, and support mixed spinor/scalar layouts in `integrate_cross*_spinor` and `integrate_cross*`, which may now join molecules of different `cint_type`. (ajz34/libcint-rs#26)
+
+Fixes:
+
+- Fix the shape of the `int3c2e{,_ip1,_ip2,_pvp1,_pvxp1,_ig1,_spsp1,_ipspsp1,_spsp1ip2,_ipip1,_ipip2,_ipvip1,_ip1ip2}_spinor` integrators: the auxiliary center is scalar spherical, but its size was computed as spinor. (ajz34/libcint-rs#26)
+- Ordinary (non-cross) integration of an integrator with a mixed center layout now raises `CIntErrorBase::IntegratorNotAvailable` instead of returning a wrongly shaped integral; use `integrate_cross*` instead. (ajz34/libcint-rs#26)
+
 ## v0.6.1 -- 2026-11-05
 
 Enhancements:
