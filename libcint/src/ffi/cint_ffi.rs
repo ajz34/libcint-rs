@@ -9301,3 +9301,52 @@ unsafe extern "C" {
         cache: *mut f64,
     ) -> c_int;
 }
+
+/* `int3c2e*_ssc` functions are exported by libcint but omitted from its
+ * `cint_funcs.h`, so they are declared here. qcint has the internal
+ * `is_ssc`/`c2s_*_ssc` helpers but no public `_ssc` entry points. The `_c`
+ * suffix avoids colliding with the unit-struct integrator names in
+ * `cint_wrapper.rs`. */
+#[cfg(not(feature = "qcint"))]
+unsafe extern "C" {
+    pub fn int3c2e_ssc_optimizer(opt: *mut *mut CINTOpt, atm: *const c_int, natm: c_int, bas: *const c_int, nbas: c_int, env: *const f64);
+    #[link_name = "int3c2e_sph_ssc"]
+    pub fn int3c2e_sph_ssc_c(
+        out: *mut f64,
+        dims: *const c_int,
+        shls: *const c_int,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+        opt: *const CINTOpt,
+        cache: *mut f64,
+    ) -> c_int;
+    #[link_name = "int3c2e_spinor_ssc"]
+    pub fn int3c2e_spinor_ssc_c(
+        out: *mut __BindgenComplex<f64>,
+        dims: *const c_int,
+        shls: *const c_int,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+        opt: *const CINTOpt,
+        cache: *mut f64,
+    ) -> c_int;
+    #[link_name = "int3c2e_spsp1_spinor_ssc"]
+    pub fn int3c2e_spsp1_spinor_ssc_c(
+        out: *mut __BindgenComplex<f64>,
+        dims: *const c_int,
+        shls: *const c_int,
+        atm: *const c_int,
+        natm: c_int,
+        bas: *const c_int,
+        nbas: c_int,
+        env: *const f64,
+        opt: *const CINTOpt,
+        cache: *mut f64,
+    ) -> c_int;
+}

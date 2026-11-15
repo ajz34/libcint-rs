@@ -150,6 +150,45 @@ pub enum CIntType {
     Spinor,
 }
 
+/// Per-center representation of an integral driver.
+///
+/// Most integrators use one representation (the [`CInt::cint_type`] of the
+/// molecule) for every center. A few drivers mix representations; for example,
+/// the `int3c2e*_spinor` family evaluates two spinor centers against a scalar
+/// spherical auxiliary center:
+///
+/// ```rust
+/// use libcint::prelude::*;
+///
+/// let layout = CIntIntegralLayout {
+///     driver_type: CIntType::Spinor,
+///     center_types: &[CIntType::Spinor, CIntType::Spinor, CIntType::Spheric],
+/// };
+/// assert_eq!(layout.center_types[2], CIntType::Spheric);
+///
+/// // scalar spherical bra pair with a Cartesian auxiliary center
+/// let ssc = CIntIntegralLayout {
+///     driver_type: CIntType::Spheric,
+///     center_types: &[CIntType::Spheric, CIntType::Spheric, CIntType::Cartesian],
+/// };
+/// assert_eq!(ssc.center_types[2], CIntType::Cartesian);
+/// ```
+///
+/// `driver_type` selects the FFI entry point (`integral_spinor` for [`Spinor`],
+/// `integral_sph` for [`Spheric`], ...) and the output dtype. Whenever
+/// `CInt::cint_type == driver_type`, `center_types` is authoritative for the
+/// output shape, block copy and buffer size. `center_types.len()` must equal
+/// [`Integrator::n_center`].
+///
+/// [`CInt::cint_type`]: CInt::cint_type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CIntIntegralLayout {
+    /// Representation used to call the C driver and to type the output buffer.
+    pub driver_type: CIntType,
+    /// Representation of each center, in the order expected by the driver.
+    pub center_types: &'static [CIntType],
+}
+
 /// Symmetry of the integral.
 ///
 /// Naming convention is
@@ -788,6 +827,12 @@ impl CInt {
     /// // panics: Expected float type size 16 bytes, but got 8 bytes.
     /// ```
     ///
+    /// **Mixed-center layouts require cross integration**
+    ///
+    /// `int3c2e_sph_ssc` evaluates spherical centers 0/1 against a Cartesian
+    /// auxiliary center, so it is not available through this function. Use
+    /// [`integrate_cross`](Self::integrate_cross) instead.
+    ///
     /// </div>
     ///
     /// # See also
@@ -851,6 +896,18 @@ impl CInt {
     /// let (out, shape) = cint_data.integrate_spinor("int1e_ovlp_sph", None, None).into();
     /// // panics: Expected float type size 8 bytes, but got 16 bytes.
     /// ```
+    ///
+    /// **Mixed spinor/scalar integrals require cross integration**
+    ///
+    /// The density-fitting family `int3c2e*_spinor` evaluates two spinor
+    /// centers and one scalar spherical auxiliary center, so it has no single
+    /// `cint_type` that ordinary integration could use. This function returns
+    /// [`CIntErrorBase::IntegratorNotAvailable`] for those integrals; use
+    /// [`integrate_cross_spinor`](Self::integrate_cross_spinor) with the bra
+    /// and auxiliary molecules instead. This also applies to the `_ssc`
+    /// variants (`int3c2e_spinor_ssc`, `int3c2e_spsp1_spinor_ssc`), which
+    /// use a Cartesian auxiliary center. The scalar `int3c2e_sph` and
+    /// `int3c2e_cart` variants are unaffected.
     ///
     /// </div>
     ///
@@ -950,6 +1007,13 @@ impl CInt {
     /// assert!((cint_fp(&out) - 10.435234769997802).abs() < 1e-10);
     /// ```
     ///
+    /// # Mixed scalar/spherical layouts
+    ///
+    /// `int3c2e_sph_ssc` evaluates scalar spherical centers 0/1 against a
+    /// Cartesian auxiliary center. Its preset [`CIntIntegralLayout`] makes this
+    /// cross path produce `[nao_sph, nao_sph, nao_cart_aux]` output (for
+    /// example `[43, 43, 48]` for H2O/def2-TZVP as both bra and aux).
+    ///
     /// # See also
     ///
     /// - [`integrate`](Self::integrate) for general integrals.
@@ -997,10 +1061,30 @@ impl CInt {
     /// Integrate with multiple molecules (for spinor type) **in
     /// column-major**.
     ///
+    /// # Mixed spinor/scalar layouts
+    ///
+    /// Integrals such as `int3c2e*_spinor` evaluate two spinor centers against
+    /// a scalar spherical auxiliary center. For these, the `cint_type` of the
+    /// molecules and any `_sph` / `_cart` / `_spinor` suffix are ignored: the
+    /// integrator's preset [`CIntIntegralLayout`] is authoritative. The
+    /// molecules may therefore have different `cint_type`s, for example a
+    /// spinor bra and a spherical auxiliary basis. The `_ssc` spinor
+    /// variants (`int3c2e_spinor_ssc`, `int3c2e_spsp1_spinor_ssc`) use the
+    /// same rule with a Cartesian auxiliary center.
+    ///
+    /// Mixed layouts use the same output convention as uniform integrals:
+    /// column-major `s2ij` packs the upper triangle. For a complex Hermitian
+    /// bra pair this is the elementwise conjugate of PySCF's lower-triangle
+    /// packing; use
+    /// [`integrate_cross_row_major_spinor`](Self::integrate_cross_row_major_spinor)
+    /// when a buffer directly comparable with PySCF's packed `s2ij` is
+    /// needed.
+    ///
     /// # See also
     ///
     /// - [`integrate_cross`](Self::integrate_cross) for non-spinor type
     ///   integrals.
+    /// - [`CIntIntegralLayout`] for the per-center metadata.
     pub fn integrate_cross_spinor<'l>(
         intor: &str,
         mols: impl AsRef<[&'l CInt]>,
@@ -1032,7 +1116,7 @@ impl CInt {
             .shls_slice(shls_slice.as_ref())
             .aosym(aosym.into())
             .build()?;
-        CInt::integrate_cross_with_args_inner(args)
+        CInt::integrate_cross_with_args_inner_impl(args, true)
     }
 
     /// Main electronic integral driver (for non-spinor type) **in row-major**.
@@ -1289,6 +1373,12 @@ impl CInt {
 
     /// Integrate with multiple molecules (for spinor type) **in row-major**.
     ///
+    /// Mixed spinor/scalar layouts such as `int3c2e*_spinor` are handled as in
+    /// [`integrate_cross_spinor`](Self::integrate_cross_spinor): the preset
+    /// per-center [`CIntIntegralLayout`] overrides the molecules' `cint_type`.
+    /// Row-major `s2ij` packs the lower triangle, so it matches PySCF's packed
+    /// order directly (up to the documented stride differences).
+    ///
     /// # See also
     ///
     /// - [`integrate_cross_row_major`](Self::integrate_cross_row_major) for
@@ -1326,7 +1416,7 @@ impl CInt {
             .aosym(aosym.into())
             .row_major(true)
             .build()?;
-        CInt::integrate_cross_with_args_inner(args)
+        CInt::integrate_cross_with_args_inner_impl(args, true)
     }
 }
 

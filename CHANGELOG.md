@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+Enhancements:
+
+- Add `CIntIntegralLayout` and `Integrator::center_layout()` for integrators whose centers do not share one representation. The `int3c2e*_spinor` family is declared as `[Spinor, Spinor, Spheric]`.
+- `integrate_cross*_spinor` now supports spinor/spherical density-fitting integrals such as `(mu_spinor nu_spinor | L_sph)`: output shapes, block copies and buffer sizes use the preset per-center types, and the molecules may have different `cint_type`s. `s2ij` keeps the usual column-major upper / row-major lower packing; use `integrate_cross_row_major_spinor` for PySCF's packed order.
+- Ordinary (non-cross) integration of a mixed-layout integral returns `IntegratorNotAvailable`; the scalar `_sph` / `_cart` variants are unchanged.
+- Add the `int3c2e*_ssc` family (`int3c2e_sph_ssc`, `int3c2e_spinor_ssc`, `int3c2e_spsp1_spinor_ssc`), which uses a Cartesian auxiliary center. The scalar `int3c2e_sph_ssc` path is tested through `integrate_cross`.
+
 ## v0.6.1 -- 2026-11-05
 
 Enhancements:

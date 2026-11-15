@@ -71,7 +71,12 @@ fn cross_integrator(intor: &str, mols: &[&CInt]) -> Result<Box<dyn Integrator>, 
 ///
 /// `mols` must be non-empty; callers check the length against the integrator's
 /// number of centres first.
-fn cross_concat(mols: &[&CInt]) -> (CInt, Vec<usize>) {
+///
+/// When `forced_type` is `Some`, the concatenation is given that
+/// [`CIntType`] regardless of the inputs' types. This is needed for mixed
+/// layouts (e.g. a spinor bra and a scalar spherical auxiliary basis), whose
+/// components cannot otherwise be concatenated.
+fn cross_concat(mols: &[&CInt], forced_type: Option<CIntType>) -> (CInt, Vec<usize>) {
     let mut offsets = vec![0; mols.len()];
     let mut unique: Vec<&CInt> = vec![mols[0]];
     let mut concat = mols[0].clone();
@@ -80,11 +85,68 @@ fn cross_concat(mols: &[&CInt]) -> (CInt, Vec<usize>) {
             offsets[i] = offsets[pos];
         } else {
             offsets[i] = concat.nbas();
-            concat = &concat + mol;
+            concat = match forced_type {
+                Some(cint_type) => concat.concat_with_type(mol, cint_type),
+                None => &concat + mol,
+            };
             unique.push(mol);
         }
     }
+    if let Some(cint_type) = forced_type {
+        concat.cint_type = cint_type;
+    }
     (concat, offsets)
+}
+
+impl CInt {
+    /// Mixed layout that applies to the current driver type.
+    ///
+    /// The layout is only active when `self.cint_type` is its `driver_type`.
+    /// This keeps uniform scalar integrals of the same family (for example
+    /// `int3c2e_sph` / `int3c2e_cart`) on the ordinary global-`ao_loc` path.
+    pub(crate) fn active_layout(&self, integrator: &dyn Integrator) -> Option<CIntIntegralLayout> {
+        let layout = integrator.center_layout()?;
+        if layout.driver_type == self.cint_type {
+            debug_assert_eq!(layout.center_types.len(), integrator.n_center());
+            Some(layout)
+        } else {
+            None
+        }
+    }
+
+    /// Representation of one center, taking an active mixed layout into
+    /// account.
+    pub(crate) fn center_type(&self, integrator: &dyn Integrator, center: usize) -> CIntType {
+        if let Some(layout) = self.active_layout(integrator) {
+            layout.center_types.get(center).copied().unwrap_or(layout.driver_type)
+        } else {
+            self.cint_type
+        }
+    }
+
+    /// `ao_loc` for every center, using the integrator's mixed layout when it
+    /// is active.
+    pub(crate) fn loc_per_center(&self, integrator: &dyn Integrator) -> Vec<Vec<usize>> {
+        (0..integrator.n_center()).map(|ic| self.make_loc_with_type(self.center_type(integrator, ic))).collect()
+    }
+
+    /// Reject ordinary (non-cross) integration for an active mixed layout.
+    ///
+    /// Cross integration has the per-center molecule mapping needed for a
+    /// mixed layout; ordinary integration does not, so it is disabled until a
+    /// safe argument for it exists.
+    fn check_non_cross_layout(&self, integrator: &dyn Integrator) -> Result<(), CIntError> {
+        if let Some(layout) = self.active_layout(integrator) {
+            cint_raise!(
+                IntegratorNotAvailable,
+                "Integrator `{}` has mixed center layout {:?} for driver {:?}; non-cross integration is not supported yet. Use `integrate_cross*` or `integrate_cross_with_args*` instead.",
+                integrator.name(),
+                layout.center_types,
+                layout.driver_type
+            )?;
+        }
+        Ok(())
+    }
 }
 
 /// Implementation of integral at higher API level (for advanced user usage).
@@ -188,7 +250,8 @@ impl CInt {
     pub fn get_cintopt_cross_f<'l>(intor: &str, mols: impl AsRef<[&'l CInt]>) -> Result<CIntOpt, CIntError> {
         let mols = mols.as_ref();
         let integrator = cross_integrator(intor, mols)?;
-        let (concat, _) = cross_concat(mols);
+        let forced_type = integrator.center_layout().map(|layout| layout.driver_type);
+        let (concat, _) = cross_concat(mols, forced_type);
         Ok(concat.build_cint_opt(&*integrator))
     }
 
@@ -348,6 +411,18 @@ impl CInt {
     where
         F: ComplexFloat + Send + Sync,
     {
+        self.integrate_with_args_inner_impl(args, false, None)
+    }
+
+    fn integrate_with_args_inner_impl<F>(
+        &self,
+        args: IntegrateArgs<F>,
+        allow_mixed: bool,
+        forced_driver: Option<CIntType>,
+    ) -> Result<CIntOutput<F>, CIntError>
+    where
+        F: ComplexFloat + Send + Sync,
+    {
         let mut data = if self.is_ecp_merged() { self.clone() } else { self.merge_ecpbas() };
         if let Some(grids) = args.grids {
             data.set_grids(grids);
@@ -374,6 +449,17 @@ impl CInt {
 
         // unwrap and prepare (without output checking)
         let integrator = CInt::get_integrator(intor);
+
+        // For a mixed-layout cross integral the preset driver type is
+        // authoritative: it overrides the suffix, the molecules' `cint_type`
+        // and any with-clause.
+        if let Some(cint_type) = forced_driver {
+            data.cint_type = cint_type;
+        }
+        if !allow_mixed {
+            data.check_non_cross_layout(&*integrator)?;
+        }
+
         let mut shls_slice = args.shls_slice.iter().map(|&[shl0, shl1]| [shl0 as c_int, shl1 as c_int]).collect_vec();
         if shls_slice.is_empty() {
             shls_slice = vec![[0, data.nbas() as c_int]; integrator.n_center()];
@@ -405,7 +491,7 @@ impl CInt {
         }
 
         // prepare output and check size of output
-        let mut out_shape = data.cgto_shape(&shls_slice, aosym);
+        let mut out_shape = data.cgto_shape_for(&*integrator, &shls_slice, aosym);
         if has_grids {
             let ngrids = data.ngrids();
             out_shape.insert(0, ngrids);
@@ -492,7 +578,7 @@ impl CInt {
     ///
     /// [`CInt::integrate_cross_with_args`]
     pub fn integrate_cross_with_args_spinor(args: IntorCrossArgs<Complex<f64>>) -> CIntOutput<Complex<f64>> {
-        CInt::integrate_cross_with_args_inner(args).cint_unwrap()
+        CInt::integrate_cross_with_args_inner_impl(args, true).cint_unwrap()
     }
 
     /// Perform cross integral with multiple `CInt` instances for spinor
@@ -502,16 +588,35 @@ impl CInt {
     ///
     /// [`CInt::integrate_cross_with_args_spinor`]
     pub fn integrate_cross_with_args_spinor_f<F>(args: IntorCrossArgs<Complex<f64>>) -> Result<CIntOutput<Complex<f64>>, CIntError> {
-        CInt::integrate_cross_with_args_inner(args)
+        CInt::integrate_cross_with_args_inner_impl(args, true)
     }
 
     pub fn integrate_cross_with_args_inner<F>(args: IntorCrossArgs<F>) -> Result<CIntOutput<F>, CIntError>
     where
         F: ComplexFloat + Send + Sync,
     {
+        CInt::integrate_cross_with_args_inner_impl(args, false)
+    }
+
+    pub(crate) fn integrate_cross_with_args_inner_impl<F>(args: IntorCrossArgs<F>, spinor_api: bool) -> Result<CIntOutput<F>, CIntError>
+    where
+        F: ComplexFloat + Send + Sync,
+    {
         let IntorCrossArgs { intor, mols, shls_slice, aosym, out, row_major, cintopt } = args;
 
         let integrator = cross_integrator(intor, mols)?;
+        // A mixed layout wins over the caller's `cint_type`. The API family
+        // (`integrate_cross*` vs `integrate_cross*_spinor`) only decides
+        // whether a spinor or a scalar mixed driver is applicable; for
+        // `int3c2e*_spinor` the preset per-center types are used as-is.
+        let layout = integrator.center_layout().filter(|layout| {
+            if spinor_api {
+                layout.driver_type == CIntType::Spinor
+            } else {
+                layout.driver_type != CIntType::Spinor
+            }
+        });
+        let forced_driver = layout.map(|layout| layout.driver_type);
         let n_center = integrator.n_center();
         let mut shls_slice = if shls_slice.is_empty() {
             mols.iter().map(|mol| [0, mol.nbas()]).collect_vec()
@@ -532,8 +637,10 @@ impl CInt {
         };
 
         // Concatenate the distinct molecules (first-appearance order) and shift
-        // each slice to the concatenated shell numbering.
-        let (mol_concate, offsets) = cross_concat(mols);
+        // each slice to the concatenated shell numbering. A forced driver type
+        // allows the inputs to have different `cint_type`s, as in the spinor
+        // bra + scalar auxiliary case.
+        let (mol_concate, offsets) = cross_concat(mols, forced_driver);
         for i in 1..n_center {
             shls_slice[i][0] += offsets[i];
             shls_slice[i][1] += offsets[i];
@@ -565,7 +672,7 @@ impl CInt {
         }
         let args = if let Some(out) = out { args_builder.out(out).build()? } else { args_builder.build()? };
 
-        mol_concate.integrate_with_args_inner(args)
+        mol_concate.integrate_with_args_inner_impl(args, true, forced_driver)
     }
 }
 
@@ -717,10 +824,11 @@ impl CInt {
         // additional check
         data.check_float_type::<F>().cint_unwrap();
         data.check_shls_slice(&integrator, shls_slice, aosym).cint_unwrap();
+        data.check_non_cross_layout(&integrator).cint_unwrap();
 
         // integral preparation and execution
-        let mut out_shape = data.cgto_shape(shls_slice, aosym);
-        let n_comp = match self.cint_type {
+        let mut out_shape = data.cgto_shape_for(&integrator, shls_slice, aosym);
+        let n_comp = match data.cint_type {
             Spheric | Cartesian => integrator.n_comp(),
             Spinor => integrator.n_spinor_comp(),
         };
@@ -1100,6 +1208,11 @@ impl CInt {
 
     /* #region cgto_shape, cgto_loc */
 
+    /// Shape of integral (in atomic orbital basis), using the molecule's single
+    /// `cint_type` for every center.
+    ///
+    /// For integrators with a mixed per-center layout, use
+    /// [`CInt::cgto_shape_for`] instead.
     pub fn cgto_shape(&self, shls_slice: &[[c_int; 2]], aosym: CIntSymm) -> Vec<usize> {
         match aosym {
             CIntSymm::S1 => self.cgto_shape_s1(shls_slice),
@@ -1107,6 +1220,60 @@ impl CInt {
             CIntSymm::S2kl => self.cgto_shape_s2kl(shls_slice),
             CIntSymm::S4 => self.cgto_shape_s4(shls_slice),
             CIntSymm::S8 => self.cgto_shape_s8(shls_slice),
+        }
+    }
+
+    /// Shape of integral (in atomic orbital basis), accounting for a mixed
+    /// per-center layout declared by `integrator`.
+    ///
+    /// This is the counterpart of [`CInt::cgto_shape`] for drivers such as
+    /// `int3c2e*_spinor`, whose auxiliary center is scalar spherical while the
+    /// first two centers are spinor. For an integrator without a mixed layout
+    /// (or when the layout's driver type is not active), it returns exactly the
+    /// same shape as [`CInt::cgto_shape`].
+    ///
+    /// This function does not check the validity of the `shls_slice`.
+    pub fn cgto_shape_for(&self, integrator: &dyn Integrator, shls_slice: &[[c_int; 2]], aosym: CIntSymm) -> Vec<usize> {
+        let locs = self.cgto_locs_for(integrator, shls_slice);
+        Self::cgto_shape_from_locs(shls_slice, &locs, aosym)
+    }
+
+    fn cgto_shape_from_locs(shls_slice: &[[c_int; 2]], locs: &[Vec<usize>], aosym: CIntSymm) -> Vec<usize> {
+        let extent = |loc: &[usize]| loc[loc.len() - 1] - loc[0];
+        let pair_extent = |loc: &[usize]| {
+            let np = extent(loc);
+            np * (np + 1) / 2
+        };
+
+        match aosym {
+            CIntSymm::S1 => locs.iter().map(|loc| extent(loc)).collect(),
+            CIntSymm::S2ij => {
+                if shls_slice[0] != shls_slice[1] {
+                    panic!("shls_slice must have the same first two elements for S2ij symmetry");
+                }
+                let mut shape = vec![pair_extent(&locs[0])];
+                shape.extend(locs[2..].iter().map(|loc| extent(loc)));
+                shape
+            },
+            CIntSymm::S2kl => {
+                if shls_slice[2] != shls_slice[3] {
+                    panic!("shls_slice must have the same last two elements for S2kl symmetry");
+                }
+                vec![extent(&locs[0]), extent(&locs[1]), pair_extent(&locs[2])]
+            },
+            CIntSymm::S4 => {
+                if shls_slice[0] != shls_slice[1] || shls_slice[2] != shls_slice[3] {
+                    panic!("shls_slice must have the same first two elements and last two elements for S4 symmetry");
+                }
+                vec![pair_extent(&locs[0]), pair_extent(&locs[2])]
+            },
+            CIntSymm::S8 => {
+                if shls_slice[0] != shls_slice[1] || shls_slice[0] != shls_slice[2] || shls_slice[0] != shls_slice[3] {
+                    panic!("shls_slice must have the same first four elements for S8 symmetry");
+                }
+                let np_s2 = pair_extent(&locs[0]);
+                vec![np_s2 * (np_s2 + 1) / 2]
+            },
         }
     }
 
@@ -1279,6 +1446,9 @@ impl CInt {
     /// This function will be used when coping small blocks of integral tensors
     /// into large output tensor.
     ///
+    /// For integrators with a mixed per-center layout, use
+    /// [`CInt::cgto_locs_for`] instead.
+    ///
     /// # Example
     ///
     /// ```rust
@@ -1297,6 +1467,25 @@ impl CInt {
         shls_slice
             .iter()
             .map(|&[shl0, shl1]| {
+                let [shl0, shl1] = [shl0 as usize, shl1 as usize];
+                ao_loc[shl0..shl1 + 1].iter().map(|&x| x - ao_loc[shl0]).collect_vec()
+            })
+            .collect_vec()
+    }
+
+    /// Obtain relative atomic-orbital locations for integral, accounting for a
+    /// mixed per-center layout declared by `integrator`.
+    ///
+    /// This is the counterpart of [`CInt::cgto_locs`] for drivers such as
+    /// `int3c2e*_spinor`. For an integrator without an active mixed layout, it
+    /// returns exactly the same locations as [`CInt::cgto_locs`].
+    pub fn cgto_locs_for(&self, integrator: &dyn Integrator, shls_slice: &[[c_int; 2]]) -> Vec<Vec<usize>> {
+        let locs = self.loc_per_center(integrator);
+        shls_slice
+            .iter()
+            .enumerate()
+            .map(|(i, &[shl0, shl1])| {
+                let ao_loc = &locs[i];
                 let [shl0, shl1] = [shl0 as usize, shl1 as usize];
                 ao_loc[shl0..shl1 + 1].iter().map(|&x| x - ao_loc[shl0]).collect_vec()
             })
@@ -1408,14 +1597,15 @@ impl CInt {
     /// assert_eq!(max_buffer_size, 81);
     /// ```
     pub fn max_buffer_size(&self, integrator: &dyn Integrator, shls_slice: &[[c_int; 2]]) -> usize {
-        let ao_loc = self.ao_loc();
+        let locs = self.loc_per_center(integrator);
         let n_comp = match self.cint_type {
             Spheric | Cartesian => integrator.n_comp(),
             Spinor => integrator.n_spinor_comp(),
         };
 
         let mut result = n_comp;
-        for &[shl0, shl1] in shls_slice {
+        for (ic, &[shl0, shl1]) in shls_slice.iter().enumerate() {
+            let ao_loc = &locs[ic];
             let mut cgto_max = 0;
             for shl in shl0..shl1 {
                 let shl = shl as usize;

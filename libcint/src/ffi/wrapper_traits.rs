@@ -53,6 +53,15 @@ pub trait Integrator: Send + Sync {
     fn n_comp(&self) -> usize;
     fn n_spinor_comp(&self) -> usize;
     fn n_center(&self) -> usize;
+    /// Mixed per-center representation of this integral, or `None` when the
+    /// driver uses the molecule's [`CIntType`] for every center.
+    ///
+    /// This metadata is authoritative for layout: for example,
+    /// `int3c2e*_spinor` uses two spinor centers and a scalar spherical
+    /// auxiliary center. See [`CIntIntegralLayout`].
+    fn center_layout(&self) -> Option<CIntIntegralLayout> {
+        None
+    }
     fn ng(&self) -> Vec<i32>;
     fn integrator_category(&self) -> &'static str;
     fn name(&self) -> &'static str;
@@ -78,6 +87,7 @@ macro_rules! impl_integrator {
         $integrator_category: literal,
         $name: literal,
         $kind: expr
+        $(, $center_layout:expr)?
     ) => {
         #[allow(non_camel_case_types)]
         pub struct $intor;
@@ -164,6 +174,11 @@ macro_rules! impl_integrator {
 
             fn n_center(&self) -> usize {
                 $n_center as usize
+            }
+
+            fn center_layout(&self) -> Option<$crate::cint::CIntIntegralLayout> {
+                let layout = None $(.or(Some($center_layout)))?;
+                layout
             }
 
             fn ng(&self) -> Vec<i32> {
