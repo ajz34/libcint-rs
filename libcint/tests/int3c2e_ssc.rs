@@ -5,6 +5,10 @@
 //! `cint_funcs.h`; qcint does not provide them publicly. These tests pin the
 //! scalar cross path and the per-center layout metadata.
 
+// qcint does not export the `_ssc` entry points, so the integrator entries are
+// compiled out under that feature; skip the whole test crate there.
+#![cfg(not(feature = "qcint"))]
+
 use approx::assert_relative_eq;
 use libcint::prelude::*;
 

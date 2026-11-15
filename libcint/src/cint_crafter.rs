@@ -126,8 +126,16 @@ impl CInt {
 
     /// `ao_loc` for every center, using the integrator's mixed layout when it
     /// is active.
+    ///
+    /// Without an active layout every center uses the same table, so it is
+    /// built once and shared; only a mixed layout needs one table per center.
     pub(crate) fn loc_per_center(&self, integrator: &dyn Integrator) -> Vec<Vec<usize>> {
-        (0..integrator.n_center()).map(|ic| self.make_loc_with_type(self.center_type(integrator, ic))).collect()
+        let n_center = integrator.n_center();
+        if self.active_layout(integrator).is_none() {
+            let ao_loc = self.ao_loc();
+            return (0..n_center).map(|_| ao_loc.clone()).collect();
+        }
+        (0..n_center).map(|ic| self.make_loc_with_type(self.center_type(integrator, ic))).collect()
     }
 
     /// Reject ordinary (non-cross) integration for an active mixed layout.
@@ -1238,6 +1246,14 @@ impl CInt {
         Self::cgto_shape_from_locs(shls_slice, &locs, aosym)
     }
 
+    /// Shape of integral from per-center relative AO locations.
+    ///
+    /// `locs[i]` is the location table of center `i` as returned by
+    /// [`CInt::cgto_locs`] / [`CInt::cgto_locs_for`]. This is the single
+    /// implementation behind [`CInt::cgto_shape`] and
+    /// [`CInt::cgto_shape_for`].
+    ///
+    /// This function does not check the validity of the `shls_slice`.
     fn cgto_shape_from_locs(shls_slice: &[[c_int; 2]], locs: &[Vec<usize>], aosym: CIntSymm) -> Vec<usize> {
         let extent = |loc: &[usize]| loc[loc.len() - 1] - loc[0];
         let pair_extent = |loc: &[usize]| {
@@ -1292,16 +1308,7 @@ impl CInt {
     /// assert_eq!(cgto_shape, vec![37, 38, 29]);
     /// ```
     pub fn cgto_shape_s1(&self, shls_slice: &[[c_int; 2]]) -> Vec<usize> {
-        let ao_loc = self.ao_loc();
-
-        shls_slice
-            .iter()
-            .map(|&[shl0, shl1]| {
-                let p0 = ao_loc[shl0 as usize];
-                let p1 = ao_loc[shl1 as usize];
-                p1 - p0
-            })
-            .collect()
+        Self::cgto_shape_from_locs(shls_slice, &self.cgto_locs(shls_slice), CIntSymm::S1)
     }
 
     /// Shape of integral (in atomic orbital basis, symmetry s2ij), for
@@ -1324,28 +1331,7 @@ impl CInt {
     /// assert_eq!(cgto_shape, vec![703, 29]);
     /// ```
     pub fn cgto_shape_s2ij(&self, shls_slice: &[[c_int; 2]]) -> Vec<usize> {
-        let ao_loc = self.ao_loc();
-        let n_center = shls_slice.len();
-
-        if shls_slice[0] != shls_slice[1] {
-            panic!("shls_slice must have the same first two elements for S2ij symmetry");
-        }
-
-        let mut shape = vec![];
-        {
-            let shl_slice = shls_slice[0];
-            let p0 = ao_loc[shl_slice[0] as usize];
-            let p1 = ao_loc[shl_slice[1] as usize];
-            let np = p1 - p0;
-            shape.push(np * (np + 1) / 2);
-        }
-        for n in 2..n_center {
-            let shl_slice = shls_slice[n];
-            let p0 = ao_loc[shl_slice[0] as usize];
-            let p1 = ao_loc[shl_slice[1] as usize];
-            shape.push(p1 - p0);
-        }
-        shape
+        Self::cgto_shape_from_locs(shls_slice, &self.cgto_locs(shls_slice), CIntSymm::S2ij)
     }
 
     /// Shape of integral (in atomic orbital basis, symmetry s2kl), for
@@ -1353,38 +1339,7 @@ impl CInt {
     ///
     /// This function does not check the validity of the `shls_slice`.
     pub fn cgto_shape_s2kl(&self, shls_slice: &[[c_int; 2]]) -> Vec<usize> {
-        let ao_loc = self.ao_loc();
-
-        if shls_slice[2] != shls_slice[3] {
-            panic!("shls_slice must have the same last two elements for S2kl symmetry");
-        }
-
-        let mut shape = vec![];
-        {
-            // push slice 1
-            let shl_slice = shls_slice[0];
-            let p0 = ao_loc[shl_slice[0] as usize];
-            let p1 = ao_loc[shl_slice[1] as usize];
-            let np = p1 - p0;
-            shape.push(np);
-        }
-        {
-            // push slice 2
-            let shl_slice = shls_slice[1];
-            let p0 = ao_loc[shl_slice[0] as usize];
-            let p1 = ao_loc[shl_slice[1] as usize];
-            let np = p1 - p0;
-            shape.push(np);
-        }
-        {
-            // push slice 3/4
-            let shl_slice = shls_slice[2];
-            let p0 = ao_loc[shl_slice[0] as usize];
-            let p1 = ao_loc[shl_slice[1] as usize];
-            let np = p1 - p0;
-            shape.push(np * (np + 1) / 2);
-        }
-        shape
+        Self::cgto_shape_from_locs(shls_slice, &self.cgto_locs(shls_slice), CIntSymm::S2kl)
     }
 
     /// Shape of integral (in atomic orbital basis, symmetry s4), for
@@ -1392,30 +1347,7 @@ impl CInt {
     ///
     /// This function does not check the validity of the `shls_slice`.
     pub fn cgto_shape_s4(&self, shls_slice: &[[c_int; 2]]) -> Vec<usize> {
-        let ao_loc = self.ao_loc();
-
-        if shls_slice[0] != shls_slice[1] || shls_slice[2] != shls_slice[3] {
-            panic!("shls_slice must have the same first two elements and last two elements for S4 symmetry");
-        }
-
-        let mut shape = vec![];
-        {
-            // push slice 1
-            let shl_slice = shls_slice[0];
-            let p0 = ao_loc[shl_slice[0] as usize];
-            let p1 = ao_loc[shl_slice[1] as usize];
-            let np = p1 - p0;
-            shape.push(np * (np + 1) / 2);
-        }
-        {
-            // push slice 2
-            let shl_slice = shls_slice[2];
-            let p0 = ao_loc[shl_slice[0] as usize];
-            let p1 = ao_loc[shl_slice[1] as usize];
-            let np = p1 - p0;
-            shape.push(np * (np + 1) / 2);
-        }
-        shape
+        Self::cgto_shape_from_locs(shls_slice, &self.cgto_locs(shls_slice), CIntSymm::S4)
     }
 
     /// Shape of integral (in atomic orbital basis, symmetry s8), for
@@ -1423,20 +1355,7 @@ impl CInt {
     ///
     /// This function does not check the validity of the `shls_slice`.
     pub fn cgto_shape_s8(&self, shls_slice: &[[c_int; 2]]) -> Vec<usize> {
-        let ao_loc = self.ao_loc();
-
-        if shls_slice[0] != shls_slice[1] || shls_slice[0] != shls_slice[2] || shls_slice[0] != shls_slice[3] {
-            panic!("shls_slice must have the same first four elements for S8 symmetry");
-        }
-
-        let shl_slice = shls_slice[0];
-        let p0 = ao_loc[shl_slice[0] as usize];
-        let p1 = ao_loc[shl_slice[1] as usize];
-        let np = p1 - p0;
-
-        let np_s2 = np * (np + 1) / 2;
-        let np_s8 = np_s2 * (np_s2 + 1) / 2;
-        vec![np_s8]
+        Self::cgto_shape_from_locs(shls_slice, &self.cgto_locs(shls_slice), CIntSymm::S8)
     }
 
     /// Obtain atomic orbital locations for integral, starting from 0 (instead

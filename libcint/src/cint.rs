@@ -901,12 +901,13 @@ impl CInt {
     ///
     /// The density-fitting family `int3c2e*_spinor` evaluates two spinor
     /// centers and one scalar spherical auxiliary center, so it has no single
-    /// `cint_type` that ordinary integration could use. This function returns
-    /// [`CIntErrorBase::IntegratorNotAvailable`] for those integrals; use
-    /// [`integrate_cross_spinor`](Self::integrate_cross_spinor) with the bra
-    /// and auxiliary molecules instead. This also applies to the `_ssc`
-    /// variants (`int3c2e_spinor_ssc`, `int3c2e_spsp1_spinor_ssc`), which
-    /// use a Cartesian auxiliary center. The scalar `int3c2e_sph` and
+    /// `cint_type` that ordinary integration could use. This function panics
+    /// with [`CIntErrorBase::IntegratorNotAvailable`] for those integrals (use
+    /// [`integrate_spinor_f`](Self::integrate_spinor_f) to handle the error
+    /// instead). Use [`integrate_cross_spinor`](Self::integrate_cross_spinor)
+    /// with the bra and auxiliary molecules instead. This also applies to the
+    /// `_ssc` variants (`int3c2e_spinor_ssc`, `int3c2e_spsp1_spinor_ssc`),
+    /// which use a Cartesian auxiliary center. The scalar `int3c2e_sph` and
     /// `int3c2e_cart` variants are unaffected.
     ///
     /// </div>
