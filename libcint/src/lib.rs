@@ -19,7 +19,12 @@
 //!   (the same shape convention to PySCF, and same memory layout to PySCF
 //!   4-center integrals).
 //! - [`CInt::integrate_cross`]: integrate function with multiple [`CInt`]s,
-//!   useful for integral with auxiliary basis sets.
+//!   useful for integral with auxiliary basis sets; also supports mixed
+//!   scalar/Cartesian layouts such as `int3c2e_sph_ssc`.
+//! - [`CInt::integrate_cross_spinor`]: cross integrals for spinor type,
+//!   including mixed spinor/scalar density-fitting layouts such as
+//!   `int3c2e*_spinor` and the `_ssc` variants (see [`CIntIntegralLayout`] and
+//!   [`Integrator::center_layout`]).
 //! - [`CInt::integrate_with_args`], [`CInt::integrate_args_builder`]: integrate
 //!   function with arguments builder (advanced options).
 //! - [`CInt::get_cintopt`], [`CIntOpt`]: build a reusable libcint optimizer and

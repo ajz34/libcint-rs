@@ -8,10 +8,26 @@ impl Add for &CInt {
     type Output = CInt;
 
     fn add(self, mol2: &CInt) -> CInt {
+        self.concat_impl(mol2, None)
+    }
+}
+
+impl CInt {
+    /// Concatenate two molecules while forcing the result's integral type.
+    ///
+    /// Mixed-layout cross integrals may need to join molecules whose own
+    /// `cint_type`s differ (for example a spinor bra and a spherical auxiliary
+    /// basis). The result is given `cint_type`; the optimizer and the C driver
+    /// only depend on the basis data, not on the input types.
+    pub(crate) fn concat_with_type(&self, mol2: &CInt, cint_type: CIntType) -> CInt {
+        self.concat_impl(mol2, Some(cint_type))
+    }
+
+    fn concat_impl(&self, mol2: &CInt, forced_type: Option<CIntType>) -> CInt {
         let mol1 = self.decopule_ecpbas();
         let mol2 = mol2.decopule_ecpbas();
 
-        if mol1.cint_type != mol2.cint_type {
+        if forced_type.is_none() && mol1.cint_type != mol2.cint_type {
             panic!("Cannot concatenate CInt with different cint_type");
         }
 
@@ -64,6 +80,9 @@ impl Add for &CInt {
             .collect_vec();
 
         let mut result = mol1;
+        if let Some(cint_type) = forced_type {
+            result.cint_type = cint_type;
+        }
         result.atm.extend(atm2);
         result.bas.extend(bas2);
         result.ecpbas.extend(ecpbas2);

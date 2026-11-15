@@ -53,9 +53,9 @@ impl CInt {
         let n_center = integrator.n_center(); // atom center number for intor
 
         // AO shape, without intor component
-        let cgto_shape = self.cgto_shape_s1(shls_slice);
+        let cgto_shape = self.cgto_shape_for(integrator, shls_slice, CIntSymm::S1);
         // AO relative locations mapped to shells, 0-indexed
-        let cgto_locs = self.cgto_locs(shls_slice);
+        let cgto_locs = self.cgto_locs_for(integrator, shls_slice);
 
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
@@ -214,9 +214,9 @@ impl CInt {
         let n_center = integrator.n_center(); // atom center number for intor
 
         // AO shape, without intor component
-        let cgto_shape = self.cgto_shape_s2ij(shls_slice);
+        let cgto_shape = self.cgto_shape_for(integrator, shls_slice, CIntSymm::S2ij);
         // AO relative locations mapped to shells, 0-indexed
-        let cgto_locs = self.cgto_locs(shls_slice);
+        let cgto_locs = self.cgto_locs_for(integrator, shls_slice);
 
         // cache (thread local)
         let cache_size = self.max_cache_size(integrator, shls_slice);
@@ -373,9 +373,9 @@ impl CInt {
 
         // n_center must be 4 for S2kl symmetry, checked in `check_shls_slice`
         // AO shape, without intor component
-        let cgto_shape = self.cgto_shape_s2kl(shls_slice);
+        let cgto_shape = self.cgto_shape_for(integrator, shls_slice, CIntSymm::S2kl);
         // AO relative locations mapped to shells, 0-indexed
-        let cgto_locs = self.cgto_locs(shls_slice);
+        let cgto_locs = self.cgto_locs_for(integrator, shls_slice);
         let out_shape = [cgto_shape[0], cgto_shape[1], cgto_shape[2], n_comp];
 
         // cache (thread local)
@@ -465,9 +465,9 @@ impl CInt {
 
         // n_center must be 4 for S4 symmetry, checked in `check_shls_slice`
         // AO shape, without intor component
-        let cgto_shape = self.cgto_shape_s4(shls_slice);
+        let cgto_shape = self.cgto_shape_for(integrator, shls_slice, CIntSymm::S4);
         // AO relative locations mapped to shells, 0-indexed
-        let cgto_locs = self.cgto_locs(shls_slice);
+        let cgto_locs = self.cgto_locs_for(integrator, shls_slice);
         let out_shape = [cgto_shape[0], cgto_shape[1], n_comp];
 
         // cache (thread local)
@@ -558,9 +558,9 @@ impl CInt {
 
         // n_center must be 4 for S8 symmetry, checked in `check_shls_slice`
         // AO shape, without intor component
-        let cgto_shape = self.cgto_shape_s8(shls_slice);
+        let cgto_shape = self.cgto_shape_for(integrator, shls_slice, CIntSymm::S8);
         // AO relative locations mapped to shells, 0-indexed
-        let cgto_locs = self.cgto_locs(shls_slice);
+        let cgto_locs = self.cgto_locs_for(integrator, shls_slice);
         let out_shape = [cgto_shape[0], n_comp];
 
         // cache (thread local)

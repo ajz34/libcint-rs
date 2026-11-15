@@ -99,6 +99,39 @@ def scan_intor_defs(src_paths):
     return actual, spinor_only
 
 
+def scan_ssc_defs(src_paths):
+    """Scan `_ssc` entries, which are outside the `_sph/_cart/_spinor` taxonomy.
+
+    These functions are defined in the libcint sources but deliberately omitted
+    from `cint_funcs.h`, so the header/bindgen path cannot see them.  The `_ssc`
+    suffix means `(representation, representation | Cartesian)`: centers 0/1 use
+    the representation from the driver, center 2 is Cartesian.  Each family
+    shares a `<family>_ssc_optimizer`.
+    """
+    ssc = {}
+    optimizers = set()
+    for src_path in src_paths:
+        with open(src_path, "r") as f:
+            text = f.read()
+        for m in re.finditer(r"CACHE_SIZE_T\s+(int\w*?_ssc)\s*\(([^)]*)\)\s*\{", text):
+            name = m.group(1)
+            signature = m.group(2)
+            body = text[m.end():m.end() + 900]
+            ng_match = re.search(r"FINT ng\[\]\s*=\s*\{([^}]*)\}", body)
+            if ng_match is None:
+                raise ValueError(f"{name}: cannot find ng[]")
+            drv_match = re.search(r"return\s+(CINT\w+_drv)\s*\(", body)
+            is_spinor = "complex" in signature or (drv_match is not None and "spinor" in drv_match.group(1))
+            ssc[name] = {
+                "ng": [int(x) for x in ng_match.group(1).split(",")],
+                "repr": "Spinor" if is_spinor else "Spheric",
+                "family": name.split("_")[0],
+            }
+        for m in re.finditer(r"void\s+(int\w*?_ssc_optimizer)\s*\(", text):
+            optimizers.add(m.group(1))
+    return ssc, optimizers
+
+
 actual_intor_qcint, _ = scan_intor_defs(qcint_src_paths)
 # -
 
@@ -140,6 +173,16 @@ actual_intor, spinor_only_intor = scan_intor_defs(
     glob.iglob(f"{dir_libcint_src}/src/**/*.c", recursive=True)
 )
 # -
+
+# `_ssc` entries are not part of the standard header; scan them separately.
+ssc_intor, ssc_optimizer = scan_ssc_defs(
+    sorted(glob.glob(f"{dir_libcint_src}/src/**/*.c", recursive=True))
+)
+assert ssc_intor, "no `_ssc` integral definitions found in the libcint sources"
+for _name, _meta in ssc_intor.items():
+    _family = _meta["family"]
+    assert f"{_family}_ssc_optimizer" in ssc_optimizer, f"{_name}: missing {_family}_ssc_optimizer"
+    assert int(_family[3]) == 3, f"{_name}: expected a three-center `_ssc` integral"
 
 # assert known intors are all included in all intors
 assert len(set(known_intor) - set(actual_intor)) == 0
@@ -203,6 +246,127 @@ qcint_v6_2_intor = {
 
 def rule_qcint_v6_2(intor):
     return intor in qcint_v6_2_intor
+
+
+# `int3c2e*_spinor` drivers evaluate two spinor centers against one scalar
+# spherical auxiliary center.  The `_ssc` variants use a Cartesian auxiliary
+# center and must not be added to this list.
+int3c2e_spinor_sph_aux_layout = {
+    "int3c2e",
+    "int3c2e_ip1",
+    "int3c2e_ip2",
+    "int3c2e_pvp1",
+    "int3c2e_pvxp1",
+    "int3c2e_ig1",
+    "int3c2e_spsp1",
+    "int3c2e_ipspsp1",
+    "int3c2e_spsp1ip2",
+    "int3c2e_ipip1",
+    "int3c2e_ipip2",
+    "int3c2e_ipvip1",
+    "int3c2e_ip1ip2",
+}
+
+def gen_ssc_ffi_block():
+    out = [
+        "",
+        "",
+        "/* `int3c2e*_ssc` functions are exported by libcint but omitted from its",
+        " * `cint_funcs.h`, so they are declared here. qcint has the internal",
+        " * `is_ssc`/`c2s_*_ssc` helpers but no public `_ssc` entry points. The `_c`",
+        " * suffix avoids colliding with the unit-struct integrator names in",
+        " * `cint_wrapper.rs`. */",
+        '#[cfg(not(feature = "qcint"))]',
+        'unsafe extern "C" {',
+    ]
+    for optimizer in sorted(ssc_optimizer):
+        out += [
+            f"    pub fn {optimizer}(",
+            "        opt: *mut *mut CINTOpt,",
+            "        atm: *const c_int,",
+            "        natm: c_int,",
+            "        bas: *const c_int,",
+            "        nbas: c_int,",
+            "        env: *const f64,",
+            "    );",
+        ]
+    for name, meta in ssc_intor.items():
+        out_ty = "__BindgenComplex<f64>" if meta["repr"] == "Spinor" else "f64"
+        out += [
+            f'    #[link_name = "{name}"]',
+            f"    pub fn {name}_c(",
+            f"        out: *mut {out_ty},",
+            "        dims: *const c_int,",
+            "        shls: *const c_int,",
+            "        atm: *const c_int,",
+            "        natm: c_int,",
+            "        bas: *const c_int,",
+            "        nbas: c_int,",
+            "        env: *const f64,",
+            "        opt: *const CINTOpt,",
+            "        cache: *mut f64,",
+            "    ) -> c_int;",
+        ]
+    out += ["}", ""]
+    return "\n".join(out)
+
+
+def gen_ssc_impl_entries():
+    out = []
+    for name, meta in ssc_intor.items():
+        ng = meta["ng"]
+        comp_all = max(ng[5], 1) * max(ng[6], 1) * ng[7]
+        comp_tensor = ng[7]
+        family = meta["family"]
+        n_center = int(family[3])
+        if meta["repr"] == "Spheric":
+            sph, cart, spinor = f"{name}_c", "panic_cart", "panic_spinor"
+            avail = ("true", "false", "false")
+            driver = "Spheric"
+            centers = "&[CIntType::Spheric, CIntType::Spheric, CIntType::Cartesian]"
+        else:
+            sph, cart, spinor = "panic_sph", "panic_cart", f"{name}_c"
+            avail = ("false", "false", "true")
+            driver = "Spinor"
+            centers = "&[CIntType::Spinor, CIntType::Spinor, CIntType::Cartesian]"
+        out.append(f'''#[cfg(not(feature = "qcint"))]
+impl_integrator!(
+    {name},
+    {family}_ssc_optimizer,
+    {sph},
+    {cart},
+    {spinor},
+    {avail[0]},
+    {avail[1]},
+    {avail[2]},
+    {comp_all},
+    {comp_tensor},
+    {n_center},
+    vec!{ng},
+    "{family}",
+    "{name}",
+    CIntKind::Int,
+    CIntIntegralLayout {{ driver_type: CIntType::{driver}, center_types: {centers} }}
+);
+''')
+    return "".join(out)
+
+
+def gen_ssc_match_arms():
+    return "".join(
+        f'''#[cfg(not(feature = "qcint"))]
+        "{name}" => Some(Box::new({name})),
+'''
+        for name in ssc_intor
+    )
+
+
+ssc_ffi_block = gen_ssc_ffi_block()
+
+ssc_impl_entries = gen_ssc_impl_entries()
+
+ssc_match_arms = gen_ssc_match_arms()
+
 
 
 # ## `bindgen` auto-generation
@@ -324,7 +488,7 @@ token = token.replace("::std::option::Option", "Option")
 # -
 
 with open("cint_ffi.rs", "w") as f:
-    f.write(token)
+    f.write(token + ssc_ffi_block)
 
 # ### cleanup
 
@@ -342,7 +506,7 @@ token_wrapper = """
 /* Generated by python scripts for libcint low-level wrapper. */
 /* Should not modify manually. */
 
-use crate::cint::CIntKind;
+use crate::cint::{CIntIntegralLayout, CIntKind, CIntType};
 use crate::ffi::cint_ffi::*;
 use crate::ffi::wrapper_traits::Integrator;
 use crate::impl_integrator;
@@ -402,6 +566,13 @@ def gen_impl_integrator(intor):
     comp_all = max(comp_1e, 1) * max(comp_2e, 1) * comp_tensor
 
     # write token
+    center_layout = ""
+    if intor in int3c2e_spinor_sph_aux_layout:
+        center_layout = """,
+        CIntIntegralLayout {
+            driver_type: CIntType::Spinor,
+            center_types: &[CIntType::Spinor, CIntType::Spinor, CIntType::Spheric],
+        }"""
     token = f"""impl_integrator!(
         {intor},
         {intor}_optimizer,
@@ -414,7 +585,7 @@ def gen_impl_integrator(intor):
         {comp_all}, {comp_tensor}, {n_center},
         vec!{ng},
         "{integrator_category}", "{intor}",
-        CIntKind::Int);\n"""
+        CIntKind::Int{center_layout});\n"""
 
     # cargo features for control
     if rule_with_f12(intor):
@@ -432,6 +603,8 @@ def gen_impl_integrator(intor):
 
 for intor in actual_intor:
     token_wrapper += gen_impl_integrator(intor)
+    if intor == "int3c2e":
+        token_wrapper += ssc_impl_entries
 
 # +
 # get_integrator
@@ -457,6 +630,8 @@ for intor in actual_intor:
     token_wrapper += f"""
         "{intor}" => Some(Box::new({intor})),
     """.strip()
+    if intor == "int3c2e":
+        token_wrapper += "\n" + ssc_match_arms
 
 token_wrapper += """
         _ => None,
